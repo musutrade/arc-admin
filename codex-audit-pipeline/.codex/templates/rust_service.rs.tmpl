@@ -1,0 +1,41 @@
+// 使用前替换: {{ENTITY_NAME}}
+// 注意: Service 层禁止出现 SQL (auditor 会拦截), 只允许调用 Repository
+use crate::repositories::{{ENTITY_NAME}}Repository;
+use crate::models::{{ENTITY_NAME}};
+use anyhow::Result;
+
+#[derive(Clone)]
+pub struct {{ENTITY_NAME}}Service {
+    repo: {{ENTITY_NAME}}Repository,
+}
+
+impl {{ENTITY_NAME}}Service {
+    pub fn new(repo: {{ENTITY_NAME}}Repository) -> Self {
+        Self { repo }
+    }
+
+    pub async fn get_by_id(&self, id: i64) -> Result<Option<{{ENTITY_NAME}}>> {
+        if id <= 0 {
+            anyhow::bail!("ID must be positive");
+        }
+        self.repo.find_by_id(id).await
+    }
+
+    pub async fn list(&self, page: i64, size: i64) -> Result<Vec<{{ENTITY_NAME}}>> {
+        let limit = size.min(100);
+        let offset = (page - 1) * size;
+        self.repo.find_all(limit, offset).await
+    }
+
+    pub async fn create(&self, data: {{ENTITY_NAME}}CreateDto) -> Result<{{ENTITY_NAME}}> {
+        self.validate(&data)?;
+        self.repo.create(data).await
+    }
+
+    fn validate(&self, data: &{{ENTITY_NAME}}CreateDto) -> Result<()> {
+        if data.name.is_empty() {
+            anyhow::bail!("Name cannot be empty");
+        }
+        Ok(())
+    }
+}

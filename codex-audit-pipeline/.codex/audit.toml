@@ -1,0 +1,91 @@
+# ============================================================
+# auditor 审计规则配置
+# 路径均相对于项目根目录；可用环境变量 BACKEND_DIR / FRONTEND_DIR 覆盖
+# ============================================================
+[paths]
+backend = "backend"
+frontend = "frontend"
+
+exclude = ["target", "node_modules", "dist", ".git", "tools"]
+
+# ============================================================
+# 硬性约束：SQL 写操作只允许出现在 Repository / 迁移 / 测试层
+# 这是与"模板生成代码"兼容的关键：Repository 模板里本来就有
+# INSERT / UPDATE / .execute()，所以这里用 allowlist 放行写操作的家。
+# ============================================================
+[[hard_rules]]
+name = "SQL 写操作仅允许出现在 Repository/迁移/测试层"
+severity = "blocker"
+paths = ["backend"]
+extensions = ["rs"]
+patterns = [
+  '(?i)INSERT\s+INTO',
+  '(?i)UPDATE\s+\w+\s+SET',
+  '(?i)DELETE\s+FROM',
+  '(?i)DROP\s+TABLE',
+  '(?i)ALTER\s+TABLE',
+  '(?i)TRUNCATE',
+  '\.execute\(',
+  '\.exec\(',
+]
+allowlist = [
+  "backend/src/repositories",
+  "backend/src/db",
+  "backend/migrations",
+  "backend/tests",
+  "backend/src/seed",
+]
+exclude_patterns = []
+
+# ============================================================
+# 架构分层审计
+# ============================================================
+[[arch_rules]]
+name = "Service 层不应包含 SQL 查询"
+layer = "service"
+paths = ["backend/src/services"]
+extensions = ["rs"]
+forbidden_patterns = ['sqlx::query']
+suggestion = "请将 SQL 逻辑移至 Repository 层"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Handler 层不应包含 SQL 查询"
+layer = "handler"
+paths = ["backend/src/handlers"]
+extensions = ["rs"]
+forbidden_patterns = ['sqlx::query']
+suggestion = "请将 SQL 逻辑移至 Repository 层"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Model 层不应包含业务逻辑（允许常见 trait impl）"
+layer = "model"
+paths = ["backend/src/models"]
+extensions = ["rs"]
+forbidden_patterns = ['^impl\s+']
+suggestion = "Model 应仅为纯数据结构，业务逻辑应放在 Service 层"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Component 不应直接注入 HttpClient"
+layer = "component"
+paths = ["frontend/src/app/pages", "frontend/src/app/layout"]
+extensions = ["ts"]
+forbidden_patterns = ['HttpClient']
+suggestion = "请通过 Service 层调用 API"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Service 层不应操作 DOM"
+layer = "service"
+paths = ["frontend/src/app/core"]
+extensions = ["ts"]
+forbidden_patterns = ['@ViewChild', '@ViewChildren', 'ElementRef']
+suggestion = "请将 DOM 操作逻辑移到 Component 层"
+allowlist = []
+exclude_patterns = []

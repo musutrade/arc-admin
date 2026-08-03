@@ -1,0 +1,49 @@
+#!/bin/sh
+# 提交前快速门禁：lint + 审计（完整测试请跑 codex-audit-pipeline/scripts/run_tests.sh）
+# 安装：git config core.hooksPath codex-audit-pipeline/hooks
+set -e
+
+HOOKS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# shellcheck source=scripts/common.sh
+. "$HOOKS_DIR/../scripts/common.sh" "$HOOKS_DIR"
+
+cd "$PROJECT_ROOT"
+
+BACKEND_DIR="${BACKEND_DIR:-backend}"
+FRONTEND_DIR="${FRONTEND_DIR:-frontend}"
+FAIL=0
+
+echo "🔍 提交前检查..."
+
+if [ -f "$BACKEND_DIR/Cargo.toml" ]; then
+  echo "  >> Clippy (-D warnings)..."
+  if ! cargo clippy --manifest-path="$BACKEND_DIR/Cargo.toml" -- -D warnings 2>&1; then
+    echo "❌ Clippy 检查失败，请修复后提交"
+    FAIL=1
+  fi
+fi
+
+if [ -d "$FRONTEND_DIR/src" ]; then
+  echo "  >> ESLint (--max-warnings=0)..."
+  if ! npx eslint "$FRONTEND_DIR/src" --ext .ts,.html --max-warnings=0 2>&1; then
+    echo "❌ ESLint 检查失败，请修复后提交"
+    FAIL=1
+  fi
+fi
+
+# 审计门禁（仅当 auditor 已编译；首次请先 cargo build --release 避免提交卡顿）
+if [ -x "$AUDITOR_BIN" ]; then
+  echo "  >> 审计门禁..."
+  if ! bash "$PIPELINE_DIR/scripts/audit_gate.sh"; then
+    FAIL=1
+  fi
+else
+  echo "ℹ️ auditor 未编译，跳过审计门禁（先执行: (cd codex-audit-pipeline/tools/auditor && cargo build --release)）"
+fi
+
+if [ "$FAIL" -eq 0 ]; then
+  echo "✅ 提交前检查通过"
+  exit 0
+fi
+echo "❌ 请修复上述问题后重新提交"
+exit 1

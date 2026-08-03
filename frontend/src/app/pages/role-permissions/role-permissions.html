@@ -1,0 +1,63 @@
+<div class="page">
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <div>
+      <h1>Assign Permissions</h1>
+      <p>Configure functional access rights per role level with granular permission codes.</p>
+    </div>
+    <button class="btn-primary" (click)="onCreateRole()">
+      <mat-icon>add</mat-icon>
+      <span>Add New Role</span>
+    </button>
+  </div>
+
+  <!-- 角色表格 -->
+  <div class="table-card">
+    @if (error()) {
+      <div class="empty-state">
+        <mat-icon>error</mat-icon>
+        <p>{{ error() }}</p>
+      </div>
+    } @else if (loading()) {
+      <div class="loading-wrap"><mat-progress-spinner diameter="32" mode="indeterminate" /></div>
+    } @else {
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Role Name</th>
+              <th>Users Assigned</th>
+              <th>Status</th>
+              <th class="th-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.roleId) {
+              <tr>
+                <td>
+                  <div class="role-name-cell">
+                    <span class="role-avatar"><mat-icon>badge</mat-icon></span>
+                    <span class="role-name">{{ row.roleName }}</span>
+                  </div>
+                </td>
+                <td class="cell-secondary">{{ row.usersAssigned }} users</td>
+                <td>
+                  <span class="status-pill" [class.inactive]="!row.active">
+                    <span class="dot"></span>
+                    {{ row.active ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td class="th-actions">
+                  <button class="edit-link" (click)="onEditPermissions(row)">
+                    <mat-icon>tune</mat-icon>
+                    Edit Permissions
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>

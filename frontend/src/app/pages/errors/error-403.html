@@ -1,0 +1,61 @@
+<div class="error-page">
+  <!-- 点阵背景 -->
+  <div class="dot-grid"></div>
+
+  <div class="error-content">
+    <!-- 错误卡片 -->
+    <div class="error-card">
+      <div class="card-accent"></div>
+
+      <div class="error-illustration">
+        <div class="illustration-glow"></div>
+        <mat-icon class="illustration-icon">lock_reset</mat-icon>
+        <div class="error-badge">
+          <mat-icon class="filled">block</mat-icon>
+        </div>
+      </div>
+
+      <h1 class="error-code">403</h1>
+      <h2 class="error-title">Access Forbidden</h2>
+      <p class="error-desc">
+        Sorry, you do not have permission to access this page. This resource is restricted to
+        specific administrative roles.
+      </p>
+
+      <div class="error-actions">
+        <button class="btn-primary" (click)="goHome()">
+          <mat-icon>arrow_back</mat-icon>
+          Back to Home
+        </button>
+        <button class="btn-outline">
+          <mat-icon>request_quote</mat-icon>
+          Apply for Access
+        </button>
+      </div>
+    </div>
+
+    <!-- 底部信息 -->
+    <div class="error-meta">
+      <span class="meta-item"><mat-icon>info</mat-icon>Request ID: ERR-403-9921-X</span>
+      <a class="meta-link">Contact System Admin</a>
+    </div>
+
+    <!-- 辅助提示 -->
+    <div class="help-grid">
+      <div class="help-item">
+        <mat-icon>account_tree</mat-icon>
+        <div>
+          <p class="help-title">Need a higher role?</p>
+          <p class="help-desc">Check role hierarchies in documentation.</p>
+        </div>
+      </div>
+      <div class="help-item">
+        <mat-icon>history_edu</mat-icon>
+        <div>
+          <p class="help-title">Recent Activity</p>
+          <p class="help-desc">View your past permission requests.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

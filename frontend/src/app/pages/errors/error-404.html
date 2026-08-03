@@ -1,0 +1,76 @@
+<div class="error-page n404">
+  <!-- 背景装饰 -->
+  <div class="bg-decor">
+    <div class="decor-orb orb-a"></div>
+    <div class="decor-orb orb-b"></div>
+  </div>
+
+  <div class="error-content n404-content">
+    <!-- 404 插图 -->
+    <div class="n404-illustration">
+      <div class="n404-ghost-text">404</div>
+      <div class="n404-card">
+        <mat-icon class="filled">qr_code_2</mat-icon>
+        <div class="n404-error-badge">
+          <mat-icon class="filled">error</mat-icon>
+        </div>
+      </div>
+    </div>
+
+    <!-- 文案 -->
+    <div class="n404-text">
+      <h2 class="error-title large">System Endpoint Not Found</h2>
+      <p class="error-desc wide">
+        The requested access control node or resource page does not exist. It might have been
+        migrated, deleted, or you may have entered an incorrect path.
+      </p>
+    </div>
+
+    <!-- 搜索 + 操作 -->
+    <div class="n404-panel">
+      <div class="n404-search">
+        <mat-icon>search</mat-icon>
+        <input
+          type="text"
+          placeholder="Search for users, roles, or documentation..."
+          (keyup.enter)="searchFrom404($any($event.target).value)"
+        />
+      </div>
+      <div class="n404-buttons">
+        <button class="btn-primary" (click)="goHome()">
+          <mat-icon>home</mat-icon>
+          Back to Dashboard
+        </button>
+        <button class="btn-secondary" (click)="goBack()">
+          <mat-icon>arrow_back</mat-icon>
+          Previous Page
+        </button>
+      </div>
+    </div>
+
+    <!-- 快捷链接 -->
+    <div class="quick-links">
+      <a class="quick-link">
+        <span class="quick-icon"><mat-icon>menu_book</mat-icon></span>
+        <div>
+          <h3>Knowledge Base</h3>
+          <p>Read our configuration docs</p>
+        </div>
+      </a>
+      <a class="quick-link">
+        <span class="quick-icon"><mat-icon>contact_support</mat-icon></span>
+        <div>
+          <h3>Contact Support</h3>
+          <p>Reach the admin team</p>
+        </div>
+      </a>
+      <a class="quick-link">
+        <span class="quick-icon"><mat-icon>manage_search</mat-icon></span>
+        <div>
+          <h3>System Status</h3>
+          <p>Check platform health</p>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>

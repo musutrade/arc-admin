@@ -1,0 +1,96 @@
+<div class="page">
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <div>
+      <h1>Role Management</h1>
+      <p>Define, organize, and assign granular permissions to organizational roles.</p>
+    </div>
+    <div class="header-actions">
+      <div class="view-toggle">
+        <button [class.active]="view() === 'grid'" (click)="setView('grid')" title="卡片视图">
+          <mat-icon>grid_view</mat-icon>
+        </button>
+        <button [class.active]="view() === 'list'" (click)="setView('list')" title="列表视图">
+          <mat-icon>table_rows</mat-icon>
+        </button>
+      </div>
+      <button class="btn-primary" (click)="onCreateRole()">
+        <mat-icon>add_circle</mat-icon>
+        <span>Create Role</span>
+      </button>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="empty-state">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() }}</p>
+    </div>
+  } @else if (loading()) {
+    <div class="loading-wrap"><mat-progress-spinner diameter="32" mode="indeterminate" /></div>
+  } @else if (view() === 'grid') {
+    <!-- 卡片网格视图 -->
+    <div class="roles-grid">
+      @for (r of roles(); track r.id) {
+        <div class="role-card">
+          <div class="role-card-glow"></div>
+          <div class="role-card-head">
+            <div class="role-icon {{ 'ic-' + r.color }}">
+              <mat-icon>{{ r.icon }}</mat-icon>
+            </div>
+            <span class="role-category {{ 'cat-' + r.color }}">{{ r.category }}</span>
+          </div>
+          <h3 class="role-name">{{ r.name }}</h3>
+          <p class="role-desc">{{ r.description }}</p>
+          <div class="role-card-foot">
+            <div class="role-members">
+              <mat-icon>group</mat-icon>
+              <span>{{ r.members }} Members</span>
+            </div>
+            <button type="button" class="role-edit-link" (click)="onEditPermissions(r)">
+              Edit Permissions
+              <mat-icon>arrow_forward</mat-icon>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <!-- 列表视图 -->
+    <div class="table-card">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Category</th>
+              <th>Members</th>
+              <th>Description</th>
+              <th class="th-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of roles(); track r.id) {
+              <tr>
+                <td>
+                  <div class="list-role-cell">
+                    <span class="role-icon {{ 'ic-' + r.color }} sm"><mat-icon>{{ r.icon }}</mat-icon></span>
+                    <span class="list-role-name">{{ r.name }}</span>
+                  </div>
+                </td>
+                <td><span class="list-category">{{ r.category }}</span></td>
+                <td class="cell-secondary">{{ r.members }} members</td>
+                <td class="cell-secondary list-desc">{{ r.description }}</td>
+                <td class="th-actions">
+                  <button type="button" class="link-btn" (click)="onEditPermissions(r)">
+                    Edit Permissions
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>

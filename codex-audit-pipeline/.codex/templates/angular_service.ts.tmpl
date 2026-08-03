@@ -1,0 +1,33 @@
+// 使用前替换: {{ENTITY_NAME}}, {{FILE_NAME}}, {{ROUTE_PATH}}
+// 注意: 只有 Service 层允许注入 HttpClient (auditor 会拦截 Component 直连)
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { {{ENTITY_NAME}} } from '../models/{{FILE_NAME}}.model';
+
+@Injectable({ providedIn: 'root' })
+export class {{ENTITY_NAME}}Service {
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = '/api/{{ROUTE_PATH}}';
+
+  getById(id: number): Observable<{{ENTITY_NAME}}> {
+    return this.http.get<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`);
+  }
+
+  list(page = 1, size = 10): Observable<{{ENTITY_NAME}}[]> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<{{ENTITY_NAME}}[]>(this.baseUrl, { params });
+  }
+
+  create(data: Partial<{{ENTITY_NAME}}>): Observable<{{ENTITY_NAME}}> {
+    return this.http.post<{{ENTITY_NAME}}>(this.baseUrl, data);
+  }
+
+  update(id: number, data: Partial<{{ENTITY_NAME}}>): Observable<{{ENTITY_NAME}}> {
+    return this.http.put<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`, data);
+  }
+
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+}

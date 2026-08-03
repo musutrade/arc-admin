@@ -1,0 +1,321 @@
+/* ============ 用户管理 ============ */
+.filter-select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  span {
+    font-size: 13px;
+    color: var(--arco-text-tertiary);
+    white-space: nowrap;
+  }
+}
+
+.reset-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+  &:hover {
+    background: var(--mat-sys-surface-container);
+  }
+}
+
+.users-table {
+  .th-check {
+    width: 48px;
+  }
+  .th-actions {
+    text-align: right;
+  }
+
+  .user-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .avatar {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .user-name {
+      font-weight: 500;
+      white-space: nowrap;
+    }
+  }
+
+  .cell-secondary {
+    color: var(--arco-text-secondary);
+  }
+  .cell-tertiary {
+    color: var(--arco-text-tertiary);
+    font-size: 13px;
+  }
+
+  .role-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .role-tag {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    background: var(--mat-sys-surface-container-highest);
+    color: var(--arco-text-secondary);
+    white-space: nowrap;
+
+    &-accent {
+      background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+      color: var(--mat-sys-primary);
+    }
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    &.st-active {
+      background: color-mix(in srgb, var(--mat-sys-success) 10%, transparent);
+      color: var(--mat-sys-success);
+      .status-dot {
+        background: var(--mat-sys-success);
+      }
+    }
+    &.st-inactive {
+      background: color-mix(in srgb, var(--mat-sys-outline) 10%, transparent);
+      color: var(--mat-sys-outline);
+      .status-dot {
+        background: var(--mat-sys-outline);
+      }
+    }
+    &.st-suspended {
+      background: color-mix(in srgb, var(--mat-sys-warning) 10%, transparent);
+      color: var(--mat-sys-warning);
+      .status-dot {
+        background: var(--mat-sys-warning);
+      }
+    }
+  }
+
+  .td-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .row-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--arco-text-secondary);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+    &:hover {
+      background: var(--mat-sys-surface-container);
+      color: var(--mat-sys-primary);
+    }
+  }
+}
+
+/* 批量操作 */
+.table-footer {
+  &.batch-active {
+    background: color-mix(in srgb, var(--mat-sys-primary) 5%, transparent);
+  }
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--arco-text-secondary);
+  b {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.batch-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--arco-border);
+}
+
+.batch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  &.danger {
+    color: var(--mat-sys-error);
+    background: transparent;
+    &:hover {
+      background: color-mix(in srgb, var(--mat-sys-error) 10%, transparent);
+    }
+  }
+  &.primary {
+    color: var(--mat-sys-primary);
+    background: transparent;
+    &:hover {
+      background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+    }
+  }
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  .page-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+/* 统计卡片 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.stat-card {
+  padding: 24px;
+  background: var(--arco-bg-white);
+  border: 1px solid var(--arco-border);
+  border-radius: 12px;
+  box-shadow: var(--mat-sys-elevation-level1);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    box-shadow: var(--mat-sys-elevation-level2);
+    border-color: color-mix(in srgb, var(--mat-sys-primary) 30%, transparent);
+  }
+}
+
+.stat-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--arco-text-tertiary);
+}
+
+.stat-value-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: 4px;
+
+  h3 {
+    margin: 0;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 38px;
+    color: var(--arco-text-primary);
+  }
+}
+
+.stat-trend {
+  font-size: 13px;
+  font-weight: 700;
+  &.success {
+    color: var(--mat-sys-success);
+  }
+  &.warning {
+    color: var(--mat-sys-warning);
+  }
+  &.danger {
+    color: var(--mat-sys-error);
+  }
+}
+
+.stat-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mat-sys-success);
+  margin-bottom: 10px;
+  animation: stat-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes stat-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}

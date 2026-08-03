@@ -1,0 +1,201 @@
+/* ============ 层级权限表格 ============ */
+.perm-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+
+  thead th {
+    padding: 12px 24px;
+    background: var(--mat-sys-surface-container-low);
+    border-bottom: 1px solid var(--arco-border);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--arco-text-secondary);
+    white-space: nowrap;
+  }
+
+  .col-name {
+    width: 32%;
+  }
+
+  .col-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    transition: background-color 0.15s ease;
+  }
+
+  /* 模块分组行 */
+  .group-row {
+    background: color-mix(in srgb, var(--mat-sys-surface-container-low) 50%, transparent);
+    font-weight: 700;
+    border-bottom: 1px solid var(--arco-border);
+    cursor: pointer;
+
+    td {
+      padding: 10px 24px;
+    }
+  }
+
+  .group-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .group-caret {
+      color: var(--mat-sys-primary);
+      cursor: pointer;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+    .group-icon {
+      color: var(--mat-sys-primary);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+    .group-name {
+      color: var(--arco-text-primary);
+    }
+    .root-tag {
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--mat-sys-primary);
+      background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+    }
+  }
+
+  /* 权限行 */
+  .perm-row {
+    border-bottom: 1px solid var(--arco-border);
+
+    &:hover {
+      background: color-mix(in srgb, var(--mat-sys-surface-container-low) 30%, transparent);
+    }
+
+    td {
+      padding: 16px 24px;
+      font-size: 14px;
+      vertical-align: middle;
+    }
+  }
+
+  .perm-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-left: 32px;
+
+    .dot {
+      flex-shrink: 0;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--arco-border);
+    }
+    .perm-name {
+      font-weight: 500;
+      color: var(--arco-text-primary);
+      white-space: nowrap;
+    }
+  }
+
+  .perm-code {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--arco-fill-hover);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 13px;
+    color: var(--mat-sys-primary);
+    white-space: nowrap;
+  }
+
+  .perm-desc {
+    color: var(--arco-text-secondary);
+  }
+
+  .row-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--arco-text-tertiary);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+    &:hover {
+      color: var(--mat-sys-primary);
+      background: var(--arco-fill-hover);
+    }
+    &.danger:hover {
+      color: var(--mat-sys-error);
+    }
+  }
+}
+
+/* 类型徽章(Arco 语义色) */
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.badge-menu {
+  color: #2563eb;
+  background: #eff6ff;
+  border-color: #dbeafe;
+}
+.badge-button {
+  color: #ea580c;
+  background: #fff7ed;
+  border-color: #ffedd5;
+}
+.badge-api {
+  color: #7c3aed;
+  background: #faf5ff;
+  border-color: #f3e8ff;
+}
+
+[data-theme='dark'] {
+  .badge-menu {
+    color: #93c5fd;
+    background: rgba(37, 99, 235, 0.15);
+    border-color: rgba(37, 99, 235, 0.35);
+  }
+  .badge-button {
+    color: #fdba74;
+    background: rgba(234, 88, 12, 0.15);
+    border-color: rgba(234, 88, 12, 0.35);
+  }
+  .badge-api {
+    color: #c4b5fd;
+    background: rgba(124, 58, 237, 0.15);
+    border-color: rgba(124, 58, 237, 0.35);
+  }
+}

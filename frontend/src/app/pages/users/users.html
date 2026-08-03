@@ -1,0 +1,178 @@
+<div class="page">
+  <!-- 页面头部 -->
+  <div class="page-header">
+    <div>
+      <h1>User Management</h1>
+      <p>Manage system access levels, account statuses, and assigned security roles.</p>
+    </div>
+    <button class="btn-primary">
+      <mat-icon>person_add</mat-icon>
+      <span>Add User</span>
+    </button>
+  </div>
+
+  <!-- 过滤栏 -->
+  <div class="filter-bar">
+    <div class="filter-search">
+      <mat-icon>search</mat-icon>
+      <input
+        type="text"
+        placeholder="Search by username or email..."
+        [value]="search()"
+        (input)="searchUsers($any($event.target).value)"
+      />
+    </div>
+    <div class="filter-select-group">
+      <span>Role:</span>
+      <select class="filter-select" [value]="roleFilter()" (change)="applyRoleFilter($any($event.target).value)">
+        <option value="all">All Roles</option>
+        @for (r of roleOptions(); track r) {
+          @if (r !== 'all') {
+            <option [value]="r">{{ r }}</option>
+          }
+        }
+      </select>
+    </div>
+    <div class="filter-select-group">
+      <span>Status:</span>
+      <select class="filter-select" [value]="statusFilter()" (change)="applyStatusFilter($any($event.target).value)">
+        <option value="all">All Status</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="suspended">Suspended</option>
+      </select>
+    </div>
+    <button class="reset-filters" (click)="resetFilters()">
+      <mat-icon>filter_list</mat-icon>
+      <span>Reset Filters</span>
+    </button>
+  </div>
+
+  <!-- 数据表格 -->
+  <div class="table-card">
+    @if (error()) {
+      <div class="empty-state">
+        <mat-icon>error</mat-icon>
+        <p>{{ error() }}</p>
+      </div>
+    } @else if (loading()) {
+      <div class="loading-wrap"><mat-progress-spinner diameter="32" mode="indeterminate" /></div>
+    } @else {
+      <div class="table-scroll">
+        <table class="data-table users-table">
+          <thead>
+            <tr>
+              <th class="th-check">
+                <mat-checkbox
+                  [checked]="allChecked()"
+                  [indeterminate]="someChecked()"
+                  (change)="toggleAll($event.checked)"
+                  color="primary"
+                />
+              </th>
+              <th>User</th>
+              <th>Email Address</th>
+              <th>Roles</th>
+              <th>Status</th>
+              <th>Last Login</th>
+              <th class="th-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (u of pagedUsers(); track u.id) {
+              <tr [class.selected]="selected().has(u.id)">
+                <td>
+                  <mat-checkbox
+                    [checked]="selected().has(u.id)"
+                    (change)="toggleRow(u.id, $event.checked)"
+                    color="primary"
+                  />
+                </td>
+                <td>
+                  <div class="user-cell">
+                    <span class="avatar" [style.background]="u.avatarColor">{{ initials(u.name) }}</span>
+                    <span class="user-name">{{ u.name }}</span>
+                  </div>
+                </td>
+                <td class="cell-secondary">{{ u.email }}</td>
+                <td>
+                  <div class="role-tags">
+                    @for (r of u.roles; track r) {
+                      <span class="role-tag" [class.role-tag-accent]="r.includes('Admin') || r.includes('Lead')">
+                        {{ r }}
+                      </span>
+                    }
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge {{ statusMeta[u.status].cls }}">
+                    <span class="status-dot"></span>
+                    {{ statusMeta[u.status].label }}
+                  </span>
+                </td>
+                <td class="cell-tertiary">{{ u.lastLogin }}</td>
+                <td class="td-actions">
+                  <button class="row-btn" (click)="onEdit(u)" title="Edit"><mat-icon>edit</mat-icon></button>
+                  <button class="row-btn" (click)="onResetPassword(u)" title="Reset Password"><mat-icon>lock_reset</mat-icon></button>
+                  <button class="row-btn" (click)="onMore(u)" title="More"><mat-icon>more_vert</mat-icon></button>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="7">
+                  <div class="empty-state">
+                    <mat-icon>search_off</mat-icon>
+                    <p>没有匹配的用户</p>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 批量操作 + 分页 -->
+      <div class="table-footer" [class.batch-active]="selectedCount() > 0">
+        <div class="batch-actions">
+          <span class="batch-count"><b>{{ selectedCount() }}</b> users selected</span>
+          @if (selectedCount() > 0) {
+            <span class="batch-divider"></span>
+            <button class="batch-btn danger"><mat-icon>delete</mat-icon>Delete Selected</button>
+            <button class="batch-btn primary"><mat-icon>rule</mat-icon>Change Role</button>
+          }
+        </div>
+        <div class="pagination">
+          <span class="page-info">Showing {{ pageStart() }}-{{ pageEnd() }} of {{ filteredUsers().length }} entries</span>
+          <div class="page-btns">
+            <button class="page-btn" [disabled]="page() === 1" (click)="goToPage(page() - 1)" aria-label="上一页">
+              <mat-icon>chevron_left</mat-icon>
+            </button>
+            @for (p of pageNumbers(); track p) {
+              <button class="page-num" [class.active]="p === page()" [attr.aria-current]="p === page() ? 'page' : null" (click)="goToPage(p)">{{ p }}</button>
+            }
+            <button class="page-btn" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)" aria-label="下一页">
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- 统计卡片(Bento Grid) -->
+  <div class="stats-grid">
+    @for (s of stats(); track s.label) {
+      <div class="stat-card">
+        <p class="stat-label">{{ s.label }}</p>
+        <div class="stat-value-row">
+          <h3>{{ s.value }}</h3>
+          @if (s.trend) {
+            <span class="stat-trend {{ s.trendTone ?? '' }}">{{ s.trend }}</span>
+          } @else if (s.pulse) {
+            <span class="stat-pulse"></span>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>

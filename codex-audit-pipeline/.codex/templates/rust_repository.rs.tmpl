@@ -1,0 +1,55 @@
+// 使用前替换: {{ENTITY_NAME}}, {{TABLE_NAME}}, {{COLUMN_LIST}}, {{VALUE_PLACEHOLDER}}
+// 注意: 本文件位于 Repository 层, 允许 SQL 写操作(与 audit.toml allowlist 一致)
+use sqlx::PgPool;
+use crate::models::{{ENTITY_NAME}};
+use anyhow::Result;
+
+#[derive(Clone)]
+pub struct {{ENTITY_NAME}}Repository {
+    pool: PgPool,
+}
+
+impl {{ENTITY_NAME}}Repository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn find_by_id(&self, id: i64) -> Result<Option<{{ENTITY_NAME}}>> {
+        let record = sqlx::query_as::<_, {{ENTITY_NAME}}>(
+            "SELECT * FROM {{TABLE_NAME}} WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(record)
+    }
+
+    pub async fn find_all(&self, limit: i64, offset: i64) -> Result<Vec<{{ENTITY_NAME}}>> {
+        let records = sqlx::query_as::<_, {{ENTITY_NAME}}>(
+            "SELECT * FROM {{TABLE_NAME}} ORDER BY id LIMIT $1 OFFSET $2",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(records)
+    }
+
+    pub async fn create(&self, data: {{ENTITY_NAME}}CreateDto) -> Result<{{ENTITY_NAME}}> {
+        let record = sqlx::query_as::<_, {{ENTITY_NAME}}>(
+            "INSERT INTO {{TABLE_NAME}} ({{COLUMN_LIST}}) VALUES ({{VALUE_PLACEHOLDER}}) RETURNING *",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(record)
+    }
+
+    pub async fn soft_delete(&self, id: i64) -> Result<bool> {
+        let rows = sqlx::query("UPDATE {{TABLE_NAME}} SET deleted_at = NOW() WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected();
+        Ok(rows > 0)
+    }
+}
