@@ -1,0 +1,695 @@
+openapi: 3.0.3
+info:
+  title: arc-admin RBAC API
+  version: 0.1.0
+  description: |
+    RBAC 管理后台 API 契约（Angular 前端 + Rust/Axum/SQLX 后端共同遵守）。
+    本文件是前后端联调的唯一事实来源：后端按此实现路由与 DTO，前端按此替换 DataService 的 mock。
+
+    ## 前端字段映射（mock → 契约）
+    - User.name            → displayName（界面展示名）
+    - User.lastLogin       → lastLoginAt（ISO 时间戳，前端负责格式化为 "2 mins ago"）
+    - User.avatarColor     → 移除，由前端根据 displayName 哈希生成
+    - Role.permissionGroupIds → 由 GET /roles 聚合返回（int[]）
+    - Role.members         → 由 GET /roles 聚合返回（user_roles 计数）
+    - RolePermissionRow    → 前端由 Role[] 派生，不再单独接口
+    - StatCard             → 前端由 GET /dashboard/stats 映射
+    - 所有 id 由 mock 字符串改为 BIGINT 数值
+servers:
+  - url: http://localhost:8081/api/v1
+    description: 本地开发
+tags:
+  - name: auth
+    description: 认证
+  - name: users
+    description: 用户管理
+  - name: roles
+    description: 角色管理
+  - name: permissions
+    description: 权限管理
+  - name: dashboard
+    description: 仪表盘
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: 登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: 当前登录用户信息
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/me/permissions:
+    get:
+      tags: [auth]
+      summary: 当前用户权限码（前端路由/按钮级控制）
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 权限码列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [codes]
+                properties:
+                  codes:
+                    type: array
+                    items:
+                      type: string
+                    example: ["user:directory:read", "dashboard:analytics:read"]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users:
+    get:
+      tags: [users]
+      summary: 用户分页列表（支持关键字/状态筛选）
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: keyword
+          in: query
+          description: 按 username / displayName / email 模糊匹配
+          schema: { type: string }
+        - name: status
+          in: query
+          description: 状态筛选
+          schema:
+            $ref: '#/components/schemas/UserStatus'
+      responses:
+        '200':
+          description: 分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [users]
+      summary: 创建用户
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      summary: 用户详情
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 用户详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [users]
+      summary: 更新用户（资料与状态）
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [users]
+      summary: 删除用户（软删除，deleted_at 置位）
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/{id}/roles:
+    put:
+      tags: [users]
+      summary: 分配用户角色（整体覆盖）
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignRolesRequest'
+      responses:
+        '204':
+          description: 分配成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /roles:
+    get:
+      tags: [roles]
+      summary: 角色列表（含成员数与权限组聚合）
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 角色列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+    post:
+      tags: [roles]
+      summary: 创建角色
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /roles/{id}:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [roles]
+      summary: 角色详情
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 角色详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [roles]
+      summary: 更新角色
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [roles]
+      summary: 删除角色（级联删除用户角色/角色权限关联）
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /roles/{id}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/RoleId'
+    get:
+      tags: [roles]
+      summary: 角色已分配的权限 id 列表（分配模态框回显用）
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 权限 id 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissions'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [roles]
+      summary: 覆盖分配角色权限
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRolePermissionsRequest'
+      responses:
+        '204':
+          description: 分配成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /permissions/groups:
+    get:
+      tags: [permissions]
+      summary: 权限组（含组内权限，权限管理页/分配模态框共用）
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 权限组列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PermissionGroup'
+  /dashboard/stats:
+    get:
+      tags: [dashboard]
+      summary: 仪表盘统计（前端映射为 StatCard）
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 统计指标
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 页码，从 1 开始
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      description: 每页数量（1-100）
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+      description: 用户 id
+    RoleId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+      description: 角色 id
+  responses:
+    Unauthorized:
+      description: 未认证或 token 失效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Forbidden:
+      description: 无权限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Conflict:
+      description: 唯一约束冲突（如 username/code 已存在）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    ValidationError:
+      description: 请求参数校验失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    UserStatus:
+      type: string
+      enum: [active, inactive, suspended]
+    PermissionType:
+      type: string
+      enum: [menu, button, api]
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: 稳定的错误码，如 VALIDATION_ERROR / NOT_FOUND / UNAUTHORIZED / CONFLICT
+            message:
+              type: string
+            details:
+              type: array
+              items: { type: string }
+    PageMeta:
+      type: object
+      required: [total, page, pageSize]
+      properties:
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    User:
+      type: object
+      required: [id, username, displayName, status, roles]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        roles:
+          type: array
+          items: { type: string }
+          description: 角色名称列表（由 user_roles 聚合）
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    PageUser:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        pageSize:
+          type: integer
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    LoginResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: 有效期（秒）
+        user:
+          $ref: '#/components/schemas/User'
+    CreateUserRequest:
+      type: object
+      required: [username, password, displayName]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+        password:
+          type: string
+          format: password
+          minLength: 8
+        displayName:
+          type: string
+          maxLength: 128
+        email:
+          type: string
+          format: email
+          nullable: true
+        status:
+          $ref: '#/components/schemas/UserStatus'
+          default: active
+        roleIds:
+          type: array
+          items: { type: integer, format: int64 }
+          description: 初始角色
+    UpdateUserRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          maxLength: 128
+        email:
+          type: string
+          format: email
+          nullable: true
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: 可选，重置密码
+    AssignRolesRequest:
+      type: object
+      required: [roleIds]
+      properties:
+        roleIds:
+          type: array
+          items: { type: integer, format: int64 }
+    Role:
+      type: object
+      required: [id, code, name, category, isActive, members, permissionGroupIds]
+      properties:
+        id:
+          type: integer
+          format: int64
+        code:
+          type: string
+          description: 稳定标识，不可变
+        name:
+          type: string
+        category:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        color:
+          type: string
+          enum: [primary, warning, success, danger, neutral]
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        members:
+          type: integer
+          description: 关联用户数（user_roles 计数）
+        permissionGroupIds:
+          type: array
+          items: { type: integer, format: int64 }
+          description: 由角色权限聚合出的权限组 id
+    CreateRoleRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*$'
+        name:
+          type: string
+        category:
+          type: string
+          default: general
+        icon:
+          type: string
+          nullable: true
+        color:
+          type: string
+          enum: [primary, warning, success, danger, neutral]
+          default: neutral
+        description:
+          type: string
+          nullable: true
+        permissionIds:
+          type: array
+          items: { type: integer, format: int64 }
+          description: 可选，创建时直接分配权限
+    UpdateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        color:
+          type: string
+          enum: [primary, warning, success, danger, neutral]
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+    RolePermissions:
+      type: object
+      required: [permissionIds]
+      properties:
+        permissionIds:
+          type: array
+          items: { type: integer, format: int64 }
+    UpdateRolePermissionsRequest:
+      type: object
+      required: [permissionIds]
+      properties:
+        permissionIds:
+          type: array
+          items: { type: integer, format: int64 }
+    Permission:
+      type: object
+      required: [id, code, name, type]
+      properties:
+        id:
+          type: integer
+          format: int64
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/PermissionType'
+        description:
+          type: string
+          nullable: true
+    PermissionGroup:
+      type: object
+      required: [id, code, name, permissions]
+      properties:
+        id:
+          type: integer
+          format: int64
+        code:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+    DashboardStats:
+      type: object
+      required: [totalUsers, activeUsers, totalRoles, totalPermissions]
+      properties:
+        totalUsers:
+          type: integer
+          format: int64
+        activeUsers:
+          type: integer
+          format: int64
+        totalRoles:
+          type: integer
+          format: int64
+        totalPermissions:
+          type: integer
+          format: int64
+        suspendedUsers:
+          type: integer
+          format: int64

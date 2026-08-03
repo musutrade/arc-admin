@@ -1,58 +1,50 @@
-// 使用前替换: {{ENTITY_NAME}}
-// 注意: Handler 层禁止出现 SQL (auditor 会拦截), 只允许调用 Service
-use actix_web::{web, HttpResponse, Responder};
-use serde_json::json;
-use crate::services::{{ENTITY_NAME}}Service;
+// 使用前替换: {{ENTITY_NAME}}（模块名用 {{entity_name}} 小写形式）
+// 注意: Handler 层禁止 SQL（audit 拦截），只允许调用 services
+// 风格与 backend/src/handlers/*.rs 一致：
+//   axum + State<AppState> + AuthUser（需要登录的路由都带 _auth: AuthUser）
+// 参考实现: backend/src/handlers/users.rs
+use crate::auth::AuthUser;
+use crate::error::ApiError;
+use crate::models::{
+    {{ENTITY_NAME}}CreateRequest, {{ENTITY_NAME}}Response, PageQuery, Page{{ENTITY_NAME}},
+};
+use crate::services;
+use crate::AppState;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::Json;
 
-#[derive(Clone)]
-pub struct {{ENTITY_NAME}}Handler {
-    service: {{ENTITY_NAME}}Service,
+pub async fn list(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Query(query): Query<PageQuery>,
+) -> Result<Json<Page{{ENTITY_NAME}}>, ApiError> {
+    services::{{entity_name}}::list(&state.pool, &query).await.map(Json)
 }
 
-impl {{ENTITY_NAME}}Handler {
-    pub fn new(service: {{ENTITY_NAME}}Service) -> Self {
-        Self { service }
-    }
-
-    pub async fn find_by_id(
-        service: web::Data<{{ENTITY_NAME}}Handler>,
-        path: web::Path<i64>,
-    ) -> impl Responder {
-        let id = path.into_inner();
-        match service.service.get_by_id(id).await {
-            Ok(Some(data)) => HttpResponse::Ok().json(json!({ "data": data })),
-            Ok(None) => HttpResponse::NotFound().json(json!({ "error": "Not Found" })),
-            Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
-        }
-    }
-
-    pub async fn list(
-        service: web::Data<{{ENTITY_NAME}}Handler>,
-        query: web::Query<PageQuery>,
-    ) -> impl Responder {
-        let page = query.page.unwrap_or(1);
-        let size = query.size.unwrap_or(10);
-        match service.service.list(page, size).await {
-            Ok(data) => {
-                HttpResponse::Ok().json(json!({ "data": data, "page": page, "size": size }))
-            }
-            Err(e) => HttpResponse::InternalServerError().json(json!({ "error": e.to_string() })),
-        }
-    }
-
-    pub async fn create(
-        service: web::Data<{{ENTITY_NAME}}Handler>,
-        body: web::Json<{{ENTITY_NAME}}CreateDto>,
-    ) -> impl Responder {
-        match service.service.create(body.into_inner()).await {
-            Ok(data) => HttpResponse::Created().json(json!({ "data": data })),
-            Err(e) => HttpResponse::BadRequest().json(json!({ "error": e.to_string() })),
-        }
-    }
+pub async fn get(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(id): Path<i64>,
+) -> Result<Json<{{ENTITY_NAME}}Response>, ApiError> {
+    services::{{entity_name}}::get(&state.pool, id).await.map(Json)
 }
 
-#[derive(Debug, serde::Deserialize)]
-pub struct PageQuery {
-    pub page: Option<i64>,
-    pub size: Option<i64>,
+pub async fn create(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Json(req): Json<{{ENTITY_NAME}}CreateRequest>,
+) -> Result<(StatusCode, Json<{{ENTITY_NAME}}Response>), ApiError> {
+    services::{{entity_name}}::create(&state.pool, &req)
+        .await
+        .map(|data| (StatusCode::CREATED, Json(data)))
+}
+
+pub async fn delete(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, ApiError> {
+    services::{{entity_name}}::delete(&state.pool, id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

@@ -12,10 +12,7 @@
 #   AUDITOR_CONFIG    audit.toml 路径
 
 CALLER_DIR="$1"
-PIPELINE_DIR="$(CDPATH= cd -- "$CALLER_DIR" && pwd)"
-case "$PIPELINE_DIR" in
-  */scripts|*/hooks) PIPELINE_DIR="$(dirname "$PIPELINE_DIR")" ;;
-esac
+CALLER_DIR="$(CDPATH= cd -- "$CALLER_DIR" && pwd)"
 
 detect_project_root() {
   dir="$1"
@@ -30,17 +27,25 @@ detect_project_root() {
 
 if [ -n "${PROJECT_ROOT:-}" ]; then
   :
-elif [ -d "$PIPELINE_DIR/frontend" ] && [ -d "$PIPELINE_DIR/backend" ]; then
-  PROJECT_ROOT="$PIPELINE_DIR"
 else
-  PROJECT_ROOT="$(detect_project_root "$PIPELINE_DIR")"
+  PROJECT_ROOT="$(detect_project_root "$CALLER_DIR")"
 fi
 if [ -z "$PROJECT_ROOT" ]; then
   echo "⚠️ 未找到项目根目录（缺少 frontend/ 与 backend/），回退到当前目录: $PWD" >&2
   PROJECT_ROOT="$PWD"
 fi
 
+# pipeline 目录：优先按仓库根下的固定位置，其次按调用方所在目录推导
+# （git 钩子执行时 $0 可能指向 .git/hooks/...，不能依赖 $0 推导）
+if [ -f "$PROJECT_ROOT/codex-audit-pipeline/.codex/audit.toml" ]; then
+  PIPELINE_DIR="$PROJECT_ROOT/codex-audit-pipeline"
+else
+  PIPELINE_DIR="$(dirname "$CALLER_DIR")"
+  case "$PIPELINE_DIR" in
+    */scripts|*/hooks) PIPELINE_DIR="$(dirname "$PIPELINE_DIR")" ;;
+  esac
+fi
+
 REPORT_DIR="${REPORT_DIR:-$PIPELINE_DIR/.codex/reports}"
 AUDITOR_BIN="${AUDITOR_BIN:-$PIPELINE_DIR/tools/auditor/target/release/auditor}"
 AUDITOR_CONFIG="${AUDITOR_CONFIG:-$PIPELINE_DIR/.codex/audit.toml}"
-

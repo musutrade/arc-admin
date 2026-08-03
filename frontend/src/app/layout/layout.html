@@ -2,7 +2,15 @@
 <div class="app-shell">
 
   <!-- ============ 侧边栏 ============ -->
-  <aside class="sidebar" [class.collapsed]="collapsed()" [class.open]="sidebarOpen()" (click)="sidebarOpen.set(false)">
+  <aside
+    class="sidebar"
+    [class.collapsed]="collapsed()"
+    [class.open]="sidebarOpen()"
+    (click)="sidebarOpen.set(false)"
+    tabindex="0"
+    (keydown.enter)="sidebarOpen.set(false)"
+    (keydown.space)="sidebarOpen.set(false)"
+  >
     <!-- Logo -->
     <div class="sidebar-logo">
       <div class="brand-card">

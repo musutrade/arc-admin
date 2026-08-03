@@ -44,8 +44,9 @@
         </div>
         <div class="perm-grid">
           @for (p of group.permissions; track p.id) {
-            <label class="perm-item" [class.checked]="isAssigned(p)">
+            <label class="perm-item" [class.checked]="isAssigned(p)" [for]="'perm-' + p.id">
               <mat-checkbox
+                [id]="'perm-' + p.id"
                 [checked]="isAssigned(p)"
                 (change)="togglePermission(p.id, $event.checked)"
                 color="primary"

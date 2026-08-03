@@ -13,6 +13,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 │   ├── src/main.rs            # 入口：路由 + 连接池 + 迁移
 │   ├── migrations/            # SQLX 迁移（不可变，只增不改）
 │   └── .env.example
+├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
 ├── codex-audit-pipeline/      # Codex 工作流工具（自包含）
 │   ├── .codex/                # 审计规则 / 模板 / 报告产物
 │   ├── scripts/               # changed_paths / audit_gate / run_tests
@@ -27,7 +28,8 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 # 前端
 cd frontend && npm install && npm start   # http://localhost:4200
 
-# 后端（先创建数据库并设置 DATABASE_URL）
+# 后端（先创建数据库，再按 .env.example 填 .env）
+cp backend/.env.example backend/.env   # 修改 DATABASE_URL
 cd backend && cargo run                    # http://localhost:8080/api/v1/healthz
 ```
 
@@ -48,3 +50,10 @@ RUN_RUST=true RUN_ANGULAR=true bash codex-audit-pipeline/scripts/run_tests.sh
 
 详见 [AGENTS.md](AGENTS.md) 与 `codex-audit-pipeline/README.md`。
 
+## API 契约
+
+[docs/openapi.yaml](docs/openapi.yaml) 是前后端联调的唯一事实来源：
+
+- 后端按契约实现路由与 DTO（`/api/v1/...`，服务端口由 `backend/.env` 的 `PORT` 控制，当前 8081）；
+- 前端按契约替换 `DataService` 的 mock，字段映射说明见契约顶部；
+- 数据库 schema 与种子数据由 `backend/migrations/` 管理（当前已应用 0001 schema + 0002 种子：5 权限组 / 15 权限 / 6 角色）。

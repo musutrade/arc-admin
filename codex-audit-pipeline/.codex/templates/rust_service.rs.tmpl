@@ -1,41 +1,55 @@
-// 使用前替换: {{ENTITY_NAME}}
-// 注意: Service 层禁止出现 SQL (auditor 会拦截), 只允许调用 Repository
-use crate::repositories::{{ENTITY_NAME}}Repository;
-use crate::models::{{ENTITY_NAME}};
-use anyhow::Result;
+// 使用前替换: {{ENTITY_NAME}}（模块名用 {{entity_name}} 小写形式）
+// 注意: Service 层禁止 SQL（audit 拦截），只允许调用 repositories；错误统一为 ApiError
+// 风格与 backend/src/services/*.rs 一致：自由函数 + &PgPool，参数校验放在本层
+// 参考实现: backend/src/services/users.rs
+use crate::error::{db_error, ApiError};
+use crate::models::{
+    {{ENTITY_NAME}}CreateRequest, {{ENTITY_NAME}}Response, PageQuery, Page{{ENTITY_NAME}},
+};
+use crate::repositories;
+use sqlx::PgPool;
 
-#[derive(Clone)]
-pub struct {{ENTITY_NAME}}Service {
-    repo: {{ENTITY_NAME}}Repository,
+pub async fn list(pool: &PgPool, query: &PageQuery) -> Result<Page{{ENTITY_NAME}}, ApiError> {
+    let page = query.page.unwrap_or(1).max(1);
+    let page_size = query.page_size.unwrap_or(20).clamp(1, 100);
+    let rows = repositories::{{entity_name}}::list(pool, page, page_size)
+        .await
+        .map_err(db_error)?;
+    let total = repositories::{{entity_name}}::count(pool).await.map_err(db_error)?;
+    Ok(Page{{ENTITY_NAME}} {
+        items: rows.into_iter().map(Into::into).collect(),
+        total,
+        page,
+        page_size,
+    })
 }
 
-impl {{ENTITY_NAME}}Service {
-    pub fn new(repo: {{ENTITY_NAME}}Repository) -> Self {
-        Self { repo }
-    }
+pub async fn get(pool: &PgPool, id: i64) -> Result<{{ENTITY_NAME}}Response, ApiError> {
+    let row = repositories::{{entity_name}}::find_by_id(pool, id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::not_found("{{ENTITY_NAME}} 不存在"))?;
+    Ok(row.into())
+}
 
-    pub async fn get_by_id(&self, id: i64) -> Result<Option<{{ENTITY_NAME}}>> {
-        if id <= 0 {
-            anyhow::bail!("ID must be positive");
-        }
-        self.repo.find_by_id(id).await
-    }
+pub async fn create(
+    pool: &PgPool,
+    req: &{{ENTITY_NAME}}CreateRequest,
+) -> Result<{{ENTITY_NAME}}Response, ApiError> {
+    // 校验规则写在这里（与 users::create / roles::create 的模式一致）
+    // if req.name.trim().is_empty() { return Err(ApiError::validation("name 不能为空")); }
+    let row = repositories::{{entity_name}}::create(pool, req)
+        .await
+        .map_err(db_error)?;
+    Ok(row.into())
+}
 
-    pub async fn list(&self, page: i64, size: i64) -> Result<Vec<{{ENTITY_NAME}}>> {
-        let limit = size.min(100);
-        let offset = (page - 1) * size;
-        self.repo.find_all(limit, offset).await
+pub async fn delete(pool: &PgPool, id: i64) -> Result<(), ApiError> {
+    let deleted = repositories::{{entity_name}}::soft_delete(pool, id)
+        .await
+        .map_err(db_error)?;
+    if !deleted {
+        return Err(ApiError::not_found("{{ENTITY_NAME}} 不存在"));
     }
-
-    pub async fn create(&self, data: {{ENTITY_NAME}}CreateDto) -> Result<{{ENTITY_NAME}}> {
-        self.validate(&data)?;
-        self.repo.create(data).await
-    }
-
-    fn validate(&self, data: &{{ENTITY_NAME}}CreateDto) -> Result<()> {
-        if data.name.is_empty() {
-            anyhow::bail!("Name cannot be empty");
-        }
-        Ok(())
-    }
+    Ok(())
 }

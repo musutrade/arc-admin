@@ -1,55 +1,70 @@
 // 使用前替换: {{ENTITY_NAME}}, {{TABLE_NAME}}, {{COLUMN_LIST}}, {{VALUE_PLACEHOLDER}}
-// 注意: 本文件位于 Repository 层, 允许 SQL 写操作(与 audit.toml allowlist 一致)
-use sqlx::PgPool;
-use crate::models::{{ENTITY_NAME}};
-use anyhow::Result;
+// 注意: Repository 层是唯一允许 SQL 写操作的地方（audit allowlist）
+// 风格与 backend/src/repositories/*.rs 一致：
+//   自由函数 + &PgPool，返回 sqlx::Error（由 Service 层映射为 ApiError）
+// 参考实现: backend/src/repositories/users.rs
+use crate::models::{{ENTITY_NAME}}Row;
+use sqlx::{PgPool, Row};
 
-#[derive(Clone)]
-pub struct {{ENTITY_NAME}}Repository {
-    pool: PgPool,
+const ENTITY_COLUMNS: &str = "id, {{COLUMN_LIST}}, created_at, updated_at";
+
+pub async fn find_by_id(
+    pool: &PgPool,
+    id: i64,
+) -> Result<Option<{{ENTITY_NAME}}Row>, sqlx::Error> {
+    sqlx::query_as::<_, {{ENTITY_NAME}}Row>(&format!(
+        "SELECT {ENTITY_COLUMNS} FROM {{TABLE_NAME}} WHERE id = $1 AND deleted_at IS NULL"
+    ))
+    .bind(id)
+    .fetch_optional(pool)
+    .await
 }
 
-impl {{ENTITY_NAME}}Repository {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
+pub async fn list(
+    pool: &PgPool,
+    page: i64,
+    page_size: i64,
+) -> Result<Vec<{{ENTITY_NAME}}Row>, sqlx::Error> {
+    sqlx::query_as::<_, {{ENTITY_NAME}}Row>(&format!(
+        "SELECT {ENTITY_COLUMNS} FROM {{TABLE_NAME}}
+         WHERE deleted_at IS NULL
+         ORDER BY id LIMIT $1 OFFSET $2"
+    ))
+    .bind(page_size)
+    .bind((page - 1) * page_size)
+    .fetch_all(pool)
+    .await
+}
 
-    pub async fn find_by_id(&self, id: i64) -> Result<Option<{{ENTITY_NAME}}>> {
-        let record = sqlx::query_as::<_, {{ENTITY_NAME}}>(
-            "SELECT * FROM {{TABLE_NAME}} WHERE id = $1",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
+pub async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
+    let row = sqlx::query("SELECT count(*) FROM {{TABLE_NAME}} WHERE deleted_at IS NULL")
+        .fetch_one(pool)
         .await?;
-        Ok(record)
-    }
+    row.try_get::<i64, _>(0)
+}
 
-    pub async fn find_all(&self, limit: i64, offset: i64) -> Result<Vec<{{ENTITY_NAME}}>> {
-        let records = sqlx::query_as::<_, {{ENTITY_NAME}}>(
-            "SELECT * FROM {{TABLE_NAME}} ORDER BY id LIMIT $1 OFFSET $2",
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(records)
-    }
+pub async fn create(
+    pool: &PgPool,
+    data: &crate::models::{{ENTITY_NAME}}CreateRequest,
+) -> Result<{{ENTITY_NAME}}Row, sqlx::Error> {
+    sqlx::query_as::<_, {{ENTITY_NAME}}Row>(&format!(
+        "INSERT INTO {{TABLE_NAME}} ({{COLUMN_LIST}})
+         VALUES ({{VALUE_PLACEHOLDER}})
+         RETURNING {ENTITY_COLUMNS}"
+    ))
+    // 按字段逐个 .bind(...)，与 users::create 模式一致
+    .bind(&data.field1)
+    .fetch_one(pool)
+    .await
+}
 
-    pub async fn create(&self, data: {{ENTITY_NAME}}CreateDto) -> Result<{{ENTITY_NAME}}> {
-        let record = sqlx::query_as::<_, {{ENTITY_NAME}}>(
-            "INSERT INTO {{TABLE_NAME}} ({{COLUMN_LIST}}) VALUES ({{VALUE_PLACEHOLDER}}) RETURNING *",
-        )
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(record)
-    }
-
-    pub async fn soft_delete(&self, id: i64) -> Result<bool> {
-        let rows = sqlx::query("UPDATE {{TABLE_NAME}} SET deleted_at = NOW() WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?
-            .rows_affected();
-        Ok(rows > 0)
-    }
+pub async fn soft_delete(pool: &PgPool, id: i64) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "UPDATE {{TABLE_NAME}} SET deleted_at = now(), updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL",
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
 }

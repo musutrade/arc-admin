@@ -51,10 +51,10 @@ fi
 
 if [ "$RUN_ANGULAR" = true ] && [ -d "$FRONTEND_DIR/src" ]; then
   echo "  >> Angular ESLint..."
-  if ! npx eslint "$FRONTEND_DIR/src" --ext .ts,.html --max-warnings=0 > "$RAW_LOG_DIR/eslint_check.log" 2>&1; then
+  if ! (cd "$FRONTEND_DIR" && npx eslint src --max-warnings=0) > "$RAW_LOG_DIR/eslint_check.log" 2>&1; then
     echo "  >> ESLint 未通过，尝试自动修复..."
-    npx eslint "$FRONTEND_DIR/src" --ext .ts,.html --fix > "$RAW_LOG_DIR/eslint_fix.log" 2>&1 || true
-    if npx eslint "$FRONTEND_DIR/src" --ext .ts,.html --max-warnings=0 > "$RAW_LOG_DIR/eslint_check2.log" 2>&1; then
+    (cd "$FRONTEND_DIR" && npx eslint src --fix) > "$RAW_LOG_DIR/eslint_fix.log" 2>&1 || true
+    if (cd "$FRONTEND_DIR" && npx eslint src --max-warnings=0) > "$RAW_LOG_DIR/eslint_check2.log" 2>&1; then
       echo "  ✅ ESLint 自动修复成功（⚠️ 请人工复核 git diff 后再提交）"
     else
       echo "### 未修复的 ESLint 错误:" >> "$REPORT_FILE"
