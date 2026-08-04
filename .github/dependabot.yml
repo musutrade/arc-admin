@@ -11,7 +11,7 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
   - package-ecosystem: cargo
-    directory: /codex-audit-pipeline/tools/auditor
+    directory: /codex-audit-pipeline/tools/arc-flow
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

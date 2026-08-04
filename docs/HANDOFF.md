@@ -6,8 +6,8 @@
 
 | 模块 | 已完成内容 |
 | --- | --- |
-| 工作流 | `verify.sh` 统一执行范围检测、secret scan、架构审计和测试；所有检查均不修改源码 |
-| 变更范围 | `changed_paths.sh` 支持 working-tree、staged、base 和 all 四种模式，并输出四端检查开关 |
+| 工作流 | `cargo flow verify` 统一执行范围检测、secret scan、架构审计和测试；流程 Shell 已由 Rust CLI 替代 |
+| 变更范围 | `cargo flow scope` 支持 working-tree、staged、base 和 all，并输出 backend/frontend/workflow components |
 | 后端测试 | Axum 路由已抽到 library；临时 PostgreSQL 集成测试覆盖登录、鉴权和用户 CRUD |
 | 契约 | OpenAPI 路由和 HTTP 方法由 Rust 测试与 `API_ROUTE_CONTRACT` 自动比对 |
 | 配置安全 | 生产环境强制 32 字符以上 JWT secret 和明确 CORS origin；端口、TTL 均校验 |
@@ -18,9 +18,9 @@
 ## 常用命令
 
 ```bash
-bash codex-audit-pipeline/scripts/doctor.sh
-bash codex-audit-pipeline/scripts/verify.sh
-bash codex-audit-pipeline/scripts/verify.sh --all
+cargo flow doctor
+cargo flow verify
+cargo flow verify --all
 ```
 
 后端测试默认启动并销毁一次性 `postgres:16-alpine` 容器；也可导出指向隔离测试库的 `TEST_DATABASE_URL`。任何情况下都不得指向生产库。

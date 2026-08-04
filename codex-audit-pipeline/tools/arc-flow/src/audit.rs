@@ -1,5 +1,4 @@
-use anyhow::Result;
-use clap::{Parser, Subcommand};
+use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use regex::Regex;
@@ -7,34 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-// ============================================================
-// 命令行参数
-// ============================================================
-#[derive(Parser)]
-#[command(name = "auditor")]
-#[command(about = "Codex 审计工具", long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// 全量扫描并生成审计报告（md 截断版 + json 完整版）
-    Audit {
-        /// 仅向 stdout 输出完整 JSON（供门禁脚本解析）
-        #[arg(long)]
-        json: bool,
-    },
-    /// 从结构化日志提取错误上下文（优先 ERROR 所在 trace_id）
-    ParseLogs {
-        #[arg(short, long)]
-        input: String,
-        #[arg(short, long)]
-        output: String,
-    },
-}
 
 // ============================================================
 // 配置结构体（与 .codex/audit.toml 对应）
@@ -237,12 +208,11 @@ mod log_parser {
 // ============================================================
 // 核心扫描函数
 // ============================================================
-fn compile_regexes(patterns: &[String]) -> Vec<Regex> {
+fn compile_regexes(patterns: &[String]) -> Result<Vec<Regex>> {
     patterns
         .iter()
         .map(|pattern| {
-            Regex::new(pattern)
-                .unwrap_or_else(|error| panic!("invalid regex pattern {pattern:?}: {error}"))
+            Regex::new(pattern).with_context(|| format!("invalid audit regex {pattern:?}"))
         })
         .collect()
 }
@@ -335,9 +305,9 @@ fn scan_files(
     exclude_patterns: &[String],
     allowlist: &[String],
     rule_name: &str,
-) -> Vec<Violation> {
+) -> Result<Vec<Violation>> {
     if root_dirs.is_empty() || patterns.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let root_paths: Vec<PathBuf> = root_dirs
@@ -346,11 +316,11 @@ fn scan_files(
         .filter(|path| path.exists())
         .collect();
     let exclude_set: Vec<PathBuf> = exclude_dirs.iter().map(PathBuf::from).collect();
-    let regexes = compile_regexes(patterns);
-    let exclude_regexes = compile_regexes(exclude_patterns);
+    let regexes = compile_regexes(patterns)?;
+    let exclude_regexes = compile_regexes(exclude_patterns)?;
 
     if root_paths.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
     let rule_name = rule_name.to_string();
@@ -358,7 +328,7 @@ fn scan_files(
     for root_path in root_paths.iter().skip(1) {
         walk_builder.add(root_path);
     }
-    walk_builder
+    let violations = walk_builder
         .add_custom_ignore_filename(".auditignore")
         .follow_links(false)
         .build()
@@ -420,10 +390,11 @@ fn scan_files(
             }
         })
         .flatten()
-        .collect()
+        .collect();
+    Ok(violations)
 }
 
-fn scan_arch_rules(config: &Config) -> Vec<ArchViolation> {
+fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
     let mut all_violations = Vec::new();
 
     for rule in &config.arch_rules {
@@ -444,8 +415,8 @@ fn scan_arch_rules(config: &Config) -> Vec<ArchViolation> {
             .filter(|path| path.exists())
             .collect();
         let exclude_set: Vec<PathBuf> = exclude_dirs.iter().map(PathBuf::from).collect();
-        let regexes = compile_regexes(&patterns);
-        let exclude_regexes = compile_regexes(&exclude_patterns);
+        let regexes = compile_regexes(&patterns)?;
+        let exclude_regexes = compile_regexes(&exclude_patterns)?;
 
         if root_paths.is_empty() {
             continue;
@@ -528,7 +499,7 @@ fn scan_arch_rules(config: &Config) -> Vec<ArchViolation> {
         all_violations.extend(rule_violations);
     }
 
-    all_violations
+    Ok(all_violations)
 }
 
 // ============================================================
@@ -627,7 +598,7 @@ struct JsonArchViolation {
     occurrences: Vec<JsonOccurrence>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct JsonSummary {
     total_violations: usize,
     blocker_count: usize,
@@ -642,11 +613,11 @@ struct JsonReport {
     summary: JsonSummary,
 }
 
-fn generate_json(
+fn generate_report(
     config: &Config,
     hard_violations: &[Violation],
     arch_violations: &[ArchViolation],
-) -> String {
+) -> JsonReport {
     let mut hard_json = Vec::new();
     for rule in &config.hard_rules {
         let rule_violations: Vec<&Violation> = hard_violations
@@ -709,7 +680,7 @@ fn generate_json(
         .map(|v| v.count)
         .sum();
 
-    let report = JsonReport {
+    JsonReport {
         timestamp: chrono::Utc::now().to_rfc3339(),
         hard_violations: hard_json,
         arch_violations: arch_json,
@@ -718,87 +689,73 @@ fn generate_json(
             blocker_count,
             error_count,
         },
-    };
-
-    serde_json::to_string_pretty(&report).unwrap()
+    }
 }
 
-// ============================================================
-// Main 入口
-// ============================================================
-fn main() -> Result<()> {
-    let cli = Cli::parse();
+#[derive(Debug, Clone, Serialize)]
+pub struct AuditOutcome {
+    pub total_violations: usize,
+    pub blocker_count: usize,
+    pub error_count: usize,
+}
 
-    match cli.command {
-        Commands::ParseLogs { input, output } => {
-            log_parser::extract_error_context(&input, &output)?;
-            Ok(())
-        }
+pub fn run(config_path: &Path, report_dir: &Path, emit_json: bool) -> Result<AuditOutcome> {
+    let config_str = fs::read_to_string(config_path)
+        .with_context(|| format!("read audit config {}", config_path.display()))?;
+    let config: Config = toml::from_str(&config_str)
+        .with_context(|| format!("parse audit config {}", config_path.display()))?;
 
-        Commands::Audit { json } => {
-            let config_path =
-                std::env::var("AUDITOR_CONFIG").unwrap_or_else(|_| ".codex/audit.toml".to_string());
-            if !Path::new(&config_path).exists() {
-                eprintln!("⚠️ 配置文件不存在: {}", config_path);
-                eprintln!("请设置 AUDITOR_CONFIG 或创建 .codex/audit.toml");
-                std::process::exit(1);
-            }
-
-            let config_str = fs::read_to_string(&config_path)?;
-            let config: Config = toml::from_str(&config_str)?;
-
-            let mut all_hard_violations = Vec::new();
-            for rule in &config.hard_rules {
-                let root_dirs = resolve_root_dirs(&rule.paths, &config.paths.aliases);
-                let violations = scan_files(
-                    &root_dirs,
-                    &rule.extensions,
-                    &config.paths.exclude,
-                    &rule.patterns,
-                    &rule.exclude_patterns,
-                    &rule.allowlist,
-                    &rule.name,
-                );
-                all_hard_violations.extend(violations);
-            }
-
-            let arch_violations = scan_arch_rules(&config);
-
-            // 完整 JSON：供门禁与修复阶段使用
-            let full_json = generate_json(&config, &all_hard_violations, &arch_violations);
-
-            if json {
-                println!("{}", full_json);
-                return Ok(());
-            }
-
-            // 截断版 Markdown：供 LLM 阅读
-            let markdown = generate_markdown(&config, &all_hard_violations, &arch_violations);
-            let truncated = if markdown.len() > 4096 {
-                let mut s = markdown;
-                s.truncate(4096);
-                s.push_str("\n\n... (报告已截断至 4KB，完整明细见 review_context.json)");
-                s
-            } else {
-                markdown
-            };
-
-            let report_dir = std::env::var("AUDITOR_REPORT_DIR")
-                .unwrap_or_else(|_| ".codex/reports".to_string());
-            fs::create_dir_all(&report_dir)?;
-            let truncated_len = truncated.len();
-            fs::write(format!("{report_dir}/review_context.md"), &truncated)?;
-            fs::write(format!("{report_dir}/review_context.json"), full_json)?;
-
-            println!("✅ 审计报告已生成:");
-            println!(
-                "   {report_dir}/review_context.md  (截断版, {} 字节)",
-                truncated_len
-            );
-            println!("   {report_dir}/review_context.json (完整版)");
-            Ok(())
-        }
+    let mut all_hard_violations = Vec::new();
+    for rule in &config.hard_rules {
+        let root_dirs = resolve_root_dirs(&rule.paths, &config.paths.aliases);
+        let violations = scan_files(
+            &root_dirs,
+            &rule.extensions,
+            &config.paths.exclude,
+            &rule.patterns,
+            &rule.exclude_patterns,
+            &rule.allowlist,
+            &rule.name,
+        )?;
+        all_hard_violations.extend(violations);
     }
+
+    let arch_violations = scan_arch_rules(&config)?;
+    let report = generate_report(&config, &all_hard_violations, &arch_violations);
+    let full_json = serde_json::to_string_pretty(&report)?;
+    let outcome = AuditOutcome {
+        total_violations: report.summary.total_violations,
+        blocker_count: report.summary.blocker_count,
+        error_count: report.summary.error_count,
+    };
+
+    fs::create_dir_all(report_dir)?;
+    fs::write(report_dir.join("review_context.json"), &full_json)?;
+
+    let markdown = generate_markdown(&config, &all_hard_violations, &arch_violations);
+    let truncated = if markdown.len() > 4096 {
+        let mut value = markdown;
+        let mut boundary = 4096;
+        while !value.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        value.truncate(boundary);
+        value.push_str("\n\n... (report truncated to 4KB; see review_context.json)");
+        value
+    } else {
+        markdown
+    };
+    fs::write(report_dir.join("review_context.md"), truncated)?;
+
+    if emit_json {
+        println!("{full_json}");
+    }
+
+    Ok(outcome)
+}
+
+pub fn parse_logs(input: &Path, output: &Path) -> Result<()> {
+    log_parser::extract_error_context(&input.to_string_lossy(), &output.to_string_lossy())
 }
 
 #[cfg(test)]
@@ -855,7 +812,8 @@ mod tests {
             &[],
             &[],
             "test rule",
-        );
+        )
+        .expect("scan fixture");
 
         assert_eq!(violations.len(), 2);
     }
@@ -889,7 +847,7 @@ mod tests {
             }],
         };
 
-        assert_eq!(scan_arch_rules(&config).len(), 2);
+        assert_eq!(scan_arch_rules(&config).expect("scan config").len(), 2);
     }
 
     #[test]
@@ -904,5 +862,35 @@ mod tests {
             Path::new("backend/src/repositories_backup/users.rs"),
             &allowlist
         ));
+    }
+
+    #[test]
+    fn invalid_rule_regex_returns_an_error() {
+        let error = compile_regexes(&["(".to_string()]).expect_err("invalid regex must fail");
+        assert!(error.to_string().contains("invalid audit regex"));
+    }
+
+    #[test]
+    fn log_parser_keeps_the_error_trace() {
+        let test_dir = TestDir::new("parse-logs");
+        let input = test_dir.0.join("input.jsonl");
+        let output = test_dir.0.join("output.json");
+        fs::write(
+            &input,
+            concat!(
+                "{\"level\":\"INFO\",\"trace_id\":\"failed\",\"fields\":{\"message\":\"start\"}}\n",
+                "{\"level\":\"ERROR\",\"trace_id\":\"failed\",\"fields\":{\"error\":\"root cause\"}}\n",
+                "{\"level\":\"INFO\",\"trace_id\":\"other\",\"fields\":{\"message\":\"later\"}}\n"
+            ),
+        )
+        .expect("write log fixture");
+
+        log_parser::extract_error_context(&input.to_string_lossy(), &output.to_string_lossy())
+            .expect("parse logs");
+        let parsed: Vec<serde_json::Value> =
+            serde_json::from_slice(&fs::read(output).expect("read output")).expect("output JSON");
+
+        assert_eq!(parsed.len(), 2);
+        assert!(parsed.iter().all(|entry| entry["trace_id"] == "failed"));
     }
 }

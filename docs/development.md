@@ -2,14 +2,14 @@
 
 ## 环境准备
 
-工具链版本由仓库固定：Node 读取 `.node-version`，Rust 读取 `rust-toolchain.toml`。还需要 Git、Docker、jq、timeout；ShellCheck 用于本地检查工作流脚本。
+工具链版本由仓库固定：Node 读取 `.node-version`，Rust 读取 `rust-toolchain.toml`。还需要 Git 和 Docker；若显式提供隔离的 `TEST_DATABASE_URL`，后端测试可以不使用 Docker。
 
 ```bash
 cd frontend && npm ci && cd ..
 cp backend/.env.example backend/.env
 docker pull postgres:16-alpine
 git config core.hooksPath codex-audit-pipeline/hooks
-bash codex-audit-pipeline/scripts/doctor.sh
+cargo flow doctor
 ```
 
 运行后端前，修改不入库的 `backend/.env` 中的 `DATABASE_URL`。`APP_ENV=production` 时必须设置至少 32 字符的 `JWT_SECRET` 和明确的 `CORS_ALLOWED_ORIGINS`。
@@ -29,21 +29,21 @@ cd backend && cargo run
 ## 验证流程
 
 ```bash
-# 按未提交变更自动选择检查范围
-bash codex-audit-pipeline/scripts/verify.sh
+# 查看并按未提交变更自动选择检查范围
+cargo flow scope
+cargo flow verify
 
 # 合并或交付前必须全量执行
-bash codex-audit-pipeline/scripts/verify.sh --all
+cargo flow verify --all
 ```
 
-执行顺序固定为 secret scan、架构审计、格式/lint、编译、测试和前端生产构建。报告位于 `codex-audit-pipeline/.codex/reports/`，最后一行是机器可读的 `TEST_SUMMARY`。
+执行顺序固定为 secret scan、架构审计、格式/lint、编译、测试和前端生产构建。Rust CLI 为每一步记录耗时和独立日志；报告位于 `codex-audit-pipeline/.codex/reports/`，同时提供 JSON 和末行带 `TEST_SUMMARY` 的 Markdown。
 
 后端集成测试仅允许使用临时容器或显式的隔离测试库：
 
 ```bash
 TEST_DATABASE_URL=postgres://user:password@127.0.0.1:5432/arc_admin_test \
-RUN_RUST=true RUN_ANGULAR=false RUN_AUDITOR=false RUN_SHELL=false \
-bash codex-audit-pipeline/scripts/run_tests.sh
+cargo flow verify --components backend
 ```
 
 ## Git 与 GitHub
@@ -54,4 +54,4 @@ bash codex-audit-pipeline/scripts/run_tests.sh
 - 启用 secret scanning、push protection 和 Dependabot alerts。公共仓库会额外运行 `Dependency review`；私有仓库是否可用取决于 GitHub 计划。
 - 禁止 force push 和直接删除受保护分支。
 
-CI 使用与本地相同的脚本，失败报告以 Actions artifact 保留 14 天。
+CI 使用与本地相同的 `cargo flow` 命令，失败报告以 Actions artifact 保留 14 天。

@@ -1,55 +1,6 @@
-#!/usr/bin/env bash
-# Fast, non-mutating staged gate. Full verification belongs in verify.sh/CI.
-set -uo pipefail
+#!/bin/sh
+set -eu
 
-HOOKS_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-# shellcheck source=/dev/null
-source "$HOOKS_DIR/../scripts/common.sh" "$HOOKS_DIR"
-
-cd "$PROJECT_ROOT" || exit 1
-bash "$PIPELINE_DIR/scripts/changed_paths.sh" --staged
-# shellcheck source=/dev/null
-source "$REPORT_DIR/scope.env"
-
-FAIL=0
-echo "Pre-commit checks"
-
-echo "  >> Secret scan"
-bash "$PIPELINE_DIR/scripts/secret_scan.sh" --staged || FAIL=1
-
-if [ "$RUN_SHELL" = true ]; then
-  echo "  >> Bash syntax + ShellCheck"
-  if ! bash -n "$PIPELINE_DIR"/scripts/*.sh "$PIPELINE_DIR/hooks/pre-commit"; then
-    FAIL=1
-  fi
-  shellcheck -x "$PIPELINE_DIR"/scripts/*.sh "$PIPELINE_DIR/hooks/pre-commit" || FAIL=1
-fi
-
-if [ "$RUN_RUST" = true ]; then
-  echo "  >> Rust format + Clippy"
-  cargo fmt --manifest-path="$PROJECT_ROOT/backend/Cargo.toml" -- --check || FAIL=1
-  cargo clippy --manifest-path="$PROJECT_ROOT/backend/Cargo.toml" \
-    --locked --all-targets --all-features -- -D warnings || FAIL=1
-fi
-
-if [ "$RUN_ANGULAR" = true ]; then
-  echo "  >> Angular ESLint + format"
-  (cd "$PROJECT_ROOT/frontend" && npm exec --offline eslint -- src --max-warnings=0) || FAIL=1
-  (cd "$PROJECT_ROOT/frontend" && npm run format:check) || FAIL=1
-fi
-
-if [ "$RUN_AUDITOR" = true ]; then
-  echo "  >> Auditor format + tests"
-  cargo fmt --manifest-path="$PIPELINE_DIR/tools/auditor/Cargo.toml" -- --check || FAIL=1
-  cargo test --manifest-path="$PIPELINE_DIR/tools/auditor/Cargo.toml" --locked --quiet || FAIL=1
-fi
-
-echo "  >> Architecture audit"
-bash "$PIPELINE_DIR/scripts/audit_gate.sh" || FAIL=1
-
-if [ "$FAIL" -ne 0 ]; then
-  echo "Pre-commit checks failed"
-  exit 1
-fi
-
-echo "Pre-commit checks passed"
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+exec cargo flow hook

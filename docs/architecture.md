@@ -5,7 +5,7 @@
 - `frontend/`：Angular 22 standalone 应用，负责界面、路由和前端交互状态。
 - `backend/`：Axum API，负责认证、授权、业务规则和持久化。
 - `docs/openapi.yaml`：前后端 HTTP 契约的事实来源。
-- `codex-audit-pipeline/`：独立的静态审计、范围路由、测试和 Git hook 工具。
+- `codex-audit-pipeline/`：`arc-flow` Rust CLI，统一负责范围路由、静态审计、安全扫描、测试编排、报告和 Git hook profile。
 
 ## 后端分层
 
@@ -37,6 +37,6 @@
 - `API_ROUTE_CONTRACT` 和 `backend/tests/openapi_contract.rs` 校验 OpenAPI 的路径与 HTTP 方法。
 - `backend/tests/api_flow.rs` 使用真实迁移和 PostgreSQL，覆盖未认证访问、登录、角色读取、用户创建/停用/删除。
 - Angular 测试使用 Vitest/jsdom；生产构建是完整门禁的一部分。
-- auditor 对 SQL 写入位置、分层依赖和旧模板模式做确定性扫描。
+- arc-flow 对 SQL 写入位置、分层依赖和旧模板模式做确定性扫描，并管理外部命令超时与一次性 PostgreSQL 生命周期。
 
 路由契约测试只解决路径级漂移；请求/响应 schema 的完整自动生成可在 API 规模扩大后引入 `utoipa`。

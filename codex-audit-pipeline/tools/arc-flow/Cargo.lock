@@ -77,13 +77,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "auditor"
-version = "0.3.0"
+name = "arc-flow"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "chrono",
  "clap",
  "ignore",
+ "libc",
  "rayon",
  "regex",
  "serde",

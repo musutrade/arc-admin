@@ -17,9 +17,8 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 ├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
 ├── codex-audit-pipeline/      # Codex 工作流工具（自包含）
 │   ├── .codex/                # 审计规则 / 模板 / 报告产物
-│   ├── scripts/               # doctor / changed_paths / audit_gate / run_tests / verify
-│   ├── hooks/                 # pre-commit（git config core.hooksPath）
-│   └── tools/auditor/         # 正则审计器（Rust）
+│   ├── hooks/                 # pre-commit（仅启动 arc-flow）
+│   └── tools/arc-flow/        # Rust 工作流 CLI
 └── .github/                   # CI 与 Dependabot 配置
 ```
 
@@ -31,7 +30,7 @@ cd frontend && npm ci && cd ..
 cp backend/.env.example backend/.env       # 修改 DATABASE_URL
 docker pull postgres:16-alpine
 git config core.hooksPath codex-audit-pipeline/hooks
-bash codex-audit-pipeline/scripts/doctor.sh
+cargo flow doctor
 
 # 前端（新终端）
 cd frontend && npm start                  # http://localhost:4200
@@ -43,19 +42,20 @@ cd backend && cargo run                    # http://localhost:8080/api/v1/health
 首次运行或环境变化后，可从仓库根执行依赖体检（不会连接数据库）：
 
 ```bash
-bash codex-audit-pipeline/scripts/doctor.sh
+cargo flow doctor
 ```
 
 ## Codex 工作流
 
-所有命令从仓库根执行，脚本会自动定位根目录：
+所有命令从仓库根执行，`cargo flow` 会定位项目并写入结构化报告：
 
 ```bash
-# 按工作区变更自动选择检查范围
-bash codex-audit-pipeline/scripts/verify.sh
+# 查看范围并按工作区变更自动验证
+cargo flow scope
+cargo flow verify
 
 # 合并前完整验证（secret scan → audit → lint/check/test/build）
-bash codex-audit-pipeline/scripts/verify.sh --all
+cargo flow verify --all
 ```
 
 详见 [开发指南](docs/development.md)、[架构说明](docs/architecture.md)、[AGENTS.md](AGENTS.md) 与 [工作流说明](codex-audit-pipeline/README.md)。
