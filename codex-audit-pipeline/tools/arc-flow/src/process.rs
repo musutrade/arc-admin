@@ -35,6 +35,7 @@ pub struct Task {
     args: Vec<OsString>,
     cwd: PathBuf,
     env: Vec<(OsString, OsString)>,
+    env_remove: Vec<OsString>,
     timeout: Duration,
     log: PathBuf,
 }
@@ -63,6 +64,7 @@ impl Task {
             args: Vec::new(),
             cwd: cwd.to_path_buf(),
             env: Vec::new(),
+            env_remove: Vec::new(),
             timeout: Duration::from_secs(180),
             log,
         }
@@ -84,6 +86,11 @@ impl Task {
         self
     }
 
+    pub fn env_remove(mut self, key: impl AsRef<OsStr>) -> Self {
+        self.env_remove.push(key.as_ref().to_os_string());
+        self
+    }
+
     pub fn timeout(mut self, seconds: u64) -> Self {
         self.timeout = Duration::from_secs(seconds);
         self
@@ -101,7 +108,11 @@ impl Task {
         command
             .args(&self.args)
             .current_dir(&self.cwd)
-            .envs(self.env)
+            .envs(self.env);
+        for name in self.env_remove {
+            command.env_remove(name);
+        }
+        command
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr));
         #[cfg(unix)]
@@ -188,6 +199,22 @@ mod tests {
 
         assert!(!result.passed);
         assert!(result.timed_out);
+        let _ = fs::remove_file(log);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn task_can_remove_an_inherited_environment_variable() {
+        let log = std::env::temp_dir().join(format!("arc-flow-env-{}.log", std::process::id()));
+        let result = Task::new("environment fixture", "env", Path::new("."), log.clone())
+            .env("ARC_FLOW_REMOVE_FIXTURE", "must-not-leak")
+            .env_remove("ARC_FLOW_REMOVE_FIXTURE")
+            .run()
+            .expect("run environment fixture");
+
+        assert!(result.passed);
+        let output = fs::read_to_string(&log).expect("read environment log");
+        assert!(!output.contains("ARC_FLOW_REMOVE_FIXTURE"));
         let _ = fs::remove_file(log);
     }
 }

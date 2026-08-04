@@ -6,13 +6,14 @@
 仓库根/
 ├── frontend/                  # Angular 22 + Material M3 前端
 ├── backend/                   # Rust + Axum + SQLX 后端（handlers/services/repositories/models）
+├── .arc-flow/                 # arc-flow schema v2 项目配置
 └── codex-audit-pipeline/      # 工作流工具（自包含）
     ├── hooks/                 # pre-commit 极薄启动器
     ├── tools/arc-flow/        # Rust CLI（审计 + 全流程编排）
     └── .codex/                # 审计规则 / 模板 / 报告产物
 ```
 
-所有命令从仓库根执行，脚本会自动定位仓库根。
+所有命令从仓库根执行，`arc-flow` 通过 `.arc-flow/flow.toml` 自动定位仓库根。
 
 ## ⛔ 数据库安全红线
 - SQL 写操作（INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE、`.execute()`/`.exec()`）**只允许出现在 Repository / db / migrations / tests / seed 层**。

@@ -1,0 +1,326 @@
+version = 2
+
+[project]
+name = "arc-admin"
+default_profile = "full"
+hook_profile = "hook"
+
+[paths]
+reports = "codex-audit-pipeline/.codex/reports"
+audit_config = "codex-audit-pipeline/.codex/audit.toml"
+
+[paths.aliases.backend]
+path = "backend"
+env = "ARC_FLOW_BACKEND"
+
+[paths.aliases.frontend]
+path = "frontend"
+env = "ARC_FLOW_FRONTEND"
+
+[paths.aliases.tool_manifest]
+path = "codex-audit-pipeline/tools/arc-flow/Cargo.toml"
+env = "ARC_FLOW_TOOL_MANIFEST"
+
+[policy]
+required_steps = [
+  "backend.format",
+  "backend.clippy",
+  "backend.compile",
+  "backend.tests",
+  "frontend.lint",
+  "frontend.format",
+  "frontend.tests",
+  "frontend.build",
+  "workflow.hook-syntax",
+  "workflow.format",
+  "workflow.clippy",
+  "workflow.tests",
+]
+
+[[doctor.checks]]
+id = "tool.git"
+label = "git"
+kind = "command"
+program = "git"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.cargo"
+label = "cargo"
+kind = "command"
+program = "cargo"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.rustc"
+label = "rustc"
+kind = "command"
+program = "rustc"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.node"
+label = "node"
+kind = "command"
+program = "node"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "tool.npm"
+label = "npm"
+kind = "command"
+program = "npm"
+args = ["--version"]
+
+[[doctor.checks]]
+id = "frontend.dependencies"
+label = "frontend dependencies"
+kind = "path"
+path = "{frontend}/node_modules"
+path_type = "directory"
+help = "run `cd frontend && npm ci`"
+
+[[doctor.checks]]
+id = "runtime.database"
+label = "runtime database"
+kind = "env-or-file"
+env = "DATABASE_URL"
+path = "{backend}/.env"
+contains = "DATABASE_URL="
+help = "create backend/.env from backend/.env.example"
+
+[[doctor.checks]]
+id = "backend.migrations"
+label = "migrations"
+kind = "glob"
+pattern = "{backend}/migrations/*.sql"
+help = "add at least one SQL migration"
+
+[[doctor.checks]]
+id = "git.hooks"
+label = "Git hooks"
+required = false
+kind = "git-config"
+key = "core.hooksPath"
+expected = "codex-audit-pipeline/hooks"
+help = "run `git config core.hooksPath codex-audit-pipeline/hooks`"
+
+[[doctor.checks]]
+id = "node.version"
+label = "Node version"
+kind = "version"
+program = "node"
+args = ["--version"]
+path = "{root}/.node-version"
+trim_prefix = "v"
+
+[[doctor.checks]]
+id = "git.remotes"
+label = "Git remotes"
+kind = "git-remotes"
+
+[[doctor.checks]]
+id = "test.database"
+label = "test database"
+required = false
+kind = "service"
+service = "test-postgres"
+help = "configure TEST_DATABASE_URL or Docker"
+
+[services.test-postgres]
+kind = "docker"
+image = "postgres:16-alpine"
+image_env = "ARC_FLOW_POSTGRES_IMAGE"
+external_env = "TEST_DATABASE_URL"
+inject_env = "TEST_DATABASE_URL"
+startup_timeout_secs = 30
+timeout_env = "ARC_FLOW_DATABASE_TIMEOUT_SECS"
+container_port = 5432
+environment = { POSTGRES_USER = "arc_admin_test", POSTGRES_PASSWORD = "arc_admin_test", POSTGRES_DB = "arc_admin_test" }
+healthcheck = ["pg_isready", "-U", "arc_admin_test", "-d", "arc_admin_test"]
+connection = "postgres://arc_admin_test:arc_admin_test@127.0.0.1:{host_port}/arc_admin_test"
+
+[parsers.rust]
+kind = "regex"
+patterns = ['(?m)^running ([0-9]+) tests?$']
+capture = 1
+minimum = 1
+
+[parsers.angular]
+kind = "regex"
+patterns = ['Tests\s+([0-9]+) passed']
+capture = 1
+minimum = 1
+
+[[scope.rules]]
+patterns = ["backend/**"]
+components = ["backend"]
+
+[[scope.rules]]
+patterns = ["frontend/**", ".node-version"]
+components = ["frontend"]
+
+[[scope.rules]]
+patterns = ["rust-toolchain.toml"]
+components = ["backend", "workflow"]
+
+[[scope.rules]]
+patterns = [
+  ".arc-flow/**",
+  "codex-audit-pipeline/tools/arc-flow/**",
+  "codex-audit-pipeline/hooks/**",
+  ".cargo/config.toml",
+]
+components = ["backend", "frontend", "workflow"]
+
+[[scope.rules]]
+patterns = ["docs/openapi.yaml", ".github/workflows/**"]
+components = ["backend", "frontend", "workflow"]
+
+[[scope.rules]]
+patterns = [
+  "codex-audit-pipeline/.codex/audit.toml",
+  "codex-audit-pipeline/.codex/templates/**",
+]
+components = ["workflow"]
+
+[[steps]]
+id = "backend.format"
+label = "backend format"
+component = "backend"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["fmt", "--manifest-path", "{backend}/Cargo.toml", "--", "--check"]
+cwd = "{root}"
+log = "backend_fmt.log"
+timeout_secs = 180
+
+[[steps]]
+id = "backend.clippy"
+label = "backend Clippy"
+component = "backend"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["clippy", "--manifest-path", "{backend}/Cargo.toml", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings"]
+cwd = "{root}"
+log = "backend_clippy.log"
+timeout_secs = 180
+
+[[steps]]
+id = "backend.compile"
+label = "backend compile"
+component = "backend"
+profiles = ["full"]
+program = "cargo"
+args = ["check", "--manifest-path", "{backend}/Cargo.toml", "--locked", "--all-targets"]
+cwd = "{root}"
+log = "backend_check.log"
+timeout_secs = 180
+
+[[steps]]
+id = "backend.tests"
+label = "backend tests"
+component = "backend"
+profiles = ["full"]
+program = "cargo"
+args = ["test", "--manifest-path", "{backend}/Cargo.toml", "--locked", "--", "--nocapture"]
+cwd = "{root}"
+log = "backend_tests.log"
+timeout_secs = 120
+timeout_env = "RUST_TEST_TIMEOUT"
+parser = "rust"
+services = ["test-postgres"]
+remove_env = ["DATABASE_URL"]
+
+[[steps]]
+id = "frontend.lint"
+label = "frontend lint"
+component = "frontend"
+profiles = ["full", "hook"]
+program = "npm"
+args = ["exec", "--offline", "eslint", "--", "src", "--max-warnings=0"]
+cwd = "{frontend}"
+log = "frontend_lint.log"
+timeout_secs = 180
+
+[[steps]]
+id = "frontend.format"
+label = "frontend format"
+component = "frontend"
+profiles = ["full", "hook"]
+program = "npm"
+args = ["run", "format:check"]
+cwd = "{frontend}"
+log = "frontend_format.log"
+timeout_secs = 180
+
+[[steps]]
+id = "frontend.tests"
+label = "frontend tests"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["test", "--", "--watch=false", "--runner=vitest"]
+cwd = "{frontend}"
+log = "frontend_tests.log"
+timeout_secs = 180
+timeout_env = "ANGULAR_TEST_TIMEOUT"
+parser = "angular"
+
+[[steps]]
+id = "frontend.build"
+label = "frontend production build"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["run", "build"]
+cwd = "{frontend}"
+log = "frontend_build.log"
+timeout_secs = 180
+timeout_env = "ANGULAR_BUILD_TIMEOUT"
+
+[[steps]]
+id = "workflow.hook-syntax"
+label = "Git hook syntax"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "sh"
+args = ["-n", "{root}/codex-audit-pipeline/hooks/pre-commit"]
+cwd = "{root}"
+log = "git_hook_syntax.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.format"
+label = "arc-flow format"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["fmt", "--manifest-path", "{tool_manifest}", "--", "--check"]
+cwd = "{root}"
+log = "arc_flow_fmt.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.clippy"
+label = "arc-flow Clippy"
+component = "workflow"
+profiles = ["full"]
+program = "cargo"
+args = ["clippy", "--manifest-path", "{tool_manifest}", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings"]
+cwd = "{root}"
+log = "arc_flow_clippy.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.tests"
+label = "arc-flow tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["test", "--manifest-path", "{tool_manifest}", "--locked", "--", "--nocapture"]
+cwd = "{root}"
+log = "arc_flow_tests.log"
+timeout_secs = 120
+timeout_env = "RUST_TEST_TIMEOUT"
+parser = "rust"

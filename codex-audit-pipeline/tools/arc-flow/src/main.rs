@@ -1,17 +1,18 @@
 mod audit;
 mod config;
 mod doctor;
+mod preset;
 mod process;
 mod project;
 mod scope;
 mod secrets;
+mod service;
 mod verify;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
-use config::Profile;
 use project::Project;
-use scope::{Component, ScopeMode};
+use scope::ScopeMode;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -19,9 +20,9 @@ use std::process::ExitCode;
 #[command(
     name = "arc-flow",
     version,
-    about = "Development workflow and architecture guard for arc-admin",
+    about = "Configurable development workflow and architecture guard",
     arg_required_else_help = true,
-    after_help = "Examples:\n  cargo flow doctor\n  cargo flow scope\n  cargo flow verify\n  cargo flow verify --all\n  cargo flow verify --components backend,frontend"
+    after_help = "Examples:\n  arc-flow presets\n  arc-flow init --preset rust-api\n  arc-flow doctor\n  arc-flow verify --all\n  cargo flow verify --components backend,frontend"
 )]
 struct Cli {
     /// Override automatic project root discovery.
@@ -70,7 +71,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Run secrets, audit, lint, compile, tests, and frontend build.
+    /// Run gates and configured steps for the selected profile and components.
     #[command(visible_alias = "check")]
     Verify {
         #[command(flatten)]
@@ -78,12 +79,14 @@ enum Commands {
         /// Override scope detection with a comma-separated component list.
         #[arg(
             long,
-            value_enum,
             value_delimiter = ',',
             num_args = 1..,
             conflicts_with_all = ["staged", "all", "base"]
         )]
-        components: Vec<Component>,
+        components: Vec<String>,
+        /// Select any profile declared by configured steps.
+        #[arg(long, value_name = "PROFILE")]
+        profile: Option<String>,
     },
     /// Run the staged, fast verification profile used by pre-commit.
     Hook,
@@ -101,9 +104,19 @@ enum Commands {
     },
     /// Run one configured full-profile step after secrets and audit gates.
     Step {
-        /// Step id from flow.toml, for example backend.clippy.
+        /// Step id from flow.toml, for example api.clippy.
         id: String,
     },
+    /// Initialize .arc-flow configuration from an embedded preset.
+    Init {
+        #[arg(long, default_value = "generic")]
+        preset: String,
+        /// Replace existing .arc-flow configuration files.
+        #[arg(long)]
+        force: bool,
+    },
+    /// List embedded project presets.
+    Presets,
 }
 
 #[derive(Debug, Subcommand)]
@@ -115,6 +128,15 @@ enum ConfigAction {
         /// Include environment overrides in the rendered TOML.
         #[arg(long)]
         resolved: bool,
+    },
+    /// Convert a schema v1 flow.toml to .arc-flow/flow.toml schema v2.
+    Migrate {
+        #[arg(long, value_name = "PATH")]
+        input: Option<PathBuf>,
+        #[arg(long, value_name = "PATH")]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -159,6 +181,43 @@ fn main() -> ExitCode {
 
 fn run() -> Result<bool> {
     let cli = Cli::parse();
+    if let Commands::Init {
+        preset: preset_name,
+        force,
+    } = &cli.command
+    {
+        let target = cli
+            .project_root
+            .clone()
+            .unwrap_or(std::env::current_dir().context("read current directory")?);
+        preset::init(&target, preset_name, *force)?;
+        return Ok(true);
+    }
+    if matches!(cli.command, Commands::Presets) {
+        preset::print_presets();
+        return Ok(true);
+    }
+    if let Commands::Config {
+        action:
+            ConfigAction::Migrate {
+                input,
+                output,
+                force,
+            },
+    } = &cli.command
+    {
+        let root = cli
+            .project_root
+            .clone()
+            .unwrap_or(std::env::current_dir().context("read current directory")?);
+        preset::migrate(
+            &root,
+            input.clone().or_else(|| cli.config.clone()),
+            output.clone(),
+            *force,
+        )?;
+        return Ok(true);
+    }
     let project = Project::discover(cli.project_root, cli.config)?;
     project.prepare()?;
 
@@ -225,17 +284,31 @@ fn run() -> Result<bool> {
         Commands::Verify {
             scope: args,
             components,
+            profile,
         } => {
             let selected = if components.is_empty() {
                 scope::detect(&project, &args.mode())?
             } else {
+                let known = project.config.components();
+                for component in &components {
+                    if !known.contains(component) {
+                        bail!("unknown component {component:?}");
+                    }
+                }
                 verify::explicit_scope(&components)
             };
-            Ok(verify::run(&project, selected, Profile::Full)?.passed)
+            let profile = profile.unwrap_or_else(|| project.config.project.default_profile.clone());
+            Ok(verify::run(&project, selected, &profile, false)?.passed)
         }
         Commands::Hook => {
             let selected = scope::detect(&project, &ScopeMode::Staged)?;
-            Ok(verify::run(&project, selected, Profile::Hook)?.passed)
+            Ok(verify::run(
+                &project,
+                selected,
+                &project.config.project.hook_profile,
+                true,
+            )?
+            .passed)
         }
         Commands::ParseLogs { input, output } => {
             audit::parse_logs(&input, &output)
@@ -247,6 +320,27 @@ fn run() -> Result<bool> {
             ConfigAction::Check => {
                 println!("Configuration valid: {}", project.config_path.display());
                 println!("Schema version: {}", project.config.version);
+                println!(
+                    "Components: {}",
+                    project
+                        .config
+                        .components()
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                println!(
+                    "Profiles: {}",
+                    project
+                        .config
+                        .steps
+                        .iter()
+                        .flat_map(|step| step.profiles.iter().cloned())
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
                 println!("Verification steps: {}", project.config.steps.len());
                 Ok(true)
             }
@@ -264,8 +358,12 @@ fn run() -> Result<bool> {
                 }
                 Ok(true)
             }
+            ConfigAction::Migrate { .. } => unreachable!("handled before project discovery"),
         },
         Commands::Step { id } => Ok(verify::run_step(&project, &id)?.passed),
+        Commands::Init { .. } | Commands::Presets => {
+            unreachable!("handled before project discovery")
+        }
     }
 }
 
@@ -278,7 +376,7 @@ fn print_scope(scope: &scope::ScopeResult) {
     let components = scope
         .components
         .iter()
-        .map(|component| component.label())
+        .map(String::as_str)
         .collect::<Vec<_>>()
         .join(", ");
     println!(

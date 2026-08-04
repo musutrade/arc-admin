@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 // ============================================================
 // 配置结构体（与 .codex/audit.toml 对应）
 // ============================================================
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Default, Deserialize, Clone)]
 struct PathsConfig {
     #[serde(default)]
     exclude: Vec<String>,
@@ -21,8 +21,11 @@ struct PathsConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 struct Config {
+    #[serde(default)]
     paths: PathsConfig,
+    #[serde(default)]
     hard_rules: Vec<HardRule>,
+    #[serde(default)]
     arch_rules: Vec<ArchRule>,
 }
 
@@ -46,6 +49,8 @@ struct ArchRule {
     paths: Vec<String>,
     extensions: Vec<String>,
     forbidden_patterns: Vec<String>,
+    #[serde(default)]
+    allowed_patterns: Vec<String>,
     suggestion: String,
     #[serde(default)]
     exclude_patterns: Vec<String>,
@@ -244,58 +249,6 @@ fn is_allowlisted(path: &Path, allowlist: &[String]) -> bool {
     })
 }
 
-/// Model 层常见 trait 白名单：这些 impl 属于数据结构的常规实现，不是业务逻辑。
-fn is_allowed_model_impl(line: &str) -> bool {
-    let upper = line.to_uppercase();
-    if upper.contains("SERIALIZE") || upper.contains("DESERIALIZE") {
-        return true;
-    }
-    const TRAITS: &[&str] = &[
-        "Display",
-        "Debug",
-        "Clone",
-        "Copy",
-        "Default",
-        "PartialEq",
-        "Eq",
-        "PartialOrd",
-        "Ord",
-        "Hash",
-        "Serialize",
-        "Deserialize",
-        "From",
-        "Into",
-        "TryFrom",
-        "TryInto",
-        "Error",
-        "Deref",
-        "AsRef",
-        "AsMut",
-        "Drop",
-        "Send",
-        "Sync",
-    ];
-    let trimmed = line.trim_start();
-    if !trimmed.starts_with("impl") {
-        return false;
-    }
-    // 去掉泛型参数 <...>，例如 impl<T> Display for X
-    let cleaned = match (trimmed.find('<'), trimmed.find('>')) {
-        (Some(a), Some(b)) if a < b => {
-            let mut s = String::with_capacity(trimmed.len());
-            s.push_str(&trimmed[..a]);
-            s.push_str(&trimmed[b + 1..]);
-            s
-        }
-        _ => trimmed.to_string(),
-    };
-    let rest = cleaned[4..].trim_start();
-    let first_word = rest.split_whitespace().next().unwrap_or("");
-    // 取路径最后一段（std::fmt::Display -> Display）
-    let last_segment = first_word.rsplit(':').next().unwrap_or("").trim();
-    TRAITS.contains(&last_segment)
-}
-
 #[allow(clippy::too_many_arguments)]
 fn scan_files(
     root_dirs: &[String],
@@ -402,6 +355,7 @@ fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
         let extensions = rule.extensions.clone();
         let exclude_dirs = config.paths.exclude.clone();
         let patterns = rule.forbidden_patterns.clone();
+        let allowed_patterns = rule.allowed_patterns.clone();
         let exclude_patterns = rule.exclude_patterns.clone();
         let allowlist = rule.allowlist.clone();
 
@@ -416,6 +370,7 @@ fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
             .collect();
         let exclude_set: Vec<PathBuf> = exclude_dirs.iter().map(PathBuf::from).collect();
         let regexes = compile_regexes(&patterns)?;
+        let allowed_regexes = compile_regexes(&allowed_patterns)?;
         let exclude_regexes = compile_regexes(&exclude_patterns)?;
 
         if root_paths.is_empty() {
@@ -423,8 +378,6 @@ fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
         }
 
         let rule_name = rule.name.clone();
-        let is_model_layer = rule.layer == "model";
-
         let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
         for root_path in root_paths.iter().skip(1) {
             walk_builder.add(root_path);
@@ -470,7 +423,7 @@ fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
                             if is_inside_line_comment(line, m.start()) {
                                 continue;
                             }
-                            if is_model_layer && is_allowed_model_impl(line) {
+                            if allowed_regexes.iter().any(|allowed| allowed.is_match(line)) {
                                 continue;
                             }
                             violations.push(ArchViolation {
@@ -772,7 +725,7 @@ mod tests {
                 .expect("system time must be after Unix epoch")
                 .as_nanos();
             let path = std::env::temp_dir().join(format!(
-                "arc-admin-auditor-{name}-{}-{unique}",
+                "arc-flow-auditor-{name}-{}-{unique}",
                 std::process::id()
             ));
             fs::create_dir_all(&path).expect("create test directory");
@@ -841,6 +794,7 @@ mod tests {
                 ],
                 extensions: vec!["ts".to_string()],
                 forbidden_patterns: vec!["HttpClient".to_string()],
+                allowed_patterns: Vec::new(),
                 suggestion: "use a service".to_string(),
                 exclude_patterns: Vec::new(),
                 allowlist: Vec::new(),

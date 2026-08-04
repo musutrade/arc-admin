@@ -1,7 +1,6 @@
 use crate::project::Project;
 use anyhow::{bail, Context, Result};
-use clap::ValueEnum;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::BTreeSet;
 use std::process::Command;
 
@@ -13,41 +12,19 @@ pub enum ScopeMode {
     All,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, ValueEnum)]
-#[serde(rename_all = "lowercase")]
-pub enum Component {
-    Backend,
-    Frontend,
-    Workflow,
-}
-
-impl Component {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Backend => "backend",
-            Self::Frontend => "frontend",
-            Self::Workflow => "workflow",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ScopeResult {
     pub mode: String,
     pub changed_files: Vec<String>,
-    pub components: BTreeSet<Component>,
+    pub components: BTreeSet<String>,
 }
 
 impl ScopeResult {
-    pub fn all() -> Self {
+    pub fn all(project: &Project) -> Self {
         Self {
             mode: "all".to_string(),
             changed_files: Vec::new(),
-            components: BTreeSet::from([
-                Component::Backend,
-                Component::Frontend,
-                Component::Workflow,
-            ]),
+            components: project.config.components(),
         }
     }
 
@@ -69,7 +46,7 @@ impl ScopeResult {
 
 pub fn detect(project: &Project, mode: &ScopeMode) -> Result<ScopeResult> {
     if matches!(mode, ScopeMode::All) {
-        return Ok(ScopeResult::all());
+        return Ok(ScopeResult::all(project));
     }
 
     ensure_git_worktree(project)?;
@@ -156,7 +133,7 @@ mod tests {
     use super::*;
 
     fn config() -> crate::config::FlowConfig {
-        toml::from_str(include_str!("../../../.codex/flow.toml")).expect("parse config")
+        toml::from_str(include_str!("../../../../.arc-flow/flow.toml")).expect("parse config")
     }
 
     #[test]
@@ -172,6 +149,6 @@ mod tests {
         let components = config()
             .components_for(&["frontend/src/main.ts".into()])
             .expect("classify");
-        assert_eq!(components, BTreeSet::from([Component::Frontend]));
+        assert_eq!(components, BTreeSet::from(["frontend".to_string()]));
     }
 }

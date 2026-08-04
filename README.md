@@ -15,8 +15,9 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 │   ├── migrations/            # SQLX 迁移（不可变，只增不改）
 │   └── .env.example
 ├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
+├── .arc-flow/                 # 可复用工作流 schema v2 配置
 ├── codex-audit-pipeline/      # Codex 工作流工具（自包含）
-│   ├── .codex/                # 工作流配置 / 审计规则 / 模板 / 报告产物
+│   ├── .codex/                # 审计规则 / 模板 / 报告产物
 │   ├── hooks/                 # pre-commit（仅启动 arc-flow）
 │   └── tools/arc-flow/        # Rust 工作流 CLI
 └── .github/                   # CI 与 Dependabot 配置
