@@ -68,7 +68,10 @@ impl IntoResponse for ApiError {
             Self::Internal(_) => "INTERNAL_ERROR",
         };
         let message = match &self {
-            Self::Internal(e) => e.to_string(),
+            Self::Internal(error) => {
+                tracing::error!(error = %error, "internal API error");
+                "服务器内部错误".to_string()
+            }
             other => other.to_string(),
         };
         let body = ErrorEnvelope {
@@ -100,4 +103,26 @@ pub fn db_error(error: sqlx::Error) -> ApiError {
         }
     }
     ApiError::internal(error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_body_util::BodyExt;
+
+    #[tokio::test]
+    async fn internal_error_response_does_not_expose_root_cause() {
+        let response = ApiError::internal("database password leaked").into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("collect error response")
+            .to_bytes();
+        let body = String::from_utf8(body.to_vec()).expect("UTF-8 error response");
+        assert!(body.contains("服务器内部错误"));
+        assert!(!body.contains("database password leaked"));
+    }
 }

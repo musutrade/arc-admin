@@ -26,11 +26,8 @@ pub async fn me(
         .map(Json)
 }
 
-pub async fn me_permissions(
-    State(state): State<AppState>,
-    auth: AuthUser,
-) -> Result<Json<PermissionCodes>, ApiError> {
-    services::auth::permission_codes(&state.pool, auth.user_id)
-        .await
-        .map(Json)
+pub async fn me_permissions(auth: AuthUser) -> Result<Json<PermissionCodes>, ApiError> {
+    Ok(Json(PermissionCodes {
+        codes: auth.permission_codes.into_iter().collect(),
+    }))
 }

@@ -1,4 +1,5 @@
-use arc_admin_backend::{build_router, db, AppState};
+use arc_admin_backend::models::{NullablePatch, UpdateUserRequest};
+use arc_admin_backend::{build_router, db, services, AppState};
 use axum::body::Body;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{Method, Request, StatusCode};
@@ -54,20 +55,51 @@ async fn login_and_user_crud_flow() {
     db::run_migrations(&pool).await.expect("test migrations");
 
     let app = build_router(AppState {
-        pool,
+        pool: pool.clone(),
         jwt_secret: Arc::new("integration-test-jwt-secret-at-least-32-chars".to_string()),
         token_ttl_secs: 3600,
     });
 
+    let (status, health) = send(&app, Method::GET, "/api/v1/healthz", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(health["status"], "ok");
+
+    let (status, readiness) = send(&app, Method::GET, "/api/v1/readyz", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(readiness["db"], true);
+
     let (status, _) = send(&app, Method::GET, "/api/v1/users", None, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({"username": "admin", "password": "admin123"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    services::auth::bootstrap_super_admin(
+        &pool,
+        "admin",
+        "integration-admin-password",
+        "Integration Administrator",
+        Some("admin@example.test".to_string()),
+    )
+    .await
+    .expect("bootstrap test administrator");
 
     let (status, login) = send(
         &app,
         Method::POST,
         "/api/v1/auth/login",
         None,
-        Some(json!({"username": "admin", "password": "admin123"})),
+        Some(json!({
+            "username": "admin",
+            "password": "integration-admin-password"
+        })),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -82,6 +114,93 @@ async fn login_and_user_crud_flow() {
         .find(|role| role["code"] == "viewer")
         .and_then(|role| role["id"].as_i64())
         .expect("viewer role id");
+    let super_admin_role_id = roles
+        .as_array()
+        .expect("roles array")
+        .iter()
+        .find(|role| role["code"] == "super_admin")
+        .and_then(|role| role["id"].as_i64())
+        .expect("super admin role id");
+
+    let admin_id = login["user"]["id"].as_i64().expect("administrator id");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{admin_id}"),
+        Some(token),
+        Some(json!({"status": "inactive"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{super_admin_role_id}"),
+        Some(token),
+        Some(json!({"isActive": false})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{super_admin_role_id}/permissions"),
+        Some(token),
+        Some(json!({"permissionIds": []})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "rolled_back_user",
+            "password": "integration-pass",
+            "displayName": "Rolled Back User",
+            "roleIds": [i64::MAX]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, users) = send(
+        &app,
+        Method::GET,
+        "/api/v1/users?keyword=rolled_back_user",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(users["total"], 0);
+
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(token),
+        Some(json!({
+            "code": "rolled_back_role",
+            "name": "Rolled Back Role",
+            "permissionIds": [i64::MAX]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, roles_after_failure) =
+        send(&app, Method::GET, "/api/v1/roles", Some(token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(roles_after_failure
+        .as_array()
+        .expect("roles array")
+        .iter()
+        .all(|role| role["code"] != "rolled_back_role"));
 
     let (status, created) = send(
         &app,
@@ -106,11 +225,78 @@ async fn login_and_user_crud_flow() {
         Method::PUT,
         &format!("/api/v1/users/{user_id}"),
         Some(token),
+        Some(json!({"email": null})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(updated["email"].is_null());
+
+    let (status, clearable_role) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(token),
+        Some(json!({
+            "code": "clearable_role",
+            "name": "Clearable Role",
+            "icon": "badge",
+            "description": "Temporary description"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let clearable_role_id = clearable_role["id"].as_i64().expect("clearable role id");
+    let (status, clearable_role) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{clearable_role_id}"),
+        Some(token),
+        Some(json!({"icon": null, "description": null})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(clearable_role["icon"].is_null());
+    assert!(clearable_role["description"].is_null());
+
+    let (status, viewer_login) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": "integration_user",
+            "password": "integration-pass"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let viewer_token = viewer_login["accessToken"]
+        .as_str()
+        .expect("viewer access token");
+
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(viewer_token),
+        Some(json!({"code": "forbidden_role", "name": "Forbidden Role"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, updated) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{user_id}"),
+        Some(token),
         Some(json!({"status": "inactive"})),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(updated["status"], "inactive");
+
+    let (status, _) = send(&app, Method::GET, "/api/v1/roles", Some(viewer_token), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 
     let (status, _) = send(
         &app,
@@ -155,4 +341,33 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, second_admin) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "second_admin",
+            "password": "integration-pass",
+            "displayName": "Second Administrator",
+            "roleIds": [super_admin_role_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let second_admin_id = second_admin["id"].as_i64().expect("second admin id");
+    let deactivate = || UpdateUserRequest {
+        display_name: None,
+        email: NullablePatch::Missing,
+        status: Some("inactive".to_string()),
+        password: None,
+    };
+    let first_request = deactivate();
+    let second_request = deactivate();
+    let (first, second) = tokio::join!(
+        services::users::update(&pool, admin_id, &first_request),
+        services::users::update(&pool, second_admin_id, &second_request),
+    );
+    assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
 }

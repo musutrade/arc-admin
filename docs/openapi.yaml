@@ -4,19 +4,19 @@ info:
   version: 0.1.0
   description: |
     RBAC 管理后台 API 契约（Angular 前端 + Rust/Axum/SQLX 后端共同遵守）。
-    本文件是前后端联调的唯一事实来源：后端按此实现路由与 DTO，前端按此替换 DataService 的 mock。
+    本文件是前后端联调的唯一事实来源：后端按此实现路由与 DTO，前端 DataService 按此映射 HTTP 响应。
 
-    ## 前端字段映射（mock → 契约）
+    ## 前端字段映射
     - User.name            → displayName（界面展示名）
     - User.lastLogin       → lastLoginAt（ISO 时间戳，前端负责格式化为 "2 mins ago"）
-    - User.avatarColor     → 移除，由前端根据 displayName 哈希生成
+    - User.avatarColor     → 非 API 字段，由前端根据用户 id 派生
     - Role.permissionGroupIds → 由 GET /roles 聚合返回（int[]）
     - Role.members         → 由 GET /roles 聚合返回（user_roles 计数）
     - RolePermissionRow    → 前端由 Role[] 派生，不再单独接口
     - StatCard             → 前端由 GET /dashboard/stats 映射
-    - 所有 id 由 mock 字符串改为 BIGINT 数值
+    - API id 使用 BIGINT 数值，前端视图模型按需转换为字符串
 servers:
-  - url: http://localhost:8081/api/v1
+  - url: http://localhost:8080/api/v1
     description: 本地开发
 tags:
   - name: system
@@ -35,10 +35,26 @@ paths:
   /healthz:
     get:
       tags: [system]
-      summary: 服务与数据库健康状态
+      summary: 进程存活状态
       responses:
         '200':
-          description: 当前健康状态
+          description: 服务进程正在运行
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+  /readyz:
+    get:
+      tags: [system]
+      summary: 服务与数据库就绪状态
+      responses:
+        '200':
+          description: 服务可以接收业务请求
           content:
             application/json:
               schema:
@@ -47,9 +63,24 @@ paths:
                 properties:
                   status:
                     type: string
-                    enum: [ok, degraded]
+                    enum: [ok]
                   db:
                     type: boolean
+                    enum: [true]
+        '503':
+          description: 数据库尚未就绪
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, db]
+                properties:
+                  status:
+                    type: string
+                    enum: [degraded]
+                  db:
+                    type: boolean
+                    enum: [false]
   /auth/login:
     post:
       tags: [auth]
@@ -460,7 +491,7 @@ components:
           type: integer
     User:
       type: object
-      required: [id, username, displayName, status, roles]
+      required: [id, username, displayName, email, status, roles, lastLoginAt, createdAt]
       properties:
         id:
           type: integer
@@ -572,7 +603,7 @@ components:
           items: { type: integer, format: int64 }
     Role:
       type: object
-      required: [id, code, name, category, isActive, members, permissionGroupIds]
+      required: [id, code, name, category, icon, color, description, isActive, members, permissionGroupIds]
       properties:
         id:
           type: integer
@@ -662,7 +693,7 @@ components:
           items: { type: integer, format: int64 }
     Permission:
       type: object
-      required: [id, code, name, type]
+      required: [id, code, name, type, description]
       properties:
         id:
           type: integer
@@ -678,7 +709,7 @@ components:
           nullable: true
     PermissionGroup:
       type: object
-      required: [id, code, name, permissions]
+      required: [id, code, name, icon, permissions]
       properties:
         id:
           type: integer
@@ -696,7 +727,7 @@ components:
             $ref: '#/components/schemas/Permission'
     DashboardStats:
       type: object
-      required: [totalUsers, activeUsers, totalRoles, totalPermissions]
+      required: [totalUsers, activeUsers, totalRoles, totalPermissions, suspendedUsers]
       properties:
         totalUsers:
           type: integer

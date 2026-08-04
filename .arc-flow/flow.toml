@@ -30,6 +30,7 @@ required_steps = [
   "frontend.lint",
   "frontend.format",
   "frontend.tests",
+  "frontend.e2e",
   "frontend.build",
   "workflow.hook-syntax",
   "workflow.format",
@@ -280,6 +281,17 @@ log = "frontend_tests.log"
 timeout_secs = 180
 timeout_env = "ANGULAR_TEST_TIMEOUT"
 parser = "angular"
+
+[[steps]]
+id = "frontend.e2e"
+label = "frontend end-to-end tests"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["run", "e2e"]
+cwd = "{frontend}"
+log = "frontend_e2e.log"
+timeout_secs = 240
 
 [[steps]]
 id = "frontend.build"

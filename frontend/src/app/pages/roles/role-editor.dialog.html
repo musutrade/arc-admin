@@ -1,0 +1,54 @@
+<form class="editor-dialog" [formGroup]="form" (ngSubmit)="submit()">
+  <div class="dialog-title-row">
+    <mat-icon>{{ role ? 'edit' : 'add_circle' }}</mat-icon>
+    <h2>{{ role ? 'Edit Role' : 'Create Role' }}</h2>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-field">
+      <label for="role-code">Code</label>
+      <input id="role-code" formControlName="code" autocomplete="off" />
+      @if (form.controls.code.touched && form.controls.code.invalid) {
+        <small>Use 3-64 lowercase letters, numbers, or underscores.</small>
+      }
+    </div>
+    <div class="form-field">
+      <label for="role-name">Name</label>
+      <input id="role-name" formControlName="name" />
+    </div>
+    <div class="form-field">
+      <label for="role-category">Category</label>
+      <input id="role-category" formControlName="category" />
+    </div>
+    <div class="form-field">
+      <label for="role-icon">Material icon</label>
+      <input id="role-icon" formControlName="icon" />
+    </div>
+    <div class="form-field">
+      <label for="role-color">Color</label>
+      <select id="role-color" formControlName="color">
+        <option value="primary">Primary</option>
+        <option value="success">Success</option>
+        <option value="warning">Warning</option>
+        <option value="danger">Danger</option>
+        <option value="neutral">Neutral</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="role-active">Status</label>
+      <select id="role-active" formControlName="isActive">
+        <option [ngValue]="true">Active</option>
+        <option [ngValue]="false">Inactive</option>
+      </select>
+    </div>
+    <div class="form-field full-width">
+      <label for="role-description">Description</label>
+      <textarea id="role-description" formControlName="description"></textarea>
+    </div>
+  </div>
+
+  <div class="dialog-actions">
+    <button type="button" class="btn-outline" mat-dialog-close>Cancel</button>
+    <button type="submit" class="btn-primary">Save Role</button>
+  </div>
+</form>

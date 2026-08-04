@@ -9,8 +9,17 @@ import {
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { firstValueFrom } from 'rxjs';
 import { DataService } from '../../core/data.service';
 import { StatCard, User, UserStatus } from '../../core/models';
+import { AuthService } from '../../core/auth.service';
+import { apiErrorMessage } from '../../core/api-error';
+import { ConfirmDialog } from '../../core/confirm.dialog';
+import { PasswordDialog } from './password.dialog';
+import { RoleSelectionDialog } from './role-selection.dialog';
+import { UserEditorDialog, UserEditorResult } from './user-editor.dialog';
 
 const STATUS_META: Record<UserStatus, { cls: string; label: string }> = {
   active: { cls: 'st-active', label: 'Active' },
@@ -20,7 +29,13 @@ const STATUS_META: Record<UserStatus, { cls: string; label: string }> = {
 
 @Component({
   selector: 'app-users',
-  imports: [MatIconModule, MatCheckboxModule, MatProgressSpinnerModule],
+  imports: [
+    MatIconModule,
+    MatCheckboxModule,
+    MatProgressSpinnerModule,
+    MatDialogModule,
+    MatSnackBarModule,
+  ],
   templateUrl: './users.html',
   styleUrl: './users.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,8 +51,16 @@ export class UsersPage implements OnInit {
   readonly selected = signal<Set<string>>(new Set());
   readonly page = signal(1);
   readonly pageSize = 10;
+  readonly busy = signal(false);
 
   private readonly data = inject(DataService);
+  private readonly auth = inject(AuthService);
+  private readonly dialog = inject(MatDialog);
+  private readonly snackBar = inject(MatSnackBar);
+
+  readonly canWrite = computed(() => this.auth.hasPermission('user:write'));
+  readonly canResetPassword = computed(() => this.auth.hasPermission('user:admin:reset_password'));
+  readonly canDeactivate = computed(() => this.auth.hasPermission('user:admin:deactivate'));
 
   /** 状态展示元数据暴露给模板 */
   readonly statusMeta = STATUS_META;
@@ -105,28 +128,26 @@ export class UsersPage implements OnInit {
   });
 
   ngOnInit(): void {
-    this.loadUsers();
-    this.loadStats();
+    void this.loadData();
   }
 
-  private loadUsers(): void {
-    this.data
-      .getUsers()
-      .then((users) => this.users.set(users))
-      .catch(() => this.error.set('用户数据加载失败,请稍后重试'));
-  }
-
-  private loadStats(): void {
-    this.data
-      .getUserStats()
-      .then((stats) => {
-        this.stats.set(stats);
-        this.loading.set(false);
-      })
-      .catch(() => {
-        this.error.set('统计数据加载失败,请稍后重试');
-        this.loading.set(false);
-      });
+  private async loadData(): Promise<void> {
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      const statsRequest = this.auth.hasPermission('dashboard:analytics:read')
+        ? this.data.getUserStats()
+        : Promise.resolve([]);
+      const [users, stats] = await Promise.all([this.data.getUsers(), statsRequest]);
+      this.users.set(users);
+      this.stats.set(stats);
+      this.selected.set(new Set());
+      this.goToPage(this.page());
+    } catch (error) {
+      this.error.set(apiErrorMessage(error, '用户数据加载失败,请稍后重试'));
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   searchUsers(value: string): void {
@@ -181,16 +202,145 @@ export class UsersPage implements OnInit {
     });
   }
 
-  onEdit(u: User): void {
-    console.log('edit user', u.id);
+  async onCreate(): Promise<void> {
+    await this.openEditor();
   }
 
-  onResetPassword(u: User): void {
-    console.log('reset password', u.id);
+  async onEdit(user: User): Promise<void> {
+    await this.openEditor(user);
   }
 
-  onMore(u: User): void {
-    console.log('more actions', u.id);
+  async onResetPassword(user: User): Promise<void> {
+    const password: string | undefined = await firstValueFrom(
+      this.dialog.open(PasswordDialog, { data: user.username }).afterClosed(),
+    );
+    if (!password) {
+      return;
+    }
+    await this.runMutation(
+      () => this.data.updateUser(user.id, { password }),
+      `Password reset for ${user.name}`,
+    );
+  }
+
+  async onDelete(user: User): Promise<void> {
+    const confirmed = await this.confirm(
+      'Delete user',
+      `Delete ${user.name}? This action disables the account immediately.`,
+      'Delete User',
+    );
+    if (!confirmed) {
+      return;
+    }
+    await this.runMutation(() => this.data.deleteUser(user.id), `${user.name} deleted`);
+  }
+
+  async deleteSelected(): Promise<void> {
+    const ids = [...this.selected()];
+    if (
+      ids.length === 0 ||
+      !(await this.confirm(
+        'Delete selected users',
+        `Delete ${ids.length} selected account(s)?`,
+        'Delete Users',
+      ))
+    ) {
+      return;
+    }
+    await this.runMutation(
+      () => Promise.all(ids.map((id) => this.data.deleteUser(id))).then(() => undefined),
+      `${ids.length} users deleted`,
+    );
+  }
+
+  async changeSelectedRoles(): Promise<void> {
+    const ids = [...this.selected()];
+    if (ids.length === 0) {
+      return;
+    }
+    try {
+      const roles = await this.data.getRoles();
+      const roleIds: string[] | undefined = await firstValueFrom(
+        this.dialog.open(RoleSelectionDialog, { data: roles }).afterClosed(),
+      );
+      if (!roleIds) {
+        return;
+      }
+      await this.runMutation(
+        () =>
+          Promise.all(ids.map((id) => this.data.assignUserRoles(id, roleIds))).then(
+            () => undefined,
+          ),
+        `Roles updated for ${ids.length} users`,
+      );
+    } catch (error) {
+      this.showError(error, '角色数据加载失败');
+    }
+  }
+
+  private async openEditor(user?: User): Promise<void> {
+    try {
+      const roles = await this.data.getRoles();
+      const result: UserEditorResult | undefined = await firstValueFrom(
+        this.dialog.open(UserEditorDialog, { data: { user, roles } }).afterClosed(),
+      );
+      if (!result) {
+        return;
+      }
+      if (user) {
+        await this.runMutation(async () => {
+          await this.data.updateUser(user.id, {
+            displayName: result.displayName,
+            email: result.email || null,
+            status: result.status,
+            ...(result.password ? { password: result.password } : {}),
+          });
+          await this.data.assignUserRoles(user.id, result.roleIds);
+        }, `${result.displayName} updated`);
+      } else {
+        await this.runMutation(
+          () =>
+            this.data.createUser({
+              username: result.username,
+              password: result.password,
+              displayName: result.displayName,
+              email: result.email || null,
+              status: result.status,
+              roleIds: result.roleIds.map(Number),
+            }),
+          `${result.displayName} created`,
+        );
+      }
+    } catch (error) {
+      this.showError(error, '用户编辑器加载失败');
+    }
+  }
+
+  private async runMutation(action: () => Promise<unknown>, success: string): Promise<void> {
+    this.busy.set(true);
+    try {
+      await action();
+      this.snackBar.open(success, 'Close', { duration: 3000 });
+      await this.loadData();
+    } catch (error) {
+      this.showError(error, '操作失败,请稍后重试');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private confirm(title: string, message: string, confirmLabel: string): Promise<boolean> {
+    return firstValueFrom(
+      this.dialog
+        .open(ConfirmDialog, {
+          data: { title, message, confirmLabel, danger: true },
+        })
+        .afterClosed(),
+    ).then(Boolean);
+  }
+
+  private showError(error: unknown, fallback: string): void {
+    this.snackBar.open(apiErrorMessage(error, fallback), 'Close', { duration: 5000 });
   }
 
   initials(name: string): string {

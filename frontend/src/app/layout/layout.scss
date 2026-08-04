@@ -523,6 +523,25 @@
   .mobile-menu-btn {
     display: flex;
   }
+  .topbar,
+  .sidebar.collapsed ~ .topbar {
+    left: 0;
+    padding: 0 12px;
+  }
+  .topbar-left {
+    gap: 8px;
+  }
+  .content,
+  .sidebar.collapsed ~ .content {
+    margin-left: 0;
+  }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    border: 0;
+    background: rgba(0, 0, 0, 0.28);
+  }
   .topbar-title {
     font-size: 16px;
   }

@@ -5,10 +5,12 @@
       <h1>User Management</h1>
       <p>Manage system access levels, account statuses, and assigned security roles.</p>
     </div>
-    <button class="btn-primary">
-      <mat-icon>person_add</mat-icon>
-      <span>Add User</span>
-    </button>
+    @if (canWrite()) {
+      <button class="btn-primary" (click)="onCreate()" [disabled]="busy()">
+        <mat-icon>person_add</mat-icon>
+        <span>Add User</span>
+      </button>
+    }
   </div>
 
   <!-- 过滤栏 -->
@@ -125,15 +127,31 @@
                 </td>
                 <td class="cell-tertiary">{{ u.lastLogin }}</td>
                 <td class="td-actions">
-                  <button class="row-btn" (click)="onEdit(u)" title="Edit">
-                    <mat-icon>edit</mat-icon>
-                  </button>
-                  <button class="row-btn" (click)="onResetPassword(u)" title="Reset Password">
-                    <mat-icon>lock_reset</mat-icon>
-                  </button>
-                  <button class="row-btn" (click)="onMore(u)" title="More">
-                    <mat-icon>more_vert</mat-icon>
-                  </button>
+                  @if (canWrite()) {
+                    <button class="row-btn" (click)="onEdit(u)" title="Edit" [disabled]="busy()">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                  }
+                  @if (canResetPassword()) {
+                    <button
+                      class="row-btn"
+                      (click)="onResetPassword(u)"
+                      title="Reset Password"
+                      [disabled]="busy()"
+                    >
+                      <mat-icon>lock_reset</mat-icon>
+                    </button>
+                  }
+                  @if (canDeactivate()) {
+                    <button
+                      class="row-btn danger"
+                      (click)="onDelete(u)"
+                      title="Delete"
+                      [disabled]="busy()"
+                    >
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  }
                 </td>
               </tr>
             } @empty {
@@ -158,8 +176,16 @@
           >
           @if (selectedCount() > 0) {
             <span class="batch-divider"></span>
-            <button class="batch-btn danger"><mat-icon>delete</mat-icon>Delete Selected</button>
-            <button class="batch-btn primary"><mat-icon>rule</mat-icon>Change Role</button>
+            @if (canDeactivate()) {
+              <button class="batch-btn danger" (click)="deleteSelected()" [disabled]="busy()">
+                <mat-icon>delete</mat-icon>Delete Selected
+              </button>
+            }
+            @if (canWrite()) {
+              <button class="batch-btn primary" (click)="changeSelectedRoles()" [disabled]="busy()">
+                <mat-icon>rule</mat-icon>Change Role
+              </button>
+            }
           }
         </div>
         <div class="pagination">

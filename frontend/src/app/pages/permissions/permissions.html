@@ -5,10 +5,6 @@
       <h1>Resource Access Control</h1>
       <p>Manage granular permission codes and their hierarchy across the enterprise platform.</p>
     </div>
-    <div class="header-actions">
-      <button class="btn-outline"><mat-icon>filter_list</mat-icon>Advanced Filters</button>
-      <button class="btn-outline"><mat-icon>file_download</mat-icon>Export</button>
-    </div>
   </div>
 
   <!-- 过滤栏 -->
@@ -63,14 +59,13 @@
               <th>Code Identifier</th>
               <th>Type</th>
               <th>Description</th>
-              <th class="col-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
             @for (group of filteredGroups(); track group.id) {
               <!-- 模块分组行 -->
               <tr class="group-row" (click)="toggleGroup(group.id)">
-                <td colspan="5">
+                <td colspan="4">
                   <div class="group-cell">
                     <mat-icon class="group-caret">{{
                       group.collapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down'
@@ -101,34 +96,12 @@
                       </span>
                     </td>
                     <td class="perm-desc">{{ p.description }}</td>
-                    <td class="col-actions">
-                      <button class="row-btn" (click)="onEdit(p)" title="Edit">
-                        <mat-icon>edit</mat-icon>
-                      </button>
-                      <button class="row-btn danger" (click)="onDelete(p)" title="Delete">
-                        <mat-icon>delete</mat-icon>
-                      </button>
-                    </td>
                   </tr>
                 }
               }
             }
           </tbody>
         </table>
-      </div>
-
-      <!-- 分页 -->
-      <div class="table-footer">
-        <span class="page-info">Page 1 of 1</span>
-        <div class="pagination">
-          <button class="page-btn" disabled aria-label="上一页">
-            <mat-icon>chevron_left</mat-icon>
-          </button>
-          <button class="page-num active">1</button>
-          <button class="page-btn" disabled aria-label="下一页">
-            <mat-icon>chevron_right</mat-icon>
-          </button>
-        </div>
       </div>
     }
   </div>

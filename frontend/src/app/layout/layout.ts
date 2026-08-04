@@ -4,21 +4,12 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatBadgeModule } from '@angular/material/badge';
-import { MatDividerModule } from '@angular/material/divider';
 import { ThemeService } from '../core/theme.service';
+import { AuthService } from '../core/auth.service';
 
 @Component({
   selector: 'app-layout',
-  imports: [
-    RouterOutlet,
-    RouterLink,
-    RouterLinkActive,
-    MatIconModule,
-    MatMenuModule,
-    MatBadgeModule,
-    MatDividerModule,
-  ],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, MatMenuModule],
   templateUrl: './layout.html',
   styleUrl: './layout.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,6 +24,7 @@ export class LayoutComponent {
   private readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  readonly auth = inject(AuthService);
   readonly isDark = this.theme.isDark;
 
   constructor() {
@@ -69,10 +61,12 @@ export class LayoutComponent {
     this.userSubOpen.set(false);
   }
 
-  /** 退出登录:清除 mock 认证状态并回到登录页 */
+  can(permission: string): boolean {
+    return this.auth.hasPermission(permission);
+  }
+
   logout(): void {
-    localStorage.removeItem('arc-auth');
-    sessionStorage.removeItem('arc-auth');
+    this.auth.logout();
     this.router.navigate(['/login']);
   }
 }

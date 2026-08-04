@@ -75,6 +75,72 @@ pub async fn permission_codes(pool: &PgPool, user_id: i64) -> Result<PermissionC
     Ok(PermissionCodes { codes })
 }
 
+pub async fn bootstrap_super_admin(
+    pool: &PgPool,
+    username: &str,
+    password: &str,
+    display_name: &str,
+    email: Option<String>,
+) -> Result<UserResponse, ApiError> {
+    let username = username.trim();
+    if !(3..=64).contains(&username.len())
+        || !username.chars().all(|character| {
+            character.is_ascii_alphanumeric() || character == '_' || character == '-'
+        })
+    {
+        return Err(ApiError::validation(
+            "username 需为 3-64 位字母、数字、下划线或连字符",
+        ));
+    }
+    if password.len() < 16 {
+        return Err(ApiError::validation("引导管理员密码不能少于 16 位"));
+    }
+    let display_name = display_name.trim();
+    if display_name.is_empty() || display_name.len() > 128 {
+        return Err(ApiError::validation("displayName 长度需在 1-128 之间"));
+    }
+
+    let role_id = repositories::roles::id_by_code(pool, "super_admin")
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| ApiError::internal("缺少内置角色 super_admin"))?;
+    let existing = repositories::users::find_by_username(pool, username)
+        .await
+        .map_err(db_error)?;
+    let password_hash = hash_password(password)?;
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let row = if let Some(existing) = existing {
+        repositories::users::activate_bootstrap_account(
+            &mut transaction,
+            existing.id,
+            &password_hash,
+            display_name,
+            email,
+        )
+        .await
+        .map_err(db_error)?
+    } else {
+        repositories::users::create(
+            &mut transaction,
+            username,
+            &password_hash,
+            display_name,
+            email,
+            "active",
+        )
+        .await
+        .map_err(db_error)?
+    };
+    repositories::users::assign_roles(&mut transaction, row.id, &[role_id])
+        .await
+        .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+    let roles = repositories::users::role_names_by_user(pool, row.id)
+        .await
+        .map_err(db_error)?;
+    Ok(user_response(row, roles))
+}
+
 /// argon2 密码哈希（PHC 字符串，含随机盐）
 pub fn hash_password(password: &str) -> Result<String, ApiError> {
     let salt = SaltString::generate(&mut OsRng);

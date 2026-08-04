@@ -182,6 +182,18 @@
   margin-top: auto;
 }
 
+.role-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.link-btn.danger {
+  color: var(--mat-sys-error);
+}
+
 .role-members {
   display: flex;
   align-items: center;

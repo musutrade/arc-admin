@@ -14,6 +14,17 @@ cargo flow doctor
 
 运行后端前，修改不入库的 `backend/.env` 中的 `DATABASE_URL`。`APP_ENV=production` 时必须设置至少 32 字符的 `JWT_SECRET` 和明确的 `CORS_ALLOWED_ORIGINS`。
 
+数据库迁移不会留下可登录的默认账号。首次部署先显式初始化管理员，密码至少 16 字符：
+
+```bash
+BOOTSTRAP_ADMIN_PASSWORD='replace-with-a-strong-password' \
+  cargo run --manifest-path backend/Cargo.toml --bin bootstrap_admin
+```
+
+命令默认使用用户名 `admin` 和显示名 `Administrator`；可通过
+`BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_DISPLAY_NAME`、`BOOTSTRAP_ADMIN_EMAIL`
+覆盖。密码只通过当前进程环境传入，不要写进 `.env`、命令脚本或提交记录。
+
 ## 日常开发
 
 ```bash
@@ -24,7 +35,13 @@ cd frontend && npm start
 cd backend && cargo run
 ```
 
-前端默认地址是 `http://localhost:4200`。后端默认健康检查是 `http://localhost:8080/api/v1/healthz`；端口以 `backend/.env` 的 `PORT` 为准。
+前端默认地址是 `http://localhost:4200`，开发代理会把 `/api/v1` 转发到
+`http://127.0.0.1:8080`。部署时可在静态资源 `config.js` 中设置
+`window.__ARC_ADMIN_CONFIG__.apiBaseUrl`，无需重新构建前端。后端端口以 `backend/.env`
+的 `PORT` 为准。
+
+- `GET /api/v1/healthz` 是进程存活检查，不访问数据库；
+- `GET /api/v1/readyz` 是就绪检查，数据库不可用时返回 HTTP 503。
 
 ## 验证流程
 
@@ -37,13 +54,22 @@ cargo flow verify
 cargo flow verify --all
 ```
 
-执行顺序固定为 secret scan、架构审计、格式/lint、编译、测试和前端生产构建。Rust CLI 为每一步记录耗时和独立日志；报告位于 `codex-audit-pipeline/.codex/reports/`，同时提供 JSON 和末行带 `TEST_SUMMARY` 的 Markdown。
+执行顺序固定为 secret scan、架构审计、格式/lint、编译、单元/集成测试、Playwright
+桌面与移动端 E2E，以及前端生产构建。Rust CLI 为每一步记录耗时和独立日志；报告位于
+`codex-audit-pipeline/.codex/reports/`，同时提供 JSON 和末行带 `TEST_SUMMARY` 的 Markdown。
 
 后端集成测试仅允许使用临时容器或显式的隔离测试库：
 
 ```bash
 TEST_DATABASE_URL=postgres://user:password@127.0.0.1:5432/arc_admin_test \
 cargo flow verify --components backend
+```
+
+前端依赖的 CI 门禁只阻断生产依赖的 high/critical 漏洞：
+
+```bash
+cd frontend
+npm audit --omit=dev --audit-level=high
 ```
 
 ## Git 与 GitHub

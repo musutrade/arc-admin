@@ -1,6 +1,7 @@
 //! arc-admin backend library: application wiring shared by the server and integration tests.
 
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde_json::{json, Value};
@@ -21,6 +22,7 @@ pub use error::ApiError;
 
 pub const API_PREFIX: &str = "/api/v1";
 const HEALTHZ_PATH: &str = "/api/v1/healthz";
+const READYZ_PATH: &str = "/api/v1/readyz";
 const LOGIN_PATH: &str = "/api/v1/auth/login";
 const CURRENT_USER_PATH: &str = "/api/v1/auth/me";
 const CURRENT_USER_PERMISSIONS_PATH: &str = "/api/v1/auth/me/permissions";
@@ -36,6 +38,7 @@ const DASHBOARD_STATS_PATH: &str = "/api/v1/dashboard/stats";
 /// Public HTTP operations documented in `docs/openapi.yaml`.
 pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (HEALTHZ_PATH, &["get"]),
+    (READYZ_PATH, &["get"]),
     (LOGIN_PATH, &["post"]),
     (CURRENT_USER_PATH, &["get"]),
     (CURRENT_USER_PERMISSIONS_PATH, &["get"]),
@@ -49,6 +52,59 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (DASHBOARD_STATS_PATH, &["get"]),
 ];
 
+/// Required response fields that must remain aligned with `docs/openapi.yaml`.
+pub const API_SCHEMA_REQUIRED_FIELDS: &[(&str, &[&str])] = &[
+    (
+        "User",
+        &[
+            "id",
+            "username",
+            "displayName",
+            "email",
+            "status",
+            "roles",
+            "lastLoginAt",
+            "createdAt",
+        ],
+    ),
+    ("PageUser", &["items", "total", "page", "pageSize"]),
+    (
+        "LoginResponse",
+        &["accessToken", "tokenType", "expiresIn", "user"],
+    ),
+    (
+        "Role",
+        &[
+            "id",
+            "code",
+            "name",
+            "category",
+            "icon",
+            "color",
+            "description",
+            "isActive",
+            "members",
+            "permissionGroupIds",
+        ],
+    ),
+    ("RolePermissions", &["permissionIds"]),
+    ("Permission", &["id", "code", "name", "type", "description"]),
+    (
+        "PermissionGroup",
+        &["id", "code", "name", "icon", "permissions"],
+    ),
+    (
+        "DashboardStats",
+        &[
+            "totalUsers",
+            "activeUsers",
+            "totalRoles",
+            "totalPermissions",
+            "suspendedUsers",
+        ],
+    ),
+];
+
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
@@ -56,17 +112,30 @@ pub struct AppState {
     pub token_ttl_secs: i64,
 }
 
-async fn healthz(State(state): State<AppState>) -> Json<Value> {
+async fn healthz() -> Json<Value> {
+    Json(json!({ "status": "ok" }))
+}
+
+async fn readyz(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
     let db_ok = db::ping(&state.pool).await;
-    Json(json!({
-        "status": if db_ok { "ok" } else { "degraded" },
-        "db": db_ok,
-    }))
+    let status = if db_ok {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (
+        status,
+        Json(json!({
+            "status": if db_ok { "ok" } else { "degraded" },
+            "db": db_ok,
+        })),
+    )
 }
 
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route(HEALTHZ_PATH, get(healthz))
+        .route(READYZ_PATH, get(readyz))
         .route(LOGIN_PATH, post(handlers::auth::login))
         .route(CURRENT_USER_PATH, get(handlers::auth::me))
         .route(

@@ -1,6 +1,6 @@
 //! 仪表盘 Handler：统计指标
 
-use crate::auth::AuthUser;
+use crate::auth::{DashboardRead, RequirePermission};
 use crate::error::ApiError;
 use crate::models::DashboardStats;
 use crate::services;
@@ -10,7 +10,7 @@ use axum::Json;
 
 pub async fn stats(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<DashboardRead>,
 ) -> Result<Json<DashboardStats>, ApiError> {
     services::permissions::stats(&state.pool).await.map(Json)
 }

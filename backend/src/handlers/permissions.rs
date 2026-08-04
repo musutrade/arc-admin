@@ -1,6 +1,6 @@
 //! 权限 Handler：权限组树
 
-use crate::auth::AuthUser;
+use crate::auth::{PermissionRead, RequirePermission};
 use crate::error::ApiError;
 use crate::models::PermissionGroupResponse;
 use crate::services;
@@ -10,7 +10,7 @@ use axum::Json;
 
 pub async fn groups(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<PermissionRead>,
 ) -> Result<Json<Vec<PermissionGroupResponse>>, ApiError> {
     services::permissions::groups(&state.pool).await.map(Json)
 }

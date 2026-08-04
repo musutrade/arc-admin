@@ -2,8 +2,8 @@
 
 use crate::error::{db_error, ApiError};
 use crate::models::{
-    user_response, AssignRolesRequest, CreateUserRequest, PageQuery, PageUser, UpdateUserRequest,
-    UserResponse,
+    nullable_patch, user_response, user_with_roles_response, AssignRolesRequest, CreateUserRequest,
+    PageQuery, PageUser, UpdateUserRequest, UserResponse,
 };
 use crate::repositories;
 use crate::services::auth;
@@ -25,13 +25,7 @@ pub async fn list(pool: &PgPool, query: &PageQuery) -> Result<PageUser, ApiError
         .await
         .map_err(db_error)?;
 
-    let mut items = Vec::with_capacity(rows.len());
-    for row in rows {
-        let roles = repositories::users::role_names_by_user(pool, row.id)
-            .await
-            .map_err(db_error)?;
-        items.push(user_response(row, roles));
-    }
+    let items = rows.into_iter().map(user_with_roles_response).collect();
     Ok(PageUser {
         items,
         total,
@@ -79,8 +73,9 @@ pub async fn create(pool: &PgPool, req: &CreateUserRequest) -> Result<UserRespon
     }
 
     let hash = auth::hash_password(&req.password)?;
+    let mut transaction = pool.begin().await.map_err(db_error)?;
     let row = repositories::users::create(
-        pool,
+        &mut transaction,
         username,
         &hash,
         display_name,
@@ -90,10 +85,11 @@ pub async fn create(pool: &PgPool, req: &CreateUserRequest) -> Result<UserRespon
     .await
     .map_err(db_error)?;
     if let Some(role_ids) = &req.role_ids {
-        repositories::users::assign_roles(pool, row.id, role_ids)
+        repositories::users::assign_roles(&mut transaction, row.id, role_ids)
             .await
             .map_err(db_error)?;
     }
+    transaction.commit().await.map_err(db_error)?;
     let roles = repositories::users::role_names_by_user(pool, row.id)
         .await
         .map_err(db_error)?;
@@ -105,6 +101,16 @@ pub async fn update(
     id: i64,
     req: &UpdateUserRequest,
 ) -> Result<UserResponse, ApiError> {
+    let display_name = req
+        .display_name
+        .as_ref()
+        .map(|value| value.trim().to_string());
+    if display_name
+        .as_deref()
+        .is_some_and(|value| value.is_empty() || value.len() > 128)
+    {
+        return Err(ApiError::validation("displayName 长度需在 1-128 之间"));
+    }
     if let Some(status) = &req.status {
         if !["active", "inactive", "suspended"].contains(&status.as_str()) {
             return Err(ApiError::validation(
@@ -112,26 +118,46 @@ pub async fn update(
             ));
         }
     }
-    if let Some(password) = &req.password {
+    let password_hash = if let Some(password) = &req.password {
         if password.len() < 8 {
             return Err(ApiError::validation("password 长度不能少于 8 位"));
         }
-        let hash = auth::hash_password(password)?;
-        repositories::users::update_password(pool, id, &hash)
+        Some(auth::hash_password(password)?)
+    } else {
+        None
+    };
+    let (email_is_set, email) = nullable_patch(&req.email);
+    let email = email.and_then(|value| {
+        let value = value.trim().to_string();
+        (!value.is_empty()).then_some(value)
+    });
+
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    if req
+        .status
+        .as_deref()
+        .is_some_and(|status| status != "active")
+    {
+        protect_last_super_admin(&mut transaction, id).await?;
+    }
+    if let Some(hash) = password_hash {
+        repositories::users::update_password(&mut transaction, id, &hash)
             .await
             .map_err(db_error)?
             .ok_or_else(|| ApiError::not_found("用户不存在"))?;
     }
     let row = repositories::users::update_profile(
-        pool,
+        &mut transaction,
         id,
-        req.display_name.clone(),
-        req.email.clone(),
+        display_name,
+        email_is_set,
+        email,
         req.status.clone(),
     )
     .await
     .map_err(db_error)?
     .ok_or_else(|| ApiError::not_found("用户不存在"))?;
+    transaction.commit().await.map_err(db_error)?;
     let roles = repositories::users::role_names_by_user(pool, id)
         .await
         .map_err(db_error)?;
@@ -142,12 +168,15 @@ pub async fn delete(pool: &PgPool, id: i64, current_user_id: i64) -> Result<(), 
     if id == current_user_id {
         return Err(ApiError::forbidden("不能删除当前登录账号"));
     }
-    let deleted = repositories::users::soft_delete(pool, id)
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    protect_last_super_admin(&mut transaction, id).await?;
+    let deleted = repositories::users::soft_delete(&mut transaction, id)
         .await
         .map_err(db_error)?;
     if !deleted {
         return Err(ApiError::not_found("用户不存在"));
     }
+    transaction.commit().await.map_err(db_error)?;
     Ok(())
 }
 
@@ -160,8 +189,35 @@ pub async fn assign_roles(
         .await
         .map_err(db_error)?
         .ok_or_else(|| ApiError::not_found("用户不存在"))?;
-    repositories::users::assign_roles(pool, user_id, &req.role_ids)
+    let super_admin_role_id = repositories::roles::id_by_code(pool, "super_admin")
         .await
         .map_err(db_error)?;
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    if !super_admin_role_id.is_some_and(|id| req.role_ids.contains(&id)) {
+        protect_last_super_admin(&mut transaction, user_id).await?;
+    }
+    repositories::users::assign_roles(&mut transaction, user_id, &req.role_ids)
+        .await
+        .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
+    Ok(())
+}
+
+async fn protect_last_super_admin(
+    connection: &mut sqlx::PgConnection,
+    user_id: i64,
+) -> Result<(), ApiError> {
+    let (is_active_super_admin, active_count) =
+        repositories::users::super_admin_guard_state(connection, user_id)
+            .await
+            .map_err(db_error)?;
+    if !is_active_super_admin {
+        return Ok(());
+    }
+    if active_count <= 1 {
+        return Err(ApiError::forbidden(
+            "不能停用、删除或移除最后一个 active super_admin",
+        ));
+    }
     Ok(())
 }

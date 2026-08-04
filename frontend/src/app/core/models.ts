@@ -4,11 +4,13 @@ export type UserStatus = 'active' | 'inactive' | 'suspended';
 
 export interface User {
   id: string;
+  username: string;
   name: string;
   email: string;
   roles: string[];
   status: UserStatus;
   lastLogin: string;
+  createdAt: string;
   avatarColor: string; // 首字母头像背景色
 }
 
@@ -24,6 +26,7 @@ export interface Permission {
 
 export interface PermissionGroup {
   id: string;
+  code: string;
   name: string;
   icon: string;
   permissions: Permission[];
@@ -31,6 +34,7 @@ export interface PermissionGroup {
 
 export interface Role {
   id: string;
+  code: string;
   name: string;
   category: string;
   icon: string;
@@ -38,10 +42,12 @@ export interface Role {
   description: string;
   members: number;
   permissionGroupIds: string[];
+  isActive: boolean;
 }
 
 export interface RolePermissionRow {
   roleId: string;
+  roleCode: string;
   roleName: string;
   usersAssigned: number;
   active: boolean;

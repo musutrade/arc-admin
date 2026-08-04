@@ -9,7 +9,7 @@ import {
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DataService } from '../../core/data.service';
-import { Permission, PermissionGroup, PermissionType } from '../../core/models';
+import { PermissionGroup, PermissionType } from '../../core/models';
 
 const TYPE_META: Record<PermissionType, { icon: string; cls: string }> = {
   menu: { icon: 'table_chart', cls: 'badge-menu' },
@@ -104,13 +104,5 @@ export class PermissionsPage implements OnInit {
 
   applyTypeFilter(value: string): void {
     this.typeFilter.set(value as 'all' | PermissionType);
-  }
-
-  onEdit(p: Permission): void {
-    console.log('edit', p.code);
-  }
-
-  onDelete(p: Permission): void {
-    console.log('delete', p.code);
   }
 }

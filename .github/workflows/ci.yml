@@ -80,6 +80,9 @@ jobs:
       - name: Audit production dependencies
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=high
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
       - name: Run frontend checks and tests
         run: cargo flow verify --components frontend
       - name: Upload frontend report

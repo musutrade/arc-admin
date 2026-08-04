@@ -90,11 +90,7 @@ fn capture_command(
         .current_dir(cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
+    isolate_process_tree(&mut command);
     let mut child = command
         .spawn()
         .with_context(|| format!("start internal command {program}"))?;
@@ -215,11 +211,7 @@ impl Task {
         command
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr));
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
+        isolate_process_tree(&mut command);
         let mut child = command
             .spawn()
             .with_context(|| format!("start {}", self.program.to_string_lossy()))?;
@@ -256,6 +248,24 @@ impl Task {
         })
     }
 }
+
+#[cfg(unix)]
+fn isolate_process_tree(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn isolate_process_tree(_command: &mut Command) {}
 
 #[cfg(unix)]
 fn terminate(child: &mut Child) -> std::io::Result<ExitStatus> {
@@ -315,6 +325,26 @@ mod tests {
         assert!(result.passed);
         let output = fs::read_to_string(&log).expect("read environment log");
         assert!(!output.contains("ARC_FLOW_REMOVE_FIXTURE"));
+        let _ = fs::remove_file(log);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn task_runs_in_an_isolated_session() {
+        let log = std::env::temp_dir().join(format!("arc-flow-session-{}.log", std::process::id()));
+        let result = Task::new("session fixture", "sh", Path::new("."), log.clone())
+            .args(["-c", "ps -o sid= -p $$"])
+            .run()
+            .expect("run session fixture");
+
+        assert!(result.passed);
+        let child_session = fs::read_to_string(&log)
+            .expect("read session log")
+            .trim()
+            .parse::<i32>()
+            .expect("parse child session id");
+        let parent_session = unsafe { libc::getsid(0) };
+        assert_ne!(child_session, parent_session);
         let _ = fs::remove_file(log);
     }
 

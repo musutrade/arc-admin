@@ -1,15 +1,7 @@
 <!-- 主布局:左侧固定侧边栏 + 顶部导航栏 + 内容区 -->
 <div class="app-shell">
   <!-- ============ 侧边栏 ============ -->
-  <aside
-    class="sidebar"
-    [class.collapsed]="collapsed()"
-    [class.open]="sidebarOpen()"
-    (click)="sidebarOpen.set(false)"
-    tabindex="0"
-    (keydown.enter)="sidebarOpen.set(false)"
-    (keydown.space)="sidebarOpen.set(false)"
-  >
+  <aside class="sidebar" [class.collapsed]="collapsed()" [class.open]="sidebarOpen()">
     <!-- Logo -->
     <div class="sidebar-logo">
       <div class="brand-card">
@@ -25,107 +17,75 @@
 
     <!-- 导航 -->
     <nav class="sidebar-nav custom-scrollbar">
-      <div class="nav-group">
-        <button
-          class="nav-item"
-          [class.justify-center]="collapsed()"
-          [class.active]="usersActive()"
-          [attr.aria-expanded]="userSubOpen()"
-          (click)="toggleUserMenu()"
-          [attr.title]="collapsed() ? 'User Management' : null"
-        >
-          <mat-icon fontSet="material-symbols-outlined">group</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">User Management</span>
-          <mat-icon class="nav-caret" [class.hidden]="collapsed()" [class.rotated]="userSubOpen()"
-            >expand_more</mat-icon
+      @if (can('user:directory:read')) {
+        <div class="nav-group">
+          <button
+            class="nav-item"
+            [class.justify-center]="collapsed()"
+            [class.active]="usersActive()"
+            [attr.aria-expanded]="userSubOpen()"
+            (click)="toggleUserMenu()"
+            [attr.title]="collapsed() ? 'User Management' : null"
           >
-        </button>
-        <div class="nav-sub" [class.hidden]="collapsed() || !userSubOpen()">
-          <a routerLink="/users" routerLinkActive="sub-active" class="nav-sub-item">
-            <span>Active Users</span>
-          </a>
-          <a routerLink="/users" class="nav-sub-item">
-            <span>Pending Invites</span>
-          </a>
-          <a routerLink="/users" class="nav-sub-item">
-            <span>Access Groups</span>
-          </a>
+            <mat-icon fontSet="material-symbols-outlined">group</mat-icon>
+            <span class="nav-label" [class.hidden]="collapsed()">User Management</span>
+            <mat-icon class="nav-caret" [class.hidden]="collapsed()" [class.rotated]="userSubOpen()"
+              >expand_more</mat-icon
+            >
+          </button>
+          <div class="nav-sub" [class.hidden]="collapsed() || !userSubOpen()">
+            <a
+              routerLink="/users"
+              routerLinkActive="sub-active"
+              class="nav-sub-item"
+              (click)="sidebarOpen.set(false)"
+            >
+              <span>Active Users</span>
+            </a>
+          </div>
         </div>
-      </div>
+      }
 
-      <a
-        routerLink="/roles"
-        routerLinkActive="nav-active"
-        class="nav-item"
-        [class.justify-center]="collapsed()"
-        (click)="closeUserMenu()"
-        [attr.title]="collapsed() ? 'Role Permissions' : null"
-      >
-        <mat-icon fontSet="material-symbols-outlined">badge</mat-icon>
-        <span class="nav-label" [class.hidden]="collapsed()">Role Permissions</span>
-      </a>
-      <a
-        routerLink="/permissions"
-        routerLinkActive="nav-active"
-        class="nav-item"
-        [class.justify-center]="collapsed()"
-        (click)="closeUserMenu()"
-        [attr.title]="collapsed() ? 'Resource Access' : null"
-      >
-        <mat-icon fontSet="material-symbols-outlined">lock_person</mat-icon>
-        <span class="nav-label" [class.hidden]="collapsed()">Resource Access</span>
-      </a>
-
-      <div class="nav-group">
-        <button
+      @if (can('role:directory:read')) {
+        <a
+          routerLink="/roles"
+          routerLinkActive="nav-active"
           class="nav-item"
           [class.justify-center]="collapsed()"
-          (click)="closeUserMenu()"
-          [attr.title]="collapsed() ? 'System Policies' : null"
+          (click)="closeUserMenu(); sidebarOpen.set(false)"
+          [attr.title]="collapsed() ? 'Role Permissions' : null"
         >
-          <mat-icon fontSet="material-symbols-outlined">policy</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">System Policies</span>
-          <mat-icon class="nav-caret" [class.hidden]="collapsed()">expand_more</mat-icon>
-        </button>
-        <div class="nav-sub hidden">
-          <button type="button" class="nav-sub-item"><span>Global Rules</span></button>
-          <button type="button" class="nav-sub-item"><span>Compliance</span></button>
-        </div>
-      </div>
-
-      <a
-        routerLink="/role-permissions"
-        routerLinkActive="nav-active"
-        class="nav-item"
-        [class.justify-center]="collapsed()"
-        (click)="closeUserMenu()"
-        [attr.title]="collapsed() ? 'Assign Permissions' : null"
-      >
-        <mat-icon fontSet="material-symbols-outlined">shield</mat-icon>
-        <span class="nav-label" [class.hidden]="collapsed()">Assign Permissions</span>
-      </a>
+          <mat-icon fontSet="material-symbols-outlined">badge</mat-icon>
+          <span class="nav-label" [class.hidden]="collapsed()">Role Permissions</span>
+        </a>
+      }
+      @if (can('permission:directory:read')) {
+        <a
+          routerLink="/permissions"
+          routerLinkActive="nav-active"
+          class="nav-item"
+          [class.justify-center]="collapsed()"
+          (click)="closeUserMenu(); sidebarOpen.set(false)"
+          [attr.title]="collapsed() ? 'Resource Access' : null"
+        >
+          <mat-icon fontSet="material-symbols-outlined">lock_person</mat-icon>
+          <span class="nav-label" [class.hidden]="collapsed()">Resource Access</span>
+        </a>
+      }
+      @if (can('role:permissions:write')) {
+        <a
+          routerLink="/role-permissions"
+          routerLinkActive="nav-active"
+          class="nav-item"
+          [class.justify-center]="collapsed()"
+          (click)="closeUserMenu(); sidebarOpen.set(false)"
+          [attr.title]="collapsed() ? 'Assign Permissions' : null"
+        >
+          <mat-icon fontSet="material-symbols-outlined">shield</mat-icon>
+          <span class="nav-label" [class.hidden]="collapsed()">Assign Permissions</span>
+        </a>
+      }
     </nav>
-
-    <!-- 底部 -->
-    <div class="sidebar-footer">
-      <button
-        type="button"
-        class="nav-item"
-        [class.justify-center]="collapsed()"
-        [attr.title]="collapsed() ? 'Support' : null"
-      >
-        <mat-icon>help</mat-icon><span class="nav-label" [class.hidden]="collapsed()">Support</span>
-      </button>
-      <button
-        type="button"
-        class="nav-item"
-        [class.justify-center]="collapsed()"
-        [attr.title]="collapsed() ? 'Documentation' : null"
-      >
-        <mat-icon>description</mat-icon
-        ><span class="nav-label" [class.hidden]="collapsed()">Documentation</span>
-      </button>
-    </div>
 
     <!-- 折叠按钮 -->
     <button
@@ -136,6 +96,14 @@
       <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
     </button>
   </aside>
+  @if (sidebarOpen()) {
+    <button
+      type="button"
+      class="sidebar-backdrop"
+      aria-label="关闭菜单"
+      (click)="sidebarOpen.set(false)"
+    ></button>
+  }
 
   <!-- ============ 顶栏 ============ -->
   <header class="topbar">
@@ -148,27 +116,9 @@
         <mat-icon>menu</mat-icon>
       </button>
       <span class="topbar-title">RBAC Control Center</span>
-      <nav class="topbar-nav">
-        <button type="button" class="topbar-link">Dashboard</button>
-        <button type="button" class="topbar-link">Audit Logs</button>
-        <button type="button" class="topbar-link">Security Settings</button>
-      </nav>
     </div>
 
     <div class="topbar-right">
-      <div class="topbar-search">
-        <mat-icon>search</mat-icon>
-        <input type="text" placeholder="Global Search..." />
-      </div>
-      <button
-        class="icon-btn"
-        matBadge="3"
-        matBadgeSize="small"
-        matBadgeColor="warn"
-        aria-label="通知"
-      >
-        <mat-icon>notifications</mat-icon>
-      </button>
       <button
         class="icon-btn"
         (click)="toggleTheme()"
@@ -176,21 +126,15 @@
       >
         <mat-icon>{{ isDark() ? 'light_mode' : 'contrast' }}</mat-icon>
       </button>
-      <button class="icon-btn hide-sm" aria-label="设置">
-        <mat-icon>settings</mat-icon>
-      </button>
       <div class="topbar-divider"></div>
       <button mat-icon-button [matMenuTriggerFor]="userMenu" class="user-chip">
-        <span class="avatar">A</span>
+        <span class="avatar">{{ auth.currentUser()?.displayName?.charAt(0) ?? 'A' }}</span>
         <span class="user-meta hide-sm">
-          <span class="user-name">Admin_User</span>
-          <span class="user-role">Super Admin</span>
+          <span class="user-name">{{ auth.currentUser()?.displayName ?? 'Account' }}</span>
+          <span class="user-role">{{ auth.currentUser()?.roles?.[0] ?? 'User' }}</span>
         </span>
       </button>
       <mat-menu #userMenu="matMenu" xPosition="before" class="user-menu">
-        <button mat-menu-item><mat-icon>account_circle</mat-icon><span>个人资料</span></button>
-        <button mat-menu-item><mat-icon>settings</mat-icon><span>账户设置</span></button>
-        <mat-divider></mat-divider>
         <button mat-menu-item (click)="logout()">
           <mat-icon>logout</mat-icon><span>退出登录</span>
         </button>

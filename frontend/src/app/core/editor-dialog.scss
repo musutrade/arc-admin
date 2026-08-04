@@ -1,0 +1,113 @@
+.editor-dialog {
+  width: min(620px, calc(100vw - 32px));
+  padding: 24px;
+  color: var(--arco-text-primary);
+}
+
+.compact-dialog {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.dialog-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 28px;
+    letter-spacing: 0;
+  }
+
+  mat-icon {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.dialog-message {
+  margin: 0 0 24px;
+  color: var(--arco-text-secondary);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &.full-width {
+    grid-column: 1 / -1;
+  }
+
+  label {
+    color: var(--arco-text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 11px;
+    border: 1px solid var(--arco-border);
+    border-radius: 6px;
+    outline: none;
+    background: var(--arco-bg-white);
+    color: var(--arco-text-primary);
+    font: inherit;
+
+    &:focus {
+      border-color: var(--mat-sys-primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+  }
+
+  select[multiple] {
+    min-height: 112px;
+  }
+
+  textarea {
+    min-height: 88px;
+    resize: vertical;
+  }
+
+  small {
+    color: var(--mat-sys-error);
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.danger-action {
+  background: var(--mat-sys-error);
+}
+
+@media (max-width: 640px) {
+  .editor-dialog {
+    padding: 20px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

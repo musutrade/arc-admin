@@ -19,8 +19,4 @@ export class Error404Page {
   goBack(): void {
     window.history.back();
   }
-
-  searchFrom404(value: string): void {
-    console.log('search from 404 page:', value);
-  }
 }

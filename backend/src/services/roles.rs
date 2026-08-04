@@ -2,8 +2,8 @@
 
 use crate::error::{db_error, ApiError};
 use crate::models::{
-    CreateRoleRequest, RolePermissions, RoleResponse, RoleRow, UpdateRolePermissionsRequest,
-    UpdateRoleRequest,
+    nullable_patch, CreateRoleRequest, RolePermissions, RoleResponse, RoleRow,
+    RoleWithPermissionsRow, UpdateRolePermissionsRequest, UpdateRoleRequest,
 };
 use crate::repositories;
 use sqlx::PgPool;
@@ -32,11 +32,22 @@ pub async fn list(pool: &PgPool) -> Result<Vec<RoleResponse>, ApiError> {
     let rows = repositories::roles::list_all(pool)
         .await
         .map_err(db_error)?;
-    let mut out = Vec::with_capacity(rows.len());
-    for row in rows {
-        out.push(to_response(pool, row).await?);
+    Ok(rows.into_iter().map(list_response).collect())
+}
+
+fn list_response(row: RoleWithPermissionsRow) -> RoleResponse {
+    RoleResponse {
+        id: row.id,
+        code: row.code,
+        name: row.name,
+        category: row.category,
+        icon: row.icon,
+        color: row.color,
+        description: row.description,
+        is_active: row.is_active,
+        members: row.members,
+        permission_group_ids: row.permission_group_ids,
     }
-    Ok(out)
 }
 
 pub async fn get(pool: &PgPool, id: i64) -> Result<RoleResponse, ApiError> {
@@ -73,8 +84,9 @@ pub async fn create(pool: &PgPool, req: &CreateRoleRequest) -> Result<RoleRespon
         .clone()
         .unwrap_or_else(|| "general".to_string());
 
+    let mut transaction = pool.begin().await.map_err(db_error)?;
     let id = repositories::roles::create(
-        pool,
+        &mut transaction,
         code,
         req.name.trim(),
         &category,
@@ -85,10 +97,11 @@ pub async fn create(pool: &PgPool, req: &CreateRoleRequest) -> Result<RoleRespon
     .await
     .map_err(db_error)?;
     if let Some(permission_ids) = &req.permission_ids {
-        repositories::roles::assign_permissions(pool, id, permission_ids)
+        repositories::roles::assign_permissions(&mut transaction, id, permission_ids)
             .await
             .map_err(db_error)?;
     }
+    transaction.commit().await.map_err(db_error)?;
     get(pool, id).await
 }
 
@@ -97,6 +110,23 @@ pub async fn update(
     id: i64,
     req: &UpdateRoleRequest,
 ) -> Result<RoleResponse, ApiError> {
+    let name = req.name.as_ref().map(|value| value.trim().to_string());
+    if name.as_deref().is_some_and(str::is_empty) {
+        return Err(ApiError::validation("name 不能为空"));
+    }
+    let category = req.category.as_ref().map(|value| value.trim().to_string());
+    if category.as_deref().is_some_and(str::is_empty) {
+        return Err(ApiError::validation("category 不能为空"));
+    }
+    if req.is_active == Some(false) {
+        let role = repositories::roles::find_by_id(pool, id)
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| ApiError::not_found("角色不存在"))?;
+        if role.code == "super_admin" {
+            return Err(ApiError::forbidden("内置角色 super_admin 不可停用"));
+        }
+    }
     if let Some(color) = &req.color {
         if !ROLE_COLORS.contains(&color.as_str()) {
             return Err(ApiError::validation(
@@ -104,14 +134,18 @@ pub async fn update(
             ));
         }
     }
+    let (icon_is_set, icon) = nullable_patch(&req.icon);
+    let (description_is_set, description) = nullable_patch(&req.description);
     let updated = repositories::roles::update(
         pool,
         id,
-        req.name.clone(),
-        req.category.clone(),
-        req.icon.clone(),
+        name,
+        category,
+        icon_is_set,
+        icon,
         req.color.clone(),
-        req.description.clone(),
+        description_is_set,
+        description,
         req.is_active,
     )
     .await
@@ -156,12 +190,17 @@ pub async fn assign_permissions(
     id: i64,
     req: &UpdateRolePermissionsRequest,
 ) -> Result<(), ApiError> {
-    repositories::roles::find_by_id(pool, id)
+    let role = repositories::roles::find_by_id(pool, id)
         .await
         .map_err(db_error)?
         .ok_or_else(|| ApiError::not_found("角色不存在"))?;
-    repositories::roles::assign_permissions(pool, id, &req.permission_ids)
+    if role.code == "super_admin" {
+        return Err(ApiError::forbidden("内置角色 super_admin 的权限不可修改"));
+    }
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    repositories::roles::assign_permissions(&mut transaction, id, &req.permission_ids)
         .await
         .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
     Ok(())
 }

@@ -5,10 +5,12 @@
       <h1>Assign Permissions</h1>
       <p>Configure functional access rights per role level with granular permission codes.</p>
     </div>
-    <button class="btn-primary" (click)="onCreateRole()">
-      <mat-icon>add</mat-icon>
-      <span>Add New Role</span>
-    </button>
+    @if (canCreateRole()) {
+      <button class="btn-primary" (click)="onCreateRole()" [disabled]="busy()">
+        <mat-icon>add</mat-icon>
+        <span>Add New Role</span>
+      </button>
+    }
   </div>
 
   <!-- 角色表格 -->
@@ -48,10 +50,12 @@
                   </span>
                 </td>
                 <td class="th-actions">
-                  <button class="edit-link" (click)="onEditPermissions(row)">
-                    <mat-icon>tune</mat-icon>
-                    Edit Permissions
-                  </button>
+                  @if (row.roleCode !== 'super_admin') {
+                    <button class="edit-link" (click)="onEditPermissions(row)" [disabled]="busy()">
+                      <mat-icon>tune</mat-icon>
+                      Edit Permissions
+                    </button>
+                  }
                 </td>
               </tr>
             }

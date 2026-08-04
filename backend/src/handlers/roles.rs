@@ -1,6 +1,6 @@
 //! 角色 Handler：列表 / 详情 / 创建 / 更新 / 删除 / 权限分配
 
-use crate::auth::AuthUser;
+use crate::auth::{RequirePermission, RolePermissionWrite, RoleRead, RoleWrite};
 use crate::error::ApiError;
 use crate::models::{
     CreateRoleRequest, RolePermissions, RoleResponse, UpdateRolePermissionsRequest,
@@ -14,14 +14,14 @@ use axum::Json;
 
 pub async fn list(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<RoleRead>,
 ) -> Result<Json<Vec<RoleResponse>>, ApiError> {
     services::roles::list(&state.pool).await.map(Json)
 }
 
 pub async fn get(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<RoleRead>,
     Path(id): Path<i64>,
 ) -> Result<Json<RoleResponse>, ApiError> {
     services::roles::get(&state.pool, id).await.map(Json)
@@ -29,7 +29,7 @@ pub async fn get(
 
 pub async fn create(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<RoleWrite>,
     Json(req): Json<CreateRoleRequest>,
 ) -> Result<(StatusCode, Json<RoleResponse>), ApiError> {
     services::roles::create(&state.pool, &req)
@@ -39,7 +39,7 @@ pub async fn create(
 
 pub async fn update(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<RoleWrite>,
     Path(id): Path<i64>,
     Json(req): Json<UpdateRoleRequest>,
 ) -> Result<Json<RoleResponse>, ApiError> {
@@ -50,7 +50,7 @@ pub async fn update(
 
 pub async fn delete(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<RoleWrite>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
     services::roles::delete(&state.pool, id).await?;
@@ -59,7 +59,7 @@ pub async fn delete(
 
 pub async fn get_permissions(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<RoleRead>,
     Path(id): Path<i64>,
 ) -> Result<Json<RolePermissions>, ApiError> {
     services::roles::get_permissions(&state.pool, id)
@@ -69,7 +69,7 @@ pub async fn get_permissions(
 
 pub async fn put_permissions(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<RolePermissionWrite>,
     Path(id): Path<i64>,
     Json(req): Json<UpdateRolePermissionsRequest>,
 ) -> Result<StatusCode, ApiError> {

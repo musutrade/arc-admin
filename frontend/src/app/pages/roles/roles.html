@@ -14,10 +14,12 @@
           <mat-icon>table_rows</mat-icon>
         </button>
       </div>
-      <button class="btn-primary" (click)="onCreateRole()">
-        <mat-icon>add_circle</mat-icon>
-        <span>Create Role</span>
-      </button>
+      @if (canWrite()) {
+        <button class="btn-primary" (click)="onCreateRole()" [disabled]="busy()">
+          <mat-icon>add_circle</mat-icon>
+          <span>Create Role</span>
+        </button>
+      }
     </div>
   </div>
 
@@ -47,10 +49,28 @@
               <mat-icon>group</mat-icon>
               <span>{{ r.members }} Members</span>
             </div>
-            <button type="button" class="role-edit-link" (click)="onEditPermissions(r)">
-              Edit Permissions
-              <mat-icon>arrow_forward</mat-icon>
-            </button>
+            <div class="role-card-actions">
+              @if (canWrite()) {
+                <button
+                  type="button"
+                  class="role-edit-link"
+                  (click)="onEditRole(r)"
+                  [disabled]="busy()"
+                >
+                  Edit Role
+                </button>
+              }
+              @if (canAssign() && r.code !== 'super_admin') {
+                <button
+                  type="button"
+                  class="role-edit-link"
+                  (click)="onEditPermissions(r)"
+                  [disabled]="busy()"
+                >
+                  Permissions <mat-icon>arrow_forward</mat-icon>
+                </button>
+              }
+            </div>
           </div>
         </div>
       }
@@ -86,9 +106,36 @@
                 <td class="cell-secondary">{{ r.members }} members</td>
                 <td class="cell-secondary list-desc">{{ r.description }}</td>
                 <td class="th-actions">
-                  <button type="button" class="link-btn" (click)="onEditPermissions(r)">
-                    Edit Permissions
-                  </button>
+                  @if (canWrite()) {
+                    <button
+                      type="button"
+                      class="link-btn"
+                      (click)="onEditRole(r)"
+                      [disabled]="busy()"
+                    >
+                      Edit
+                    </button>
+                  }
+                  @if (canAssign() && r.code !== 'super_admin') {
+                    <button
+                      type="button"
+                      class="link-btn"
+                      (click)="onEditPermissions(r)"
+                      [disabled]="busy()"
+                    >
+                      Permissions
+                    </button>
+                  }
+                  @if (canWrite() && r.code !== 'super_admin') {
+                    <button
+                      type="button"
+                      class="link-btn danger"
+                      (click)="onDeleteRole(r)"
+                      [disabled]="busy()"
+                    >
+                      Delete
+                    </button>
+                  }
                 </td>
               </tr>
             }

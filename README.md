@@ -36,7 +36,11 @@ cargo flow doctor
 # 前端（新终端）
 cd frontend && npm start                  # http://localhost:4200
 
-# 后端（先创建 DATABASE_URL 指向的本地数据库）
+# 首次初始化管理员（密码至少 16 字符，不会写入迁移或日志）
+BOOTSTRAP_ADMIN_PASSWORD='replace-with-a-strong-password' \
+  cargo run --manifest-path backend/Cargo.toml --bin bootstrap_admin
+
+# 后端（新终端，先创建 DATABASE_URL 指向的本地数据库）
 cd backend && cargo run                    # http://localhost:8080/api/v1/healthz
 ```
 
@@ -84,6 +88,6 @@ cargo flow verify --all
 [docs/openapi.yaml](docs/openapi.yaml) 是前后端联调的唯一事实来源：
 
 - 后端按契约实现路由与 DTO（`/api/v1/...`，服务端口由 `backend/.env` 的 `PORT` 控制，默认 8080）；
-- 前端按契约替换 `DataService` 的 mock，字段映射说明见契约顶部；
-- 数据库 schema 与种子数据由 `backend/migrations/` 管理（0001 schema、0002 RBAC 种子、0003 本地管理员种子）。
-- `backend/tests/openapi_contract.rs` 会在 CI 中校验 OpenAPI 路径和 HTTP 方法没有漂移。
+- 前端通过 `HttpClient`、Bearer interceptor 和 DTO 映射直接调用契约接口；开发服务器把 `/api/v1` 代理到后端；
+- 数据库 schema 与基础 RBAC 数据由 `backend/migrations/` 管理；历史演示管理员会被迁移禁用，真实管理员必须显式初始化；
+- `backend/tests/openapi_contract.rs` 会在 CI 中校验 OpenAPI 路径、HTTP 方法及关键响应必填字段没有漂移。

@@ -106,7 +106,6 @@ export class AssignPermissionsDialog {
   }
 
   onSave(): void {
-    console.log('saved permissions for', this.data.role.roleName, [...this.assigned()]);
     this.dialogRef.close([...this.assigned()]);
   }
 }

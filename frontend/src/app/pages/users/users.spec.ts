@@ -1,12 +1,28 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { AuthService } from '../../core/auth.service';
 import { DataService } from '../../core/data.service';
-import { MOCK_USERS } from '../../core/mock-data';
+import { User } from '../../core/models';
+
+const USERS: User[] = Array.from({ length: 12 }, (_, index) => ({
+  id: String(index + 1),
+  username: index === 0 ? 'sarah' : `user${index + 1}`,
+  name: index === 0 ? 'Sarah Jenkins' : `User ${index + 1}`,
+  email: index === 0 ? 'sarah@example.com' : `user${index + 1}@example.com`,
+  roles: [index === 0 ? 'Auditor' : index % 2 === 0 ? 'Viewer' : 'Editor'],
+  status: index === 1 ? 'suspended' : index % 3 === 0 ? 'inactive' : 'active',
+  lastLogin: '2026-08-01T00:00:00Z',
+  createdAt: '2026-01-01T00:00:00Z',
+  avatarColor: '#165dff',
+}));
 import { UsersPage } from './users';
 
 const dataServiceStub: Partial<DataService> = {
-  getUsers: () => Promise.resolve(MOCK_USERS),
+  getUsers: () => Promise.resolve(USERS),
   getUserStats: () => Promise.resolve([]),
+};
+const authServiceStub: Partial<AuthService> = {
+  hasPermission: () => false,
 };
 
 describe('UsersPage', () => {
@@ -19,6 +35,7 @@ describe('UsersPage', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: DataService, useValue: dataServiceStub },
+        { provide: AuthService, useValue: authServiceStub },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(UsersPage);
@@ -27,7 +44,7 @@ describe('UsersPage', () => {
   });
 
   it('loads users and finishes loading on init', () => {
-    expect(page.users().length).toBe(MOCK_USERS.length);
+    expect(page.users().length).toBe(USERS.length);
     expect(page.loading()).toBe(false);
   });
 
@@ -63,11 +80,11 @@ describe('UsersPage', () => {
     expect(page.roleFilter()).toBe('all');
     expect(page.statusFilter()).toBe('all');
     expect(page.page()).toBe(1);
-    expect(page.filteredUsers().length).toBe(MOCK_USERS.length);
+    expect(page.filteredUsers().length).toBe(USERS.length);
   });
 
   it('paginates with correct totals and page bounds', () => {
-    const expectedPages = Math.ceil(MOCK_USERS.length / page.pageSize);
+    const expectedPages = Math.ceil(USERS.length / page.pageSize);
     expect(page.totalPages()).toBe(expectedPages);
     page.goToPage(99);
     expect(page.page()).toBe(expectedPages);
@@ -77,7 +94,7 @@ describe('UsersPage', () => {
   });
 
   it('tracks row selection', () => {
-    const first = MOCK_USERS[0];
+    const first = USERS[0];
     page.toggleRow(first.id, true);
     expect(page.selected().has(first.id)).toBe(true);
     expect(page.selectedCount()).toBe(1);
