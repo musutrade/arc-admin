@@ -1,0 +1,468 @@
+# arc-flow schema v2 配置参考
+
+本文档说明 `.arc-flow/flow.toml` 和审计规则文件的完整配置模型。首次接入请先阅读上一级的 [操作手册](../README.md)，再按需查阅本参考。
+
+## 1. 文件与加载顺序
+
+默认项目配置是仓库内的 `.arc-flow/flow.toml`。`arc-flow` 从当前目录向父目录查找该文件，也可以显式指定：
+
+```bash
+arc-flow --project-root /path/to/project config check
+arc-flow --project-root /path/to/project --config config/ci-flow.toml config check
+ARC_FLOW_CONFIG=config/ci-flow.toml arc-flow --project-root /path/to/project config check
+```
+
+配置路径必须位于项目根内部。相对路径按项目根解析；绝对路径、`..` 越界路径和指向仓库外的符号链接会被拒绝。
+
+生效顺序如下，后者覆盖前者：
+
+1. `.arc-flow/flow.toml`；
+2. 配置字段声明的环境变量；
+3. 通用环境变量，例如 `ARC_FLOW_CONFIG`、`ARC_FLOW_REPORTS`；
+4. CLI 的 `--project-root` 和 `--config`。
+
+使用以下命令查看配置是否有效以及环境覆盖后的结果：
+
+```bash
+arc-flow config check
+arc-flow config print --resolved
+```
+
+## 2. 命名和路径约束
+
+所有 project、component、profile、step、parser、service、doctor check 和 path alias ID 必须：
+
+- 非空；
+- 只包含小写 ASCII 字母、数字、`.`、`-`、`_`；
+- 例如 `api.tests`、`frontend`、`pre_commit` 合法，`API Tests` 不合法。
+
+环境变量名只能包含大写 ASCII 字母、数字和下划线。`program` 必须是 PATH 中的可执行文件名，不能包含 `/` 或 `\\`。
+
+仓库路径必须是非空相对路径，不能包含父目录跳转。以下占位符可用于参数、Doctor 路径和部分配置值：
+
+| 占位符           | 含义                                                       |
+| ---------------- | ---------------------------------------------------------- |
+| `{root}`         | 项目根的绝对路径                                           |
+| `{reports}`      | 报告目录的绝对路径                                         |
+| `{audit_config}` | 审计规则文件的绝对路径                                     |
+| `{<alias>}`      | `[paths.aliases.<alias>]` 解析后的绝对路径                 |
+| `{host_port}`    | 仅 Docker service 的 `connection` 使用，由随机宿主端口替换 |
+
+步骤的 `cwd` 必须是单个 `{root}` 或 `{<alias>}`，不能写成 `{root}/backend`。需要子目录时先声明 path alias。
+
+## 3. 顶层结构
+
+```toml
+version = 2
+
+[project]
+# ...
+
+[paths]
+# ...
+
+[policy]
+# ...
+
+[[doctor.checks]]
+# ...
+
+[services.example]
+# ...
+
+[parsers.example]
+# ...
+
+[[scope.rules]]
+# ...
+
+[[steps]]
+# ...
+```
+
+| 区域                | 必需 | 用途                        |
+| ------------------- | ---- | --------------------------- |
+| `version`           | 是   | 当前固定为 `2`              |
+| `[project]`         | 是   | 项目标识和默认 profile      |
+| `[paths]`           | 是   | 报告、审计规则和路径别名    |
+| `[policy]`          | 否   | 声明不可缺失的步骤          |
+| `[[doctor.checks]]` | 否   | 本机环境体检                |
+| `[services.*]`      | 否   | 外部环境或 Docker 临时服务  |
+| `[parsers.*]`       | 否   | 从测试日志计算结果数        |
+| `[[scope.rules]]`   | 是   | 变更路径到 component 的映射 |
+| `[[steps]]`         | 是   | 实际执行的命令步骤          |
+
+未知字段会直接导致解析失败，避免拼写错误被静默忽略。
+
+## 4. `[project]`
+
+```toml
+[project]
+name = "orders-api"
+default_profile = "full"
+hook_profile = "hook"
+```
+
+| 字段              | 说明                                      |
+| ----------------- | ----------------------------------------- |
+| `name`            | 项目 ID，也用于临时容器名称               |
+| `default_profile` | `arc-flow verify` 未传 `--profile` 时使用 |
+| `hook_profile`    | `arc-flow hook` 使用的快速 profile        |
+
+两个 profile 都必须至少被一个步骤引用。profile 不需要单独声明，它由步骤的 `profiles` 集合产生。
+
+## 5. `[paths]` 和 aliases
+
+```toml
+[paths]
+reports = ".arc-flow/reports"
+audit_config = ".arc-flow/audit.toml"
+
+[paths.aliases.api]
+path = "services/api"
+env = "ARC_FLOW_API_DIR"
+
+[paths.aliases.web]
+path = "apps/web"
+```
+
+| 字段                | 说明                            |
+| ------------------- | ------------------------------- |
+| `reports`           | JSON、Markdown 和步骤日志目录   |
+| `audit_config`      | auditor 规则文件                |
+| `aliases.<id>.path` | 仓库内目录或文件路径            |
+| `aliases.<id>.env`  | 可选；覆盖 alias 路径的环境变量 |
+
+`root`、`reports`、`audit_config`、`host_port` 是保留 alias 名称。
+
+通用覆盖变量：
+
+| 环境变量                                    | 覆盖字段             |
+| ------------------------------------------- | -------------------- |
+| `REPORT_DIR` 或 `ARC_FLOW_REPORTS`          | `paths.reports`      |
+| `AUDITOR_CONFIG` 或 `ARC_FLOW_AUDIT_CONFIG` | `paths.audit_config` |
+| `ARC_FLOW_CONFIG`                           | 配置文件路径         |
+
+## 6. `[policy]`
+
+```toml
+[policy]
+required_steps = ["api.format", "api.clippy", "api.tests"]
+```
+
+`required_steps` 中的每个 ID 都必须出现在 `[[steps]]` 中，而且不能重复。这用于防止项目基础门禁被误删。它不规定步骤属于哪个 profile；profile 仍由步骤自身配置。
+
+## 7. `[[doctor.checks]]`
+
+每项检查都有公共字段：
+
+```toml
+[[doctor.checks]]
+id = "tool.git"
+label = "git"
+required = true
+help = "install Git and ensure it is on PATH"
+kind = "command"
+program = "git"
+args = ["--version"]
+```
+
+| 字段       | 默认值 | 说明                                    |
+| ---------- | ------ | --------------------------------------- |
+| `id`       | 无     | 唯一检查 ID                             |
+| `label`    | 无     | 终端和 JSON 报告中的显示名称            |
+| `required` | `true` | `true` 失败计为 FAIL，`false` 计为 WARN |
+| `help`     | 无     | 失败时追加的修复提示                    |
+| `kind`     | 无     | 检查类型                                |
+
+支持的 kind：
+
+| kind          | 字段                                     | 行为                                           |
+| ------------- | ---------------------------------------- | ---------------------------------------------- |
+| `command`     | `program`, `args`                        | 执行命令并要求退出码为 0                       |
+| `path`        | `path`, `path_type`                      | 检查任意路径、文件或目录                       |
+| `glob`        | `pattern`                                | 要求 glob 至少命中一个路径                     |
+| `env`         | `name`                                   | 要求环境变量存在                               |
+| `env-or-file` | `env`, `path`, `contains`                | 环境变量存在，或文件中有以 `contains` 开头的行 |
+| `git-config`  | `key`, `expected`                        | 要求 Git 配置等于预期值                        |
+| `git-remotes` | 无                                       | 检查 Git remote 配置                           |
+| `version`     | `program`, `args`, `path`, `trim_prefix` | 比较命令输出与版本文件                         |
+| `service`     | `service`                                | 检查 service 的外部变量或 Docker 可用性        |
+
+示例：
+
+```toml
+[[doctor.checks]]
+id = "node.version"
+label = "Node version"
+kind = "version"
+program = "node"
+args = ["--version"]
+path = "{root}/.node-version"
+trim_prefix = "v"
+
+[[doctor.checks]]
+id = "frontend.dependencies"
+label = "frontend dependencies"
+kind = "path"
+path = "{web}/node_modules"
+path_type = "directory"
+help = "run `cd apps/web && npm ci`"
+
+[[doctor.checks]]
+id = "test.database"
+label = "test database"
+required = false
+kind = "service"
+service = "test-postgres"
+```
+
+`path_type` 可取 `any`、`file`、`directory`，默认 `any`。CI 中通常使用 `arc-flow doctor --strict`，把 WARN 也视为失败。
+
+## 8. `[services.*]`
+
+### 8.1 Environment service
+
+适合由 CI、开发机或密钥管理系统提供现成连接值：
+
+```toml
+[services.test-redis]
+kind = "environment"
+source_env = "CI_REDIS_URL"
+inject_env = "TEST_REDIS_URL"
+```
+
+步骤启动前读取 `source_env`，并以 `inject_env` 注入子进程。变量不存在时步骤失败。
+
+### 8.2 Docker service
+
+```toml
+[services.test-postgres]
+kind = "docker"
+image = "postgres:16-alpine"
+image_env = "ARC_FLOW_POSTGRES_IMAGE"
+external_env = "TEST_DATABASE_URL"
+inject_env = "TEST_DATABASE_URL"
+startup_timeout_secs = 30
+timeout_env = "ARC_FLOW_DATABASE_TIMEOUT_SECS"
+container_port = 5432
+environment = { POSTGRES_USER = "test", POSTGRES_PASSWORD = "test", POSTGRES_DB = "app_test" }
+healthcheck = ["pg_isready", "-U", "test", "-d", "app_test"]
+connection = "postgres://test:test@127.0.0.1:{host_port}/app_test"
+```
+
+| 字段                   | 必需 | 说明                                           |
+| ---------------------- | ---- | ---------------------------------------------- |
+| `image`                | 是   | 本机已有的 OCI 镜像；运行时使用 `--pull=never` |
+| `image_env`            | 否   | 覆盖镜像名                                     |
+| `external_env`         | 否   | 若该变量已设置，直接使用其值并跳过 Docker      |
+| `inject_env`           | 是   | 注入测试步骤的变量名                           |
+| `startup_timeout_secs` | 是   | 等待健康检查的秒数，范围 1 到 300              |
+| `timeout_env`          | 否   | 覆盖启动超时                                   |
+| `container_port`       | 是   | 容器监听端口；宿主端口随机绑定到 `127.0.0.1`   |
+| `environment`          | 否   | 传给容器的环境变量                             |
+| `healthcheck`          | 是   | `docker exec` 后的参数列表，不能为空           |
+| `connection`           | 是   | 注入值，必须包含 `{host_port}`                 |
+
+服务按需启动，同一轮验证内复用。验证成功、失败、超时或收到中断信号时都会尝试 `docker rm --force`。镜像不会自动拉取，先用 `docker pull <image>` 准备。
+
+一个步骤可以依赖多个服务：
+
+```toml
+services = ["test-postgres", "test-redis"]
+remove_env = ["DATABASE_URL", "REDIS_URL"]
+```
+
+每个 service 必须注入不同变量；`remove_env` 也不能删除 service 正在注入的变量。
+
+## 9. `[parsers.*]`
+
+解析器用于防止命令退出码为 0、实际却没有执行任何测试：
+
+```toml
+[parsers.rust]
+kind = "regex"
+patterns = ['(?m)^running ([0-9]+) tests?$']
+capture = 1
+minimum = 1
+```
+
+| 字段       | 默认值 | 说明                          |
+| ---------- | ------ | ----------------------------- |
+| `kind`     | 无     | 当前支持 `regex`              |
+| `patterns` | 无     | 一个或多个 Rust regex         |
+| `capture`  | `1`    | 包含数值的 capture group 索引 |
+| `minimum`  | `1`    | 所有匹配计数之和的最低值      |
+
+每个正则都必须包含对应的 capture group。步骤成功后才解析日志；计数低于 `minimum` 时，该步骤改判为失败。
+
+## 10. `[[scope.rules]]`
+
+```toml
+[[scope.rules]]
+patterns = ["services/api/**", "shared/contracts/**"]
+components = ["api"]
+
+[[scope.rules]]
+patterns = [".arc-flow/**", ".github/workflows/**"]
+components = ["api", "web", "workflow"]
+```
+
+每条规则使用 glob 匹配仓库相对路径，命中后把所有 `components` 加入集合。规则可以重叠，最终 component 去重。每个 component 必须至少有一个步骤。
+
+建议把共享契约、工作流配置和 CI 文件映射到所有受影响组件，避免只验证单端。
+
+## 11. `[[steps]]`
+
+```toml
+[[steps]]
+id = "api.tests"
+label = "API tests"
+component = "api"
+profiles = ["full"]
+program = "cargo"
+args = ["test", "--manifest-path", "{api}/Cargo.toml", "--", "--nocapture"]
+cwd = "{root}"
+log = "api_tests.log"
+timeout_secs = 300
+timeout_env = "API_TEST_TIMEOUT"
+parser = "rust"
+services = ["test-postgres"]
+remove_env = ["DATABASE_URL"]
+```
+
+| 字段           | 必需 | 说明                               |
+| -------------- | ---- | ---------------------------------- |
+| `id`           | 是   | 全局唯一步骤 ID                    |
+| `label`        | 是   | 终端和报告显示名称                 |
+| `component`    | 是   | 变更范围选择单位                   |
+| `profiles`     | 是   | 该步骤参与的 profile，至少一个     |
+| `program`      | 是   | PATH 中的裸命令名                  |
+| `args`         | 是   | 独立参数数组，可使用路径占位符     |
+| `cwd`          | 是   | 单个 `{root}` 或 path alias 占位符 |
+| `log`          | 是   | 报告目录下的单个 `.log` 文件名     |
+| `timeout_secs` | 是   | 运行超时，范围 1 到 3600 秒        |
+| `timeout_env`  | 否   | 覆盖运行超时的环境变量             |
+| `parser`       | 否   | 成功后使用的 parser ID             |
+| `services`     | 否   | 运行前需要准备的 service ID 列表   |
+| `remove_env`   | 否   | 创建子进程前删除的继承环境变量     |
+
+命令直接通过 `program + args[]` 启动，不执行 shell 拼接。`sh -c`、`bash -lc` 等命令字符串会被配置校验拒绝；管道、重定向和条件逻辑应拆成多个步骤，或封装成项目内受版本控制的可执行程序。
+
+步骤选择条件是：component 已被 scope 选中，并且步骤包含当前 profile。配置顺序就是执行顺序；任一步失败后，报告判为失败。
+
+## 12. 审计规则文件
+
+`[paths].audit_config` 指向独立 TOML 文件。空规则文件可写为：
+
+```toml
+hard_rules = []
+arch_rules = []
+
+[paths]
+exclude = ["target", "node_modules", "dist", ".git"]
+```
+
+### 12.1 Hard rule
+
+```toml
+[[hard_rules]]
+name = "SQL writes stay in repositories"
+severity = "blocker"
+paths = ["api"]
+extensions = ["rs"]
+patterns = ['(?i)INSERT\\s+INTO', '\\.execute\\s*\\(']
+allowlist = ["services/api/src/repositories", "services/api/migrations", "services/api/tests"]
+exclude_patterns = []
+```
+
+`paths` 可以引用审计文件 `[paths]` 中的 alias。`allowlist` 按路径前缀放行；包含正则元字符的 allowlist 项按正则处理。`exclude_patterns` 用正则排除文件路径。
+
+### 12.2 Architecture rule
+
+```toml
+[[arch_rules]]
+name = "handlers do not query SQL"
+layer = "handler"
+paths = ["services/api/src/handlers"]
+extensions = ["rs"]
+forbidden_patterns = ['sqlx::(query|query_as|query_scalar)!?\\s*\\(']
+allowed_patterns = []
+suggestion = "move SQL into a repository"
+allowlist = []
+exclude_patterns = []
+```
+
+`allowed_patterns` 是逐行允许规则，适合明确的 trait impl 或框架样板；不要用过宽正则隐藏真实违规。`exclude_patterns` 与 hard rule 一样匹配文件路径。任意审计违规都会阻止后续外部步骤。
+
+auditor 是确定性的逐行正则扫描器，不是语言 parser。它会忽略匹配位置之前已经出现 `//` 的行注释，但不跟踪跨行 `/* ... */` 块注释。需要语法树级判断时，应使用项目语言自己的 lint 工具，并把该工具配置成一个 step。
+
+## 13. 最小完整示例
+
+```toml
+version = 2
+
+[project]
+name = "example-api"
+default_profile = "full"
+hook_profile = "hook"
+
+[paths]
+reports = ".arc-flow/reports"
+audit_config = ".arc-flow/audit.toml"
+
+[paths.aliases.app]
+path = "."
+
+[policy]
+required_steps = ["app.format", "app.tests"]
+
+[[doctor.checks]]
+id = "tool.cargo"
+label = "cargo"
+kind = "command"
+program = "cargo"
+args = ["--version"]
+
+[parsers.rust]
+kind = "regex"
+patterns = ['(?m)^running ([0-9]+) tests?$']
+capture = 1
+minimum = 1
+
+[[scope.rules]]
+patterns = ["**"]
+components = ["app"]
+
+[[steps]]
+id = "app.format"
+label = "Rust format"
+component = "app"
+profiles = ["full", "hook"]
+program = "cargo"
+args = ["fmt", "--", "--check"]
+cwd = "{app}"
+log = "rust_fmt.log"
+timeout_secs = 120
+
+[[steps]]
+id = "app.tests"
+label = "Rust tests"
+component = "app"
+profiles = ["full"]
+program = "cargo"
+args = ["test", "--", "--nocapture"]
+cwd = "{app}"
+log = "rust_tests.log"
+timeout_secs = 300
+parser = "rust"
+```
+
+完成配置后依次执行：
+
+```bash
+arc-flow config check
+arc-flow doctor
+arc-flow scope --all
+arc-flow verify --all
+```

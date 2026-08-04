@@ -48,22 +48,36 @@ cargo flow doctor
 
 ## Codex 工作流
 
-所有命令从仓库根执行，`cargo flow` 会定位项目并写入结构化报告：
+所有命令从仓库根执行。`cargo flow` 是本仓库在 `.cargo/config.toml` 中定义的别名，会从源码启动 `arc-flow`、自动定位 `.arc-flow/flow.toml`，并将结构化报告写入 `codex-audit-pipeline/.codex/reports/`。
 
 ```bash
-# 查看范围并按工作区变更自动验证
+# 开始编码前：确认变更会触发哪些组件
 cargo flow scope
+
+# 编码过程中：只验证工作区变更命中的组件
 cargo flow verify
 
-# 校验或查看应用环境覆盖后的工作流配置
+# 只验证指定组件，适合定向排查
+cargo flow verify --components backend
+cargo flow verify --components frontend
+
+# 检查配置及环境覆盖后的最终值
 cargo flow config check
 cargo flow config print --resolved
 
-# 合并前完整验证（secret scan → audit → lint/check/test/build）
+# 提交或创建 PR 前：忽略变更范围，执行所有组件
 cargo flow verify --all
 ```
 
-详见 [开发指南](docs/development.md)、[架构说明](docs/architecture.md)、[AGENTS.md](AGENTS.md) 与 [工作流说明](codex-audit-pipeline/README.md)。
+`verify` 固定先执行凭据扫描和架构审计，门禁通过后才运行配置中的 lint、compile、test、build。后端测试优先使用 `TEST_DATABASE_URL`；未配置时自动启动一次性 PostgreSQL 容器，结束后清理，不使用开发库或生产库。
+
+详细资料：
+
+- [开发指南](docs/development.md)：本项目的本地开发、测试和提交步骤；
+- [架构说明](docs/architecture.md)：前后端分层和依赖边界；
+- [项目公约](AGENTS.md)：Codex、Reviewer、Tester 和 Git 安全约束；
+- [arc-flow 操作手册](codex-audit-pipeline/README.md)：安装、命令、预设、CI、报告和故障排查；
+- [schema v2 配置参考](codex-audit-pipeline/docs/configuration.md)：`flow.toml` 与 `audit.toml` 的字段级说明。
 
 ## API 契约
 
