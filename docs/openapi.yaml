@@ -19,6 +19,8 @@ servers:
   - url: http://localhost:8081/api/v1
     description: 本地开发
 tags:
+  - name: system
+    description: 系统状态
   - name: auth
     description: 认证
   - name: users
@@ -30,6 +32,24 @@ tags:
   - name: dashboard
     description: 仪表盘
 paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: 服务与数据库健康状态
+      responses:
+        '200':
+          description: 当前健康状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, db]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, degraded]
+                  db:
+                    type: boolean
   /auth/login:
     post:
       tags: [auth]

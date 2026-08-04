@@ -14,4 +14,3 @@ pub async fn groups(
 ) -> Result<Json<Vec<PermissionGroupResponse>>, ApiError> {
     services::permissions::groups(&state.pool).await.map(Json)
 }
-

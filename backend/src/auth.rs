@@ -49,4 +49,3 @@ impl FromRequestParts<AppState> for AuthUser {
         Ok(AuthUser { user_id })
     }
 }
-

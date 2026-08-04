@@ -165,4 +165,3 @@ pub async fn assign_roles(
         .map_err(db_error)?;
     Ok(())
 }
-

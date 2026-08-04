@@ -43,7 +43,9 @@ pub async fn update(
     Path(id): Path<i64>,
     Json(req): Json<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    services::users::update(&state.pool, id, &req).await.map(Json)
+    services::users::update(&state.pool, id, &req)
+        .await
+        .map(Json)
 }
 
 pub async fn delete(
@@ -64,4 +66,3 @@ pub async fn assign_roles(
     services::users::assign_roles(&state.pool, id, &req).await?;
     Ok(StatusCode::NO_CONTENT)
 }
-

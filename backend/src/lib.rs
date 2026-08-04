@@ -1,0 +1,105 @@
+//! arc-admin backend library: application wiring shared by the server and integration tests.
+
+use axum::extract::State;
+use axum::routing::{get, post, put};
+use axum::{Json, Router};
+use serde_json::{json, Value};
+use sqlx::PgPool;
+use std::sync::Arc;
+use tower_http::trace::TraceLayer;
+
+pub mod auth;
+pub mod config;
+pub mod db;
+pub mod error;
+pub mod handlers;
+pub mod models;
+pub mod repositories;
+pub mod services;
+
+pub use error::ApiError;
+
+pub const API_PREFIX: &str = "/api/v1";
+const HEALTHZ_PATH: &str = "/api/v1/healthz";
+const LOGIN_PATH: &str = "/api/v1/auth/login";
+const CURRENT_USER_PATH: &str = "/api/v1/auth/me";
+const CURRENT_USER_PERMISSIONS_PATH: &str = "/api/v1/auth/me/permissions";
+const USERS_PATH: &str = "/api/v1/users";
+const USER_PATH: &str = "/api/v1/users/{id}";
+const USER_ROLES_PATH: &str = "/api/v1/users/{id}/roles";
+const ROLES_PATH: &str = "/api/v1/roles";
+const ROLE_PATH: &str = "/api/v1/roles/{id}";
+const ROLE_PERMISSIONS_PATH: &str = "/api/v1/roles/{id}/permissions";
+const PERMISSION_GROUPS_PATH: &str = "/api/v1/permissions/groups";
+const DASHBOARD_STATS_PATH: &str = "/api/v1/dashboard/stats";
+
+/// Public HTTP operations documented in `docs/openapi.yaml`.
+pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
+    (HEALTHZ_PATH, &["get"]),
+    (LOGIN_PATH, &["post"]),
+    (CURRENT_USER_PATH, &["get"]),
+    (CURRENT_USER_PERMISSIONS_PATH, &["get"]),
+    (USERS_PATH, &["get", "post"]),
+    (USER_PATH, &["get", "put", "delete"]),
+    (USER_ROLES_PATH, &["put"]),
+    (ROLES_PATH, &["get", "post"]),
+    (ROLE_PATH, &["get", "put", "delete"]),
+    (ROLE_PERMISSIONS_PATH, &["get", "put"]),
+    (PERMISSION_GROUPS_PATH, &["get"]),
+    (DASHBOARD_STATS_PATH, &["get"]),
+];
+
+#[derive(Clone)]
+pub struct AppState {
+    pub pool: PgPool,
+    pub jwt_secret: Arc<String>,
+    pub token_ttl_secs: i64,
+}
+
+async fn healthz(State(state): State<AppState>) -> Json<Value> {
+    let db_ok = db::ping(&state.pool).await;
+    Json(json!({
+        "status": if db_ok { "ok" } else { "degraded" },
+        "db": db_ok,
+    }))
+}
+
+pub fn build_router(state: AppState) -> Router {
+    Router::new()
+        .route(HEALTHZ_PATH, get(healthz))
+        .route(LOGIN_PATH, post(handlers::auth::login))
+        .route(CURRENT_USER_PATH, get(handlers::auth::me))
+        .route(
+            CURRENT_USER_PERMISSIONS_PATH,
+            get(handlers::auth::me_permissions),
+        )
+        .route(
+            USERS_PATH,
+            get(handlers::users::list).post(handlers::users::create),
+        )
+        .route(
+            USER_PATH,
+            get(handlers::users::get)
+                .put(handlers::users::update)
+                .delete(handlers::users::delete),
+        )
+        .route(USER_ROLES_PATH, put(handlers::users::assign_roles))
+        .route(
+            ROLES_PATH,
+            get(handlers::roles::list).post(handlers::roles::create),
+        )
+        .route(
+            ROLE_PATH,
+            get(handlers::roles::get)
+                .put(handlers::roles::update)
+                .delete(handlers::roles::delete),
+        )
+        .route(
+            ROLE_PERMISSIONS_PATH,
+            get(handlers::roles::get_permissions).put(handlers::roles::put_permissions),
+        )
+        .route(PERMISSION_GROUPS_PATH, get(handlers::permissions::groups))
+        .route(DASHBOARD_STATS_PATH, get(handlers::dashboard::stats))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}

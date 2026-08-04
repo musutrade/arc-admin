@@ -43,7 +43,9 @@ pub async fn update(
     Path(id): Path<i64>,
     Json(req): Json<UpdateRoleRequest>,
 ) -> Result<Json<RoleResponse>, ApiError> {
-    services::roles::update(&state.pool, id, &req).await.map(Json)
+    services::roles::update(&state.pool, id, &req)
+        .await
+        .map(Json)
 }
 
 pub async fn delete(
@@ -60,7 +62,9 @@ pub async fn get_permissions(
     _auth: AuthUser,
     Path(id): Path<i64>,
 ) -> Result<Json<RolePermissions>, ApiError> {
-    services::roles::get_permissions(&state.pool, id).await.map(Json)
+    services::roles::get_permissions(&state.pool, id)
+        .await
+        .map(Json)
 }
 
 pub async fn put_permissions(
@@ -72,4 +76,3 @@ pub async fn put_permissions(
     services::roles::assign_permissions(&state.pool, id, &req).await?;
     Ok(StatusCode::NO_CONTENT)
 }
-

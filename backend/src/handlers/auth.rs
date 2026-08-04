@@ -21,7 +21,9 @@ pub async fn me(
     State(state): State<AppState>,
     auth: AuthUser,
 ) -> Result<Json<UserResponse>, ApiError> {
-    services::auth::me(&state.pool, auth.user_id).await.map(Json)
+    services::auth::me(&state.pool, auth.user_id)
+        .await
+        .map(Json)
 }
 
 pub async fn me_permissions(
@@ -32,4 +34,3 @@ pub async fn me_permissions(
         .await
         .map(Json)
 }
-

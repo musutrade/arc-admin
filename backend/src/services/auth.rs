@@ -20,6 +20,9 @@ pub async fn login(
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
+    if row.status != "active" {
+        return Err(ApiError::unauthorized());
+    }
 
     let parsed = PasswordHash::new(&row.password_hash).map_err(|_| ApiError::unauthorized())?;
     Argon2::default()

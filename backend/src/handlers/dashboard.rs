@@ -14,4 +14,3 @@ pub async fn stats(
 ) -> Result<Json<DashboardStats>, ApiError> {
     services::permissions::stats(&state.pool).await.map(Json)
 }
-

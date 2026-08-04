@@ -29,7 +29,9 @@ async fn to_response(pool: &PgPool, row: RoleRow) -> Result<RoleResponse, ApiErr
 }
 
 pub async fn list(pool: &PgPool) -> Result<Vec<RoleResponse>, ApiError> {
-    let rows = repositories::roles::list_all(pool).await.map_err(db_error)?;
+    let rows = repositories::roles::list_all(pool)
+        .await
+        .map_err(db_error)?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
         out.push(to_response(pool, row).await?);
@@ -48,10 +50,7 @@ pub async fn get(pool: &PgPool, id: i64) -> Result<RoleResponse, ApiError> {
 pub async fn create(pool: &PgPool, req: &CreateRoleRequest) -> Result<RoleResponse, ApiError> {
     let code = req.code.trim();
     let valid_code = (3..=64).contains(&code.len())
-        && code
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
+        && code.chars().next().is_some_and(|c| c.is_ascii_lowercase())
         && code
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
@@ -63,10 +62,7 @@ pub async fn create(pool: &PgPool, req: &CreateRoleRequest) -> Result<RoleRespon
     if req.name.trim().is_empty() {
         return Err(ApiError::validation("name 不能为空"));
     }
-    let color = req
-        .color
-        .clone()
-        .unwrap_or_else(|| "neutral".to_string());
+    let color = req.color.clone().unwrap_or_else(|| "neutral".to_string());
     if !ROLE_COLORS.contains(&color.as_str()) {
         return Err(ApiError::validation(
             "color 只能是 primary/warning/success/danger/neutral",
@@ -135,7 +131,9 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), ApiError> {
             return Err(ApiError::forbidden("内置角色 super_admin 不可删除"));
         }
     }
-    let deleted = repositories::roles::delete(pool, id).await.map_err(db_error)?;
+    let deleted = repositories::roles::delete(pool, id)
+        .await
+        .map_err(db_error)?;
     if !deleted {
         return Err(ApiError::not_found("角色不存在"));
     }

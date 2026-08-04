@@ -1,7 +1,9 @@
 //! 权限服务：组装权限组树 + 仪表盘统计（无 SQL）
 
 use crate::error::{db_error, ApiError};
-use crate::models::{DashboardStats, DashboardStatsRow, PermissionGroupResponse, PermissionResponse};
+use crate::models::{
+    DashboardStats, DashboardStatsRow, PermissionGroupResponse, PermissionResponse,
+};
 use crate::repositories;
 use sqlx::PgPool;
 
