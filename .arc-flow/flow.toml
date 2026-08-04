@@ -152,6 +152,20 @@ patterns = ['Tests\s+([0-9]+) passed']
 capture = 1
 minimum = 1
 
+[scope]
+unmatched = "fail"
+
+[[scope.rules]]
+patterns = [
+  "README.md",
+  "AGENTS.md",
+  "docs/**",
+  "codex-audit-pipeline/README.md",
+  "codex-audit-pipeline/docs/**",
+  ".github/**",
+]
+components = ["workflow"]
+
 [[scope.rules]]
 patterns = ["backend/**"]
 components = ["backend"]

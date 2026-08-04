@@ -1,6 +1,8 @@
 use crate::config::{migrate_v1, FlowConfig, CONFIG_VERSION, DEFAULT_CONFIG_PATH};
 use anyhow::{bail, Context, Result};
 use std::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 struct Preset {
@@ -60,11 +62,11 @@ pub fn init(target: &Path, name: &str, force: bool) -> Result<()> {
     config.validate()?;
     let directory = flow_path.parent().context("flow config has no parent")?;
     fs::create_dir_all(directory)?;
-    fs::write(&flow_path, toml::to_string_pretty(&config)?)?;
-    fs::write(&audit_path, AUDIT_TEMPLATE)?;
+    atomic_write(&audit_path, AUDIT_TEMPLATE.as_bytes())?;
+    atomic_write(&flow_path, toml::to_string_pretty(&config)?.as_bytes())?;
     let gitignore = resolve_inside(&root, PathBuf::from(".arc-flow/.gitignore"))?;
     if !gitignore.exists() {
-        fs::write(gitignore, GITIGNORE_TEMPLATE)?;
+        atomic_write(&gitignore, GITIGNORE_TEMPLATE.as_bytes())?;
     }
 
     println!("Initialized preset {name:?} in {}", directory.display());
@@ -102,7 +104,7 @@ pub fn migrate(
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(&output, toml::to_string_pretty(&config)?)?;
+    atomic_write(&output, toml::to_string_pretty(&config)?.as_bytes())?;
     println!("Migrated {} -> {}", input.display(), output.display());
     println!("The source file was not removed.");
     Ok(())
@@ -116,6 +118,42 @@ fn ensure_writable(path: &Path, force: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn atomic_write(path: &Path, content: &[u8]) -> Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("path has no parent: {}", path.display()))?;
+    fs::create_dir_all(parent)?;
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("arc-flow");
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temporary = parent.join(format!(
+        ".{name}.arc-flow-{}-{unique}.tmp",
+        std::process::id()
+    ));
+
+    let result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .with_context(|| format!("create temporary file {}", temporary.display()))?;
+        file.write_all(content)?;
+        file.sync_all()?;
+        fs::rename(&temporary, path)
+            .with_context(|| format!("replace {} atomically", path.display()))?;
+        Ok(())
+    })();
+    if result.is_err() {
+        fs::remove_file(&temporary).ok();
+    }
+    result
 }
 
 fn resolve_inside(root: &Path, path: PathBuf) -> Result<PathBuf> {
@@ -210,5 +248,25 @@ mod tests {
         fs::remove_dir_all(&root).ok();
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn atomic_write_replaces_complete_content() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("arc-flow-write-{unique}"));
+        fs::create_dir_all(&root).expect("create write fixture");
+        let path = root.join("flow.toml");
+        fs::write(&path, "old").expect("write old fixture");
+
+        atomic_write(&path, b"new content").expect("replace fixture");
+
+        assert_eq!(
+            fs::read_to_string(&path).expect("read fixture"),
+            "new content"
+        );
+        fs::remove_dir_all(root).ok();
     }
 }

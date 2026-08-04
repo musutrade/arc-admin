@@ -1,8 +1,9 @@
+use crate::config::UnmatchedScope;
 use crate::project::Project;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::collections::BTreeSet;
-use std::process::Command;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub enum ScopeMode {
@@ -17,6 +18,7 @@ pub struct ScopeResult {
     pub mode: String,
     pub changed_files: Vec<String>,
     pub components: BTreeSet<String>,
+    pub unmatched_files: Vec<String>,
 }
 
 impl ScopeResult {
@@ -25,6 +27,7 @@ impl ScopeResult {
             mode: "all".to_string(),
             changed_files: Vec::new(),
             components: project.config.components(),
+            unmatched_files: Vec::new(),
         }
     }
 
@@ -72,11 +75,15 @@ pub fn detect(project: &Project, mode: &ScopeMode) -> Result<ScopeResult> {
             "staged".to_string()
         }
         ScopeMode::Base(reference) => {
-            let output = Command::new("git")
-                .current_dir(&project.root)
-                .args(["rev-parse", "--verify", &format!("{reference}^{{commit}}")])
-                .output()
-                .context("run git rev-parse")?;
+            let output = git_capture(
+                project,
+                vec![
+                    "rev-parse".into(),
+                    "--verify".into(),
+                    format!("{reference}^{{commit}}"),
+                ],
+            )
+            .context("run git rev-parse")?;
             if !output.status.success() {
                 bail!("Git base reference does not exist: {reference}");
             }
@@ -90,19 +97,32 @@ pub fn detect(project: &Project, mode: &ScopeMode) -> Result<ScopeResult> {
     };
 
     let changed_files = paths.into_iter().collect::<Vec<_>>();
+    let (mut components, unmatched_files) = project.config.classify_paths(&changed_files)?;
+    match project.config.scope.unmatched {
+        UnmatchedScope::Fail if !unmatched_files.is_empty() => {
+            bail!(
+                "scope has {} unmatched changed file(s): {}",
+                unmatched_files.len(),
+                unmatched_files.join(", ")
+            );
+        }
+        UnmatchedScope::All => components.extend(project.config.components()),
+        UnmatchedScope::Fail | UnmatchedScope::Ignore => {}
+    }
     Ok(ScopeResult {
         mode: mode_label,
-        components: project.config.components_for(&changed_files)?,
+        components,
         changed_files,
+        unmatched_files,
     })
 }
 
 fn ensure_git_worktree(project: &Project) -> Result<()> {
-    let output = Command::new("git")
-        .current_dir(&project.root)
-        .args(["rev-parse", "--is-inside-work-tree"])
-        .output()
-        .context("run git rev-parse")?;
+    let output = git_capture(
+        project,
+        vec!["rev-parse".into(), "--is-inside-work-tree".into()],
+    )
+    .context("run git rev-parse")?;
     if !output.status.success() || output.stdout != b"true\n" {
         bail!("project root is not a Git worktree");
     }
@@ -110,10 +130,7 @@ fn ensure_git_worktree(project: &Project) -> Result<()> {
 }
 
 fn git_paths(project: &Project, args: &[&str]) -> Result<Vec<String>> {
-    let output = Command::new("git")
-        .current_dir(&project.root)
-        .args(args)
-        .output()
+    let output = git_capture(project, args.iter().map(|arg| (*arg).to_string()).collect())
         .with_context(|| format!("run git {}", args.join(" ")))?;
     if !output.status.success() {
         bail!("git {} failed", args.join(" "));
@@ -128,6 +145,10 @@ fn git_paths(project: &Project, args: &[&str]) -> Result<Vec<String>> {
         .collect()
 }
 
+fn git_capture(project: &Project, args: Vec<String>) -> Result<crate::process::CapturedOutput> {
+    crate::process::capture("git", &args, &project.root, Duration::from_secs(30))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,16 +160,28 @@ mod tests {
     #[test]
     fn workflow_changes_force_all_components() {
         let components = config()
-            .components_for(&["codex-audit-pipeline/tools/arc-flow/src/main.rs".into()])
-            .expect("classify");
+            .classify_paths(&["codex-audit-pipeline/tools/arc-flow/src/main.rs".into()])
+            .expect("classify")
+            .0;
         assert_eq!(components.len(), 3);
     }
 
     #[test]
     fn frontend_change_only_selects_frontend() {
         let components = config()
-            .components_for(&["frontend/src/main.ts".into()])
-            .expect("classify");
+            .classify_paths(&["frontend/src/main.ts".into()])
+            .expect("classify")
+            .0;
         assert_eq!(components, BTreeSet::from(["frontend".to_string()]));
+    }
+
+    #[test]
+    fn unmatched_paths_are_reported() {
+        let (components, unmatched) = config()
+            .classify_paths(&["unconfigured/new-tool.lock".into()])
+            .expect("classify");
+
+        assert!(components.is_empty());
+        assert_eq!(unmatched, vec!["unconfigured/new-tool.lock"]);
     }
 }

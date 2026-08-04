@@ -3,7 +3,7 @@ use anyhow::{bail, Context, Result};
 use regex::bytes::Regex;
 use serde::Serialize;
 use std::fs;
-use std::process::Command;
+use std::time::Duration;
 
 const SECRET_PATTERN: &str = r"github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|npm_[A-Za-z0-9]{36}|https?://[^/@\s]+:[^@\s]+@[^\s]+|-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----";
 
@@ -54,11 +54,10 @@ pub fn scan(project: &Project, mode: SecretMode) -> Result<Vec<String>> {
                 Err(error) => return Err(error).with_context(|| format!("read {file}")),
             },
             SecretMode::Staged => {
-                let output = Command::new("git")
-                    .current_dir(&project.root)
-                    .args(["show", &format!(":{file}")])
-                    .output()
-                    .with_context(|| format!("read staged file {file}"))?;
+                let args = vec!["show".to_string(), format!(":{file}")];
+                let output =
+                    crate::process::capture("git", &args, &project.root, Duration::from_secs(30))
+                        .with_context(|| format!("read staged file {file}"))?;
                 if !output.status.success() {
                     continue;
                 }
@@ -87,10 +86,11 @@ pub fn scan(project: &Project, mode: SecretMode) -> Result<Vec<String>> {
 }
 
 fn git_files(project: &Project, args: &[&str]) -> Result<Vec<String>> {
-    let output = Command::new("git")
-        .current_dir(&project.root)
-        .args(args)
-        .output()
+    let args = args
+        .iter()
+        .map(|arg| (*arg).to_string())
+        .collect::<Vec<_>>();
+    let output = crate::process::capture("git", &args, &project.root, Duration::from_secs(30))
         .with_context(|| format!("run git {}", args.join(" ")))?;
     if !output.status.success() {
         bail!("git {} failed", args.join(" "));

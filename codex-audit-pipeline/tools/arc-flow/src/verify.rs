@@ -147,7 +147,12 @@ fn run_selected(
 
     if secret_passed {
         let audit_started = Instant::now();
-        let outcome = audit::run(&project.audit_config, &project.reports, false)?;
+        let outcome = audit::run(
+            &project.root,
+            &project.audit_config,
+            &project.reports,
+            false,
+        )?;
         let audit_passed = outcome.total_violations == 0;
         let audit_result = TaskResult {
             label: "architecture audit".to_string(),
@@ -223,7 +228,7 @@ fn run_configured_steps(
                 Ok(environment) => environment,
                 Err(error) => {
                     let result = TaskResult {
-                        label: format!("service {service} setup"),
+                        label: format!("{}: service {service} setup", step.label),
                         passed: false,
                         timed_out: false,
                         cancelled: false,
@@ -233,7 +238,7 @@ fn run_configured_steps(
                     };
                     print_result(&result);
                     results.push(result);
-                    break 'steps;
+                    continue 'steps;
                 }
             };
             service_env.push(environment);
@@ -342,12 +347,15 @@ pub fn explicit_scope(components: &[String]) -> ScopeResult {
         mode: "components".to_string(),
         changed_files: Vec::new(),
         components: components.iter().cloned().collect::<BTreeSet<_>>(),
+        unmatched_files: Vec::new(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{FlowConfig, ServiceConfig};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn configurable_regex_parser_counts_multiple_outputs() {
@@ -371,5 +379,48 @@ mod tests {
             parse_result_count("passed: 7", &parser).expect("count"),
             (7, 2)
         );
+    }
+
+    #[test]
+    fn service_failure_does_not_skip_unrelated_steps() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("arc-flow-verify-{unique}"));
+        crate::preset::init(&root, "generic", false).expect("initialize fixture");
+        let flow_path = root.join(".arc-flow/flow.toml");
+        let source = fs::read_to_string(&flow_path).expect("read fixture config");
+        let mut config: FlowConfig = toml::from_str(&source).expect("parse fixture config");
+        let source_env = format!("ARC_FLOW_MISSING_{unique}");
+        assert!(std::env::var_os(&source_env).is_none());
+        config.services.insert(
+            "missing-service".into(),
+            ServiceConfig::Environment {
+                source_env,
+                inject_env: "TEST_SERVICE_URL".into(),
+            },
+        );
+        config.steps[0].services = vec!["missing-service".into()];
+        config.steps[1].profiles.insert("full".into());
+        fs::write(
+            &flow_path,
+            toml::to_string_pretty(&config).expect("serialize fixture config"),
+        )
+        .expect("write fixture config");
+        let git = crate::process::capture("git", &["init".into()], &root, Duration::from_secs(5))
+            .expect("initialize Git fixture");
+        assert!(git.status.success());
+        let project = Project::discover(Some(root.clone()), None).expect("discover fixture");
+
+        let report =
+            run(&project, ScopeResult::all(&project), "full", false).expect("verify fixture");
+
+        assert!(!report.passed);
+        assert!(report
+            .steps
+            .iter()
+            .any(|step| step.label == "staged Git whitespace check" && step.passed));
+        fs::remove_dir_all(root).ok();
     }
 }

@@ -85,6 +85,9 @@ patterns = ['Tests\s+([0-9]+) passed']
 capture = 1
 minimum = 1
 
+[scope]
+unmatched = "all"
+
 [[scope.rules]]
 patterns = ["backend/**"]
 components = ["backend"]

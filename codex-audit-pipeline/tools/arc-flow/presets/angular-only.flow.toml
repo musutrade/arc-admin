@@ -50,6 +50,9 @@ patterns = ['Tests\s+([0-9]+) passed']
 capture = 1
 minimum = 1
 
+[scope]
+unmatched = "all"
+
 [[scope.rules]]
 patterns = ["src/**", "package.json", "package-lock.json", "angular.json", "tsconfig*.json", ".arc-flow/**"]
 components = ["app"]

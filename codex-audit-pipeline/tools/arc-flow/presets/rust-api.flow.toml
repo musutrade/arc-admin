@@ -49,6 +49,9 @@ patterns = ['(?m)^running ([0-9]+) tests?$']
 capture = 1
 minimum = 1
 
+[scope]
+unmatched = "all"
+
 [[scope.rules]]
 patterns = ["src/**", "tests/**", "Cargo.toml", "Cargo.lock", "rust-toolchain*", ".arc-flow/**"]
 components = ["app"]

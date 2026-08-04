@@ -113,7 +113,7 @@ arc-flow --project-root /path/to/new-project verify --all
 | `angular-only`          | Angular/npm                 | lint、format check、test、build         |
 | `angular-rust-postgres` | Angular + Rust + PostgreSQL | 双端检查、测试、构建和临时数据库        |
 
-`init` 写入 `.arc-flow/flow.toml`、`.arc-flow/audit.toml` 和忽略报告目录的 `.arc-flow/.gitignore`，不会覆盖已有配置，除非显式传入 `--force`。
+`init` 以同目录临时文件和原子重命名写入 `.arc-flow/flow.toml`、`.arc-flow/audit.toml` 和忽略报告目录的 `.arc-flow/.gitignore`，不会留下半写文件，也不会覆盖已有配置，除非显式传入 `--force`。`config migrate` 对目标配置使用相同的原子写入策略。
 
 预设是起点，不是运行时分支。初始化完成后，所有行为都由项目内 TOML 决定：可以重命名 component、增加 `ci` profile、换成 MySQL/Redis、调整目录或替换任意步骤，无需保留预设原有名称。
 
@@ -288,7 +288,7 @@ Docker provider 可用于 PostgreSQL、MySQL、Redis 等服务。容器使用随
 - 已暂存修改：`git diff --cached --name-only`；
 - 未忽略的未跟踪文件：`git ls-files --others --exclude-standard`。
 
-这些路径按 `[[scope.rules]]` 匹配，命中的 component 去重后用于选择步骤。
+这些路径按 `[[scope.rules]]` 匹配，命中的 component 去重后用于选择步骤。`[scope].unmatched` 控制未命中路径：`fail`（默认）立即失败并列出文件，`all` 选择全部 component，`ignore` 仅在明确接受漏测风险时忽略。
 
 ### Staged
 
@@ -312,6 +312,8 @@ profile 由步骤的 `profiles = [...]` 隐式声明。`verify` 使用 `[project
 4. 未知引用、重复 ID、非法 glob/regex/占位符和越界超时直接失败；
 5. service 容器必须声明健康检查并在结束时清理；
 6. 多个 service 不得向同一步骤注入同名环境变量。
+7. 审计扫描根必须存在且位于项目内，`..` 和逃出项目的符号链接会被拒绝；
+8. Doctor、Git 探测和 Docker 生命周期命令都有硬超时，超时时终止整个子进程组。
 
 secret scan 检查 Git 已追踪文件和未忽略的未跟踪文件，识别 GitHub/GitLab/npm token、AWS access key、带用户密码的 URL 和 PEM 私钥头等高置信模式。报告只记录文件名，不把凭据内容复制到终端或 JSON。
 
@@ -408,7 +410,7 @@ arc-flow verify --all
 
 ### 没有 component 被选中
 
-工作区没有变更，或者变更路径没有命中任何 scope rule。先运行 `arc-flow scope` 检查文件列表；需要全量验证时使用 `--all`，遗漏映射时修改 `[[scope.rules]]`。
+工作区没有变更时不会选择 component。变更路径没有命中 scope rule 时，默认 `unmatched = "fail"` 会列出遗漏文件并失败；修正 `[[scope.rules]]`，或为希望触发全量验证的项目设置 `unmatched = "all"`。只有明确接受未匹配文件不触发验证时才使用 `ignore`。
 
 ### `unknown component` / `unknown profile`
 
@@ -428,7 +430,7 @@ Docker provider 使用 `--pull=never`，不会在验证中隐式访问网络。�
 
 ### 步骤超时
 
-先看日志判断是死锁、网络等待还是超时过短。需要项目或 CI 差异化时设置步骤的 `timeout_env`，不要复制两套配置。步骤允许 1 到 3600 秒，service 启动允许 1 到 300 秒。
+先看日志判断是死锁、网络等待还是超时过短。需要项目或 CI 差异化时设置步骤或 service 的 `timeout_env`，不要复制两套配置。步骤允许 1 到 3600 秒，service 整个启动过程允许 1 到 300 秒；Doctor 单项检查用 `timeout_secs` 控制，默认 15 秒、范围 1 到 300 秒。
 
 ### 配置路径被拒绝
 

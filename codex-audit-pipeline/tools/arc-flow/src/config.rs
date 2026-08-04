@@ -75,6 +75,8 @@ pub struct DoctorCheck {
     pub required: bool,
     #[serde(default)]
     pub help: Option<String>,
+    #[serde(default = "default_doctor_timeout")]
+    pub timeout_secs: u64,
     #[serde(flatten)]
     pub kind: DoctorCheckKind,
 }
@@ -170,7 +172,18 @@ pub enum ParserConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ScopeConfig {
+    #[serde(default)]
+    pub unmatched: UnmatchedScope,
     pub rules: Vec<ScopeRule>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UnmatchedScope {
+    #[default]
+    Fail,
+    All,
+    Ignore,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,19 +268,27 @@ impl FlowConfig {
         Ok(())
     }
 
-    pub fn components_for(&self, paths: &[String]) -> Result<BTreeSet<String>> {
+    pub fn classify_paths(&self, paths: &[String]) -> Result<(BTreeSet<String>, Vec<String>)> {
         let mut components = BTreeSet::new();
-        for rule in &self.scope.rules {
-            let mut builder = GlobSetBuilder::new();
-            for pattern in &rule.patterns {
-                builder.add(Glob::new(pattern)?);
+        let mut unmatched = Vec::new();
+        for path in paths {
+            let mut matched = false;
+            for rule in &self.scope.rules {
+                let mut builder = GlobSetBuilder::new();
+                for pattern in &rule.patterns {
+                    builder.add(Glob::new(pattern)?);
+                }
+                let matcher = builder.build()?;
+                if matcher.is_match(path) {
+                    matched = true;
+                    components.extend(rule.components.iter().cloned());
+                }
             }
-            let matcher = builder.build()?;
-            if paths.iter().any(|path| matcher.is_match(path)) {
-                components.extend(rule.components.iter().cloned());
+            if !matched {
+                unmatched.push(path.clone());
             }
         }
-        Ok(components)
+        Ok((components, unmatched))
     }
 
     pub fn components(&self) -> BTreeSet<String> {
@@ -423,6 +444,12 @@ impl FlowConfig {
             }
             if check.label.trim().is_empty() {
                 bail!("doctor check {:?} requires a label", check.id);
+            }
+            if check.timeout_secs == 0 || check.timeout_secs > 300 {
+                bail!(
+                    "doctor check {:?} timeout_secs must be between 1 and 300",
+                    check.id
+                );
             }
             match &check.kind {
                 DoctorCheckKind::Command { program, args } => {
@@ -736,6 +763,10 @@ const fn default_true() -> bool {
     true
 }
 
+const fn default_doctor_timeout() -> u64 {
+    15
+}
+
 const fn default_capture() -> usize {
     1
 }
@@ -941,6 +972,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             label: program.clone(),
             required: true,
             help: None,
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::Command {
                 program,
                 args: vec!["--version".into()],
@@ -953,6 +985,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             label: "frontend dependencies".into(),
             required: true,
             help: Some("run `cd frontend && npm ci`".into()),
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::Path {
                 path: "{frontend}/node_modules".into(),
                 path_type: PathType::Directory,
@@ -963,6 +996,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             label: "runtime database".into(),
             required: true,
             help: Some("create backend/.env from backend/.env.example".into()),
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::EnvOrFile {
                 env: "DATABASE_URL".into(),
                 path: "{backend}/.env".into(),
@@ -974,6 +1008,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             label: "migrations".into(),
             required: true,
             help: Some("add at least one SQL migration".into()),
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::Glob {
                 pattern: "{backend}/migrations/*.sql".into(),
             },
@@ -986,6 +1021,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
                 "run `git config core.hooksPath {}`",
                 legacy.doctor.hooks_path
             )),
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::GitConfig {
                 key: "core.hooksPath".into(),
                 expected: legacy.doctor.hooks_path,
@@ -996,6 +1032,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             label: "Node version".into(),
             required: true,
             help: None,
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::Version {
                 program: "node".into(),
                 args: vec!["--version".into()],
@@ -1008,6 +1045,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             label: "Git remotes".into(),
             required: true,
             help: None,
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::GitRemotes,
         },
         DoctorCheck {
@@ -1015,6 +1053,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             label: "test database".into(),
             required: false,
             help: Some("configure TEST_DATABASE_URL or Docker".into()),
+            timeout_secs: default_doctor_timeout(),
             kind: DoctorCheckKind::Service {
                 service: service_id,
             },

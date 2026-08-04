@@ -2,13 +2,14 @@ use crate::config::ServiceConfig;
 use crate::project::Project;
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
-use std::process::Command;
+use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub struct ServiceManager<'a> {
     project: &'a Project,
     running: BTreeMap<String, RunningService>,
+    failures: BTreeMap<String, String>,
 }
 
 impl<'a> ServiceManager<'a> {
@@ -16,10 +17,14 @@ impl<'a> ServiceManager<'a> {
         Self {
             project,
             running: BTreeMap::new(),
+            failures: BTreeMap::new(),
         }
     }
 
     pub fn environment(&mut self, id: &str) -> Result<(String, String)> {
+        if let Some(error) = self.failures.get(id) {
+            bail!("service {id:?} previously failed: {error}");
+        }
         if !self.running.contains_key(id) {
             let config = self
                 .project
@@ -27,7 +32,14 @@ impl<'a> ServiceManager<'a> {
                 .service(id)
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("unknown service {id:?}"))?;
-            let running = RunningService::start(self.project, id, config)?;
+            let running = match RunningService::start(self.project, id, config) {
+                Ok(running) => running,
+                Err(error) => {
+                    let detail = format!("{error:#}");
+                    self.failures.insert(id.to_string(), detail.clone());
+                    bail!("{detail}");
+                }
+            };
             self.running.insert(id.to_string(), running);
         }
         let service = self.running.get(id).expect("service inserted");
@@ -39,6 +51,7 @@ struct RunningService {
     inject_env: String,
     value: String,
     container: Option<String>,
+    project_root: PathBuf,
 }
 
 impl RunningService {
@@ -50,10 +63,14 @@ impl RunningService {
             } => {
                 let value = std::env::var(&source_env)
                     .with_context(|| format!("service {id:?} requires {source_env}"))?;
+                if value.trim().is_empty() {
+                    bail!("service {id:?} requires non-empty {source_env}");
+                }
                 Ok(Self {
                     inject_env,
                     value,
                     container: None,
+                    project_root: project.root.clone(),
                 })
             }
             ServiceConfig::Docker {
@@ -70,14 +87,17 @@ impl RunningService {
                 if let Some((_, value)) = external_env
                     .as_ref()
                     .and_then(|name| std::env::var(name).ok().map(|value| (name, value)))
+                    .filter(|(_, value)| !value.trim().is_empty())
                 {
                     return Ok(Self {
                         inject_env,
                         value,
                         container: None,
+                        project_root: project.root.clone(),
                     });
                 }
-                ensure_docker(project, id)?;
+                let deadline = Instant::now() + Duration::from_secs(startup_timeout_secs);
+                ensure_docker(project, id, remaining(deadline)?)?;
                 start_docker(
                     project,
                     id,
@@ -88,6 +108,7 @@ impl RunningService {
                     environment,
                     healthcheck,
                     connection,
+                    deadline,
                 )
             }
         }
@@ -105,6 +126,7 @@ fn start_docker(
     environment: BTreeMap<String, String>,
     healthcheck: Vec<String>,
     connection: String,
+    deadline: Instant,
 ) -> Result<RunningService> {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -128,10 +150,7 @@ fn start_docker(
         args.extend(["--env".into(), format!("{key}={value}")]);
     }
     args.extend(["--publish".into(), publish, image.clone()]);
-    let output = Command::new("docker")
-        .current_dir(&project.root)
-        .args(&args)
-        .output()
+    let output = crate::process::capture("docker", &args, &project.root, remaining(deadline)?)
         .with_context(|| format!("start Docker service {id:?}"))?;
     if !output.status.success() {
         bail!(
@@ -144,22 +163,26 @@ fn start_docker(
         inject_env,
         value: String::new(),
         container: Some(name),
+        project_root: project.root.clone(),
     };
-    let deadline = Instant::now() + Duration::from_secs(startup_timeout_secs);
     while Instant::now() < deadline {
         if crate::process::cancelled() {
             bail!("verification cancelled while waiting for service {id:?}");
         }
-        if let Some(port) = running.port(container_port)? {
+        if let Some(port) = running.port(container_port, remaining(deadline)?)? {
             let mut health_args = vec![
                 "exec".to_string(),
                 running.container.as_deref().unwrap_or_default().to_string(),
             ];
             health_args.extend(healthcheck.iter().cloned());
-            let ready = Command::new("docker")
-                .args(&health_args)
-                .output()
-                .is_ok_and(|value| value.status.success());
+            let ready = crate::process::capture(
+                "docker",
+                &health_args,
+                &project.root,
+                remaining(deadline)?,
+            )?
+            .status
+            .success();
             if ready {
                 running.value = connection.replace("{host_port}", &port);
                 return Ok(running);
@@ -170,11 +193,8 @@ fn start_docker(
     bail!("service {id:?} did not become ready within {startup_timeout_secs} seconds")
 }
 
-fn ensure_docker(project: &Project, id: &str) -> Result<()> {
-    let info = Command::new("docker")
-        .current_dir(&project.root)
-        .arg("info")
-        .output()
+fn ensure_docker(project: &Project, id: &str, timeout: Duration) -> Result<()> {
+    let info = crate::process::capture("docker", &["info".to_string()], &project.root, timeout)
         .with_context(|| format!("Docker is required by service {id:?}"))?;
     if !info.status.success() {
         bail!("Docker daemon is unavailable for service {id:?}");
@@ -183,13 +203,16 @@ fn ensure_docker(project: &Project, id: &str) -> Result<()> {
 }
 
 impl RunningService {
-    fn port(&self, container_port: u16) -> Result<Option<String>> {
+    fn port(&self, container_port: u16, timeout: Duration) -> Result<Option<String>> {
         let Some(container) = &self.container else {
             return Ok(None);
         };
-        let output = Command::new("docker")
-            .args(["port", container, &format!("{container_port}/tcp")])
-            .output()?;
+        let args = vec![
+            "port".into(),
+            container.clone(),
+            format!("{container_port}/tcp"),
+        ];
+        let output = crate::process::capture("docker", &args, &self.project_root, timeout)?;
         if !output.status.success() {
             return Ok(None);
         }
@@ -204,22 +227,29 @@ impl RunningService {
 impl Drop for RunningService {
     fn drop(&mut self) {
         if let Some(container) = &self.container {
-            let _ = Command::new("docker")
-                .args(["rm", "--force", container])
-                .output();
+            let args = vec!["rm".into(), "--force".into(), container.clone()];
+            let _ = crate::process::capture_cleanup(
+                "docker",
+                &args,
+                &self.project_root,
+                Duration::from_secs(5),
+            );
         }
     }
 }
 
-pub fn check_available(project: &Project, id: &str) -> Result<String> {
+pub fn check_available(project: &Project, id: &str, timeout: Duration) -> Result<String> {
     let service = project
         .config
         .service(id)
         .ok_or_else(|| anyhow::anyhow!("unknown service {id:?}"))?;
     match service {
         ServiceConfig::Environment { source_env, .. } => {
-            std::env::var_os(source_env)
-                .ok_or_else(|| anyhow::anyhow!("{source_env} is not configured"))?;
+            let value = std::env::var(source_env)
+                .with_context(|| format!("{source_env} is not configured"))?;
+            if value.trim().is_empty() {
+                bail!("{source_env} is empty");
+            }
             Ok(format!("{source_env} is configured"))
         }
         ServiceConfig::Docker {
@@ -228,19 +258,28 @@ pub fn check_available(project: &Project, id: &str) -> Result<String> {
             ..
         } => {
             if let Some(name) = external_env {
-                if std::env::var_os(name).is_some() {
+                if std::env::var(name).is_ok_and(|value| !value.trim().is_empty()) {
                     return Ok(format!("{name} is configured"));
                 }
             }
-            ensure_docker(project, id)?;
-            let image_ready = Command::new("docker")
-                .args(["image", "inspect", image])
-                .output()
-                .is_ok_and(|output| output.status.success());
+            let deadline = Instant::now() + timeout;
+            ensure_docker(project, id, remaining(deadline)?)?;
+            let args = vec!["image".into(), "inspect".into(), image.clone()];
+            let image_ready =
+                crate::process::capture("docker", &args, &project.root, remaining(deadline)?)?
+                    .status
+                    .success();
             if !image_ready {
                 bail!("Docker image {image} is not available; run `docker pull {image}`");
             }
             Ok(format!("Docker and {image} ready"))
         }
     }
+}
+
+fn remaining(deadline: Instant) -> Result<Duration> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .filter(|duration| !duration.is_zero())
+        .ok_or_else(|| anyhow::anyhow!("service operation timed out"))
 }

@@ -6,7 +6,7 @@ use ignore::WalkBuilder;
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -95,13 +95,14 @@ pub fn run(project: &Project) -> Result<DoctorReport> {
 }
 
 fn run_check(project: &Project, check: &DoctorCheck) -> Result<String> {
+    let timeout = Duration::from_secs(check.timeout_secs);
     match &check.kind {
         DoctorCheckKind::Command { program, args } => {
             let args = args
                 .iter()
                 .map(|arg| project.expand(arg))
                 .collect::<Vec<_>>();
-            command_output(program, &args)
+            command_output(project, program, &args, timeout)
         }
         DoctorCheckKind::Path { path, path_type } => {
             let path = project.expand(path);
@@ -143,18 +144,19 @@ fn run_check(project: &Project, check: &DoctorCheck) -> Result<String> {
             Ok(format!("{contains} found in {path}"))
         }
         DoctorCheckKind::GitConfig { key, expected } => {
-            let output = Command::new("git")
-                .current_dir(&project.root)
-                .args(["config", "--get", key])
-                .output()
+            let args = vec!["config".into(), "--get".into(), key.clone()];
+            let output = crate::process::capture("git", &args, &project.root, timeout)
                 .with_context(|| format!("read Git config {key}"))?;
+            if !output.status.success() {
+                bail!("Git config {key} is not set");
+            }
             let actual = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if actual != *expected {
                 bail!("Git config {key} is {actual:?}, expected {expected:?}");
             }
             Ok(format!("{key}={expected}"))
         }
-        DoctorCheckKind::GitRemotes => check_remotes(project),
+        DoctorCheckKind::GitRemotes => check_remotes(&project.root, timeout),
         DoctorCheckKind::Version {
             program,
             args,
@@ -165,7 +167,7 @@ fn run_check(project: &Project, check: &DoctorCheck) -> Result<String> {
                 .iter()
                 .map(|arg| project.expand(arg))
                 .collect::<Vec<_>>();
-            let actual = command_output(program, &args)?
+            let actual = command_output(project, program, &args, timeout)?
                 .trim_start_matches(trim_prefix)
                 .to_string();
             let path = project.expand(path);
@@ -178,17 +180,26 @@ fn run_check(project: &Project, check: &DoctorCheck) -> Result<String> {
             }
             Ok(expected)
         }
-        DoctorCheckKind::Service { service } => crate::service::check_available(project, service),
+        DoctorCheckKind::Service { service } => {
+            crate::service::check_available(project, service, timeout)
+        }
     }
 }
 
-fn command_output(program: &str, args: &[String]) -> Result<String> {
-    let output = Command::new(program)
-        .args(args)
-        .output()
-        .with_context(|| format!("command {program} is not available on PATH"))?;
+fn command_output(
+    project: &Project,
+    program: &str,
+    args: &[String],
+    timeout: Duration,
+) -> Result<String> {
+    let output = crate::process::capture(program, args, &project.root, timeout)
+        .with_context(|| format!("command {program} is not available or did not finish"))?;
     if !output.status.success() {
-        bail!("command {program} exited with {}", output.status);
+        bail!(
+            "command {program} exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
     }
     String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -216,17 +227,32 @@ fn check_glob(project: &Project, pattern: &str) -> Result<String> {
     Ok(format!("matched {pattern}"))
 }
 
-fn check_remotes(project: &Project) -> Result<String> {
-    let remotes = Command::new("git")
-        .current_dir(&project.root)
-        .arg("remote")
-        .output()
-        .context("list Git remotes")?;
+fn check_remotes(project_root: &Path, timeout: Duration) -> Result<String> {
+    let deadline = Instant::now() + timeout;
+    let remotes = crate::process::capture(
+        "git",
+        &["remote".to_string()],
+        project_root,
+        remaining(deadline)?,
+    )
+    .context("list Git remotes")?;
+    if !remotes.status.success() {
+        bail!(
+            "project root is not a Git worktree: {}",
+            String::from_utf8_lossy(&remotes.stderr).trim()
+        );
+    }
     for remote in String::from_utf8_lossy(&remotes.stdout).lines() {
-        let urls = Command::new("git")
-            .current_dir(&project.root)
-            .args(["remote", "get-url", "--all", remote])
-            .output()?;
+        let args = vec![
+            "remote".into(),
+            "get-url".into(),
+            "--all".into(),
+            remote.into(),
+        ];
+        let urls = crate::process::capture("git", &args, project_root, remaining(deadline)?)?;
+        if !urls.status.success() {
+            bail!("cannot read URLs for Git remote {remote:?}");
+        }
         let unsafe_url = String::from_utf8_lossy(&urls.stdout).lines().any(|url| {
             (url.starts_with("https://") || url.starts_with("http://"))
                 && url.split_once("//").is_some_and(|(_, tail)| {
@@ -239,4 +265,33 @@ fn check_remotes(project: &Project) -> Result<String> {
         }
     }
     Ok("no embedded credentials".into())
+}
+
+fn remaining(deadline: Instant) -> Result<Duration> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .filter(|duration| !duration.is_zero())
+        .ok_or_else(|| anyhow::anyhow!("doctor check timed out"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn git_remote_check_rejects_non_git_directory() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("arc-flow-doctor-{unique}"));
+        fs::create_dir_all(&root).expect("create doctor fixture");
+
+        let error =
+            check_remotes(&root, Duration::from_secs(2)).expect_err("non-Git directory must fail");
+
+        fs::remove_dir_all(root).ok();
+        assert!(error.to_string().contains("not a Git worktree"));
+    }
 }

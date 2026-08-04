@@ -24,6 +24,9 @@ id = "git.remotes"
 label = "Git remotes"
 kind = "git-remotes"
 
+[scope]
+unmatched = "all"
+
 [[scope.rules]]
 patterns = ["**"]
 components = ["project"]

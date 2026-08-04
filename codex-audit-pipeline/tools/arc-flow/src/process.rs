@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -49,6 +50,105 @@ pub struct TaskResult {
     pub duration_ms: u128,
     pub log: String,
     pub detail: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct CapturedOutput {
+    pub status: ExitStatus,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+pub fn capture(
+    program: &str,
+    args: &[String],
+    cwd: &Path,
+    timeout: Duration,
+) -> Result<CapturedOutput> {
+    capture_command(program, args, cwd, timeout, true)
+}
+
+pub fn capture_cleanup(
+    program: &str,
+    args: &[String],
+    cwd: &Path,
+    timeout: Duration,
+) -> Result<CapturedOutput> {
+    capture_command(program, args, cwd, timeout, false)
+}
+
+fn capture_command(
+    program: &str,
+    args: &[String],
+    cwd: &Path,
+    timeout: Duration,
+    observe_cancel: bool,
+) -> Result<CapturedOutput> {
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("start internal command {program}"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .context("internal command stdout was not captured")?;
+    let stderr = child
+        .stderr
+        .take()
+        .context("internal command stderr was not captured")?;
+    let stdout_reader = thread::spawn(move || read_all(stdout));
+    let stderr_reader = thread::spawn(move || read_all(stderr));
+    let started = Instant::now();
+
+    let (status, timed_out, was_cancelled) = loop {
+        if let Some(status) = child.try_wait()? {
+            break (status, false, false);
+        }
+        if observe_cancel && cancelled() {
+            break (terminate(&mut child)?, false, true);
+        }
+        if started.elapsed() >= timeout {
+            break (terminate(&mut child)?, true, false);
+        }
+        thread::sleep(Duration::from_millis(50));
+    };
+    let stdout = stdout_reader
+        .join()
+        .map_err(|_| anyhow::anyhow!("internal command stdout reader panicked"))??;
+    let stderr = stderr_reader
+        .join()
+        .map_err(|_| anyhow::anyhow!("internal command stderr reader panicked"))??;
+
+    if was_cancelled {
+        bail!("internal command {program} was cancelled");
+    }
+    if timed_out {
+        bail!(
+            "internal command {program} timed out after {} ms",
+            timeout.as_millis()
+        );
+    }
+    Ok(CapturedOutput {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn read_all(mut reader: impl Read) -> std::io::Result<Vec<u8>> {
+    let mut output = Vec::new();
+    reader.read_to_end(&mut output)?;
+    Ok(output)
 }
 
 impl Task {
@@ -216,5 +316,15 @@ mod tests {
         let output = fs::read_to_string(&log).expect("read environment log");
         assert!(!output.contains("ARC_FLOW_REMOVE_FIXTURE"));
         let _ = fs::remove_file(log);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn captured_command_has_a_hard_timeout() {
+        let args = vec!["-c".to_string(), "sleep 5".to_string()];
+        let error = capture("sh", &args, Path::new("/tmp"), Duration::from_millis(100))
+            .expect_err("capture must time out");
+
+        assert!(error.to_string().contains("timed out"));
     }
 }

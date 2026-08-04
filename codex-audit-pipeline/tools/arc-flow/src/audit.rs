@@ -1,9 +1,10 @@
-use anyhow::{Context, Result};
+use crate::project::resolve_repo_path;
+use anyhow::{bail, Context, Result};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -20,6 +21,7 @@ struct PathsConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 struct Config {
     #[serde(default)]
     paths: PathsConfig,
@@ -30,6 +32,7 @@ struct Config {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 struct HardRule {
     name: String,
     severity: String,
@@ -43,6 +46,7 @@ struct HardRule {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
 struct ArchRule {
     name: String,
     layer: String,
@@ -222,11 +226,35 @@ fn compile_regexes(patterns: &[String]) -> Result<Vec<Regex>> {
         .collect()
 }
 
-/// 将规则中的路径条目解析为实际目录：命中别名表则替换，否则原样使用。
-fn resolve_root_dirs(entries: &[String], aliases: &HashMap<String, String>) -> Vec<String> {
+fn resolve_rule_roots(
+    project_root: &Path,
+    entries: &[String],
+    aliases: &HashMap<String, String>,
+    rule_name: &str,
+) -> Result<Vec<PathBuf>> {
+    if entries.is_empty() {
+        bail!("audit rule {rule_name:?} requires at least one path");
+    }
     entries
         .iter()
-        .map(|e| aliases.get(e).cloned().unwrap_or_else(|| e.clone()))
+        .map(|entry| aliases.get(entry).unwrap_or(entry))
+        .map(|entry| {
+            resolve_repo_path(
+                project_root,
+                Path::new(entry),
+                &format!("audit rule {rule_name:?} path"),
+                true,
+            )
+        })
+        .collect()
+}
+
+fn resolve_excludes(project_root: &Path, entries: &[String]) -> Result<Vec<PathBuf>> {
+    entries
+        .iter()
+        .map(|entry| {
+            resolve_repo_path(project_root, Path::new(entry), "audit excluded path", false)
+        })
         .collect()
 }
 
@@ -236,56 +264,50 @@ fn is_inside_line_comment(line: &str, match_start: usize) -> bool {
     line.find("//").is_some_and(|pos| pos < match_start)
 }
 
-fn is_allowlisted(path: &Path, allowlist: &[String]) -> bool {
-    let path_str = path.to_str().unwrap_or("");
+fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[String]) -> bool {
+    let relative = path.strip_prefix(project_root).unwrap_or(path);
+    let path_str = relative.to_str().unwrap_or("");
     allowlist.iter().any(|pattern| {
         if pattern.contains('*') || pattern.contains('[') || pattern.contains('(') {
             Regex::new(pattern)
                 .map(|re| re.is_match(path_str))
                 .unwrap_or(false)
         } else {
-            path.starts_with(Path::new(pattern))
+            relative.starts_with(Path::new(pattern))
         }
     })
 }
 
 #[allow(clippy::too_many_arguments)]
 fn scan_files(
-    root_dirs: &[String],
+    project_root: &Path,
+    root_paths: &[PathBuf],
     extensions: &[String],
-    exclude_dirs: &[String],
+    exclude_dirs: &[PathBuf],
     patterns: &[String],
     exclude_patterns: &[String],
     allowlist: &[String],
     rule_name: &str,
 ) -> Result<Vec<Violation>> {
-    if root_dirs.is_empty() || patterns.is_empty() {
+    if root_paths.is_empty() || patterns.is_empty() {
         return Ok(Vec::new());
     }
 
-    let root_paths: Vec<PathBuf> = root_dirs
-        .iter()
-        .map(PathBuf::from)
-        .filter(|path| path.exists())
-        .collect();
-    let exclude_set: Vec<PathBuf> = exclude_dirs.iter().map(PathBuf::from).collect();
     let regexes = compile_regexes(patterns)?;
     let exclude_regexes = compile_regexes(exclude_patterns)?;
-
-    if root_paths.is_empty() {
-        return Ok(Vec::new());
-    }
 
     let rule_name = rule_name.to_string();
     let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
     for root_path in root_paths.iter().skip(1) {
         walk_builder.add(root_path);
     }
-    let violations = walk_builder
+    let entries = walk_builder
         .add_custom_ignore_filename(".auditignore")
         .follow_links(false)
         .build()
-        .filter_map(|entry| entry.ok())
+        .collect::<std::result::Result<Vec<_>, ignore::Error>>()?;
+    let violations = entries
+        .into_par_iter()
         .filter(|entry| {
             let path = entry.path();
             if path.is_dir() {
@@ -298,21 +320,22 @@ fn scan_files(
             } else {
                 return false;
             }
-            for excl in &exclude_set {
+            for excl in exclude_dirs {
                 if path.starts_with(excl) {
                     return false;
                 }
             }
-            let path_str = path.to_str().unwrap_or("");
+            let relative = path.strip_prefix(project_root).unwrap_or(path);
+            let path_str = relative.to_str().unwrap_or("");
             if exclude_regexes.iter().any(|re| re.is_match(path_str)) {
                 return false;
             }
-            !is_allowlisted(path, allowlist)
+            !is_allowlisted(path, project_root, allowlist)
         })
-        .par_bridge()
-        .filter_map(|entry| {
+        .map(|entry| -> Result<Vec<Violation>> {
             let path = entry.path();
-            let content = fs::read_to_string(path).ok()?;
+            let content = fs::read_to_string(path)
+                .with_context(|| format!("read audit source {}", path.display()))?;
             let mut violations = Vec::new();
 
             for (line_num, line) in content.lines().enumerate() {
@@ -323,7 +346,10 @@ fn scan_files(
                             continue;
                         }
                         violations.push(Violation {
-                            file: path.to_path_buf(),
+                            file: path
+                                .strip_prefix(project_root)
+                                .unwrap_or(path)
+                                .to_path_buf(),
                             line: line_num + 1,
                             content: line.trim().to_string(),
                             rule_name: format!("{}:{}", rule_name, patterns[idx]),
@@ -336,57 +362,48 @@ fn scan_files(
                     }
                 }
             }
-            if violations.is_empty() {
-                None
-            } else {
-                Some(violations)
-            }
+            Ok(violations)
         })
-        .flatten()
-        .collect();
-    Ok(violations)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(violations.into_iter().flatten().collect())
 }
 
-fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
+fn scan_arch_rules(
+    project_root: &Path,
+    config: &Config,
+    exclude_dirs: &[PathBuf],
+) -> Result<Vec<ArchViolation>> {
     let mut all_violations = Vec::new();
 
     for rule in &config.arch_rules {
-        let root_dirs = resolve_root_dirs(&rule.paths, &config.paths.aliases);
+        let root_paths =
+            resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
         let extensions = rule.extensions.clone();
-        let exclude_dirs = config.paths.exclude.clone();
         let patterns = rule.forbidden_patterns.clone();
         let allowed_patterns = rule.allowed_patterns.clone();
         let exclude_patterns = rule.exclude_patterns.clone();
         let allowlist = rule.allowlist.clone();
 
-        if root_dirs.is_empty() || patterns.is_empty() {
+        if patterns.is_empty() {
             continue;
         }
 
-        let root_paths: Vec<PathBuf> = root_dirs
-            .iter()
-            .map(PathBuf::from)
-            .filter(|path| path.exists())
-            .collect();
-        let exclude_set: Vec<PathBuf> = exclude_dirs.iter().map(PathBuf::from).collect();
         let regexes = compile_regexes(&patterns)?;
         let allowed_regexes = compile_regexes(&allowed_patterns)?;
         let exclude_regexes = compile_regexes(&exclude_patterns)?;
-
-        if root_paths.is_empty() {
-            continue;
-        }
 
         let rule_name = rule.name.clone();
         let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
         for root_path in root_paths.iter().skip(1) {
             walk_builder.add(root_path);
         }
-        let rule_violations: Vec<ArchViolation> = walk_builder
+        let entries = walk_builder
             .add_custom_ignore_filename(".auditignore")
             .follow_links(false)
             .build()
-            .filter_map(|entry| entry.ok())
+            .collect::<std::result::Result<Vec<_>, ignore::Error>>()?;
+        let rule_violations = entries
+            .into_par_iter()
             .filter(|entry| {
                 let path = entry.path();
                 if path.is_dir() {
@@ -399,21 +416,22 @@ fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
                 } else {
                     return false;
                 }
-                for excl in &exclude_set {
+                for excl in exclude_dirs {
                     if path.starts_with(excl) {
                         return false;
                     }
                 }
-                let path_str = path.to_str().unwrap_or("");
+                let relative = path.strip_prefix(project_root).unwrap_or(path);
+                let path_str = relative.to_str().unwrap_or("");
                 if exclude_regexes.iter().any(|re| re.is_match(path_str)) {
                     return false;
                 }
-                !is_allowlisted(path, &allowlist)
+                !is_allowlisted(path, project_root, &allowlist)
             })
-            .par_bridge()
-            .filter_map(|entry| {
+            .map(|entry| -> Result<Vec<ArchViolation>> {
                 let path = entry.path();
-                let content = fs::read_to_string(path).ok()?;
+                let content = fs::read_to_string(path)
+                    .with_context(|| format!("read audit source {}", path.display()))?;
                 let mut violations = Vec::new();
 
                 for (line_num, line) in content.lines().enumerate() {
@@ -427,7 +445,10 @@ fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
                                 continue;
                             }
                             violations.push(ArchViolation {
-                                file: path.to_path_buf(),
+                                file: path
+                                    .strip_prefix(project_root)
+                                    .unwrap_or(path)
+                                    .to_path_buf(),
                                 line: line_num + 1,
                                 content: line.trim().to_string(),
                                 rule_name: rule_name.clone(),
@@ -440,16 +461,11 @@ fn scan_arch_rules(config: &Config) -> Result<Vec<ArchViolation>> {
                         }
                     }
                 }
-                if violations.is_empty() {
-                    None
-                } else {
-                    Some(violations)
-                }
+                Ok(violations)
             })
-            .flatten()
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
-        all_violations.extend(rule_violations);
+        all_violations.extend(rule_violations.into_iter().flatten());
     }
 
     Ok(all_violations)
@@ -652,19 +668,108 @@ pub struct AuditOutcome {
     pub error_count: usize,
 }
 
-pub fn run(config_path: &Path, report_dir: &Path, emit_json: bool) -> Result<AuditOutcome> {
+fn validate_audit_config(project_root: &Path, config: &Config) -> Result<Vec<PathBuf>> {
+    for (alias, path) in &config.paths.aliases {
+        resolve_repo_path(
+            project_root,
+            Path::new(path),
+            &format!("audit path alias {alias:?}"),
+            false,
+        )?;
+    }
+    let exclude_dirs = resolve_excludes(project_root, &config.paths.exclude)?;
+    let mut names = HashSet::new();
+
+    for rule in &config.hard_rules {
+        if rule.name.trim().is_empty() || !names.insert(rule.name.as_str()) {
+            bail!(
+                "audit rule names must be non-empty and unique: {:?}",
+                rule.name
+            );
+        }
+        if !matches!(rule.severity.as_str(), "blocker" | "error" | "warning") {
+            bail!(
+                "audit rule {:?} has unsupported severity {:?}",
+                rule.name,
+                rule.severity
+            );
+        }
+        if rule.extensions.is_empty() || rule.patterns.is_empty() {
+            bail!(
+                "audit rule {:?} requires extensions and patterns",
+                rule.name
+            );
+        }
+        resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
+        compile_regexes(&rule.patterns)?;
+        compile_regexes(&rule.exclude_patterns)?;
+        validate_allowlist(project_root, &rule.allowlist, &rule.name)?;
+    }
+    for rule in &config.arch_rules {
+        if rule.name.trim().is_empty() || !names.insert(rule.name.as_str()) {
+            bail!(
+                "audit rule names must be non-empty and unique: {:?}",
+                rule.name
+            );
+        }
+        if rule.layer.trim().is_empty()
+            || rule.suggestion.trim().is_empty()
+            || rule.extensions.is_empty()
+            || rule.forbidden_patterns.is_empty()
+        {
+            bail!(
+                "architecture rule {:?} requires layer, suggestion, extensions, and forbidden_patterns",
+                rule.name
+            );
+        }
+        resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
+        compile_regexes(&rule.forbidden_patterns)?;
+        compile_regexes(&rule.allowed_patterns)?;
+        compile_regexes(&rule.exclude_patterns)?;
+        validate_allowlist(project_root, &rule.allowlist, &rule.name)?;
+    }
+    Ok(exclude_dirs)
+}
+
+fn validate_allowlist(project_root: &Path, allowlist: &[String], rule_name: &str) -> Result<()> {
+    for pattern in allowlist {
+        if pattern.contains('*') || pattern.contains('[') || pattern.contains('(') {
+            Regex::new(pattern).with_context(|| {
+                format!("audit rule {rule_name:?} has invalid allowlist regex {pattern:?}")
+            })?;
+        } else {
+            resolve_repo_path(
+                project_root,
+                Path::new(pattern),
+                &format!("audit rule {rule_name:?} allowlist path"),
+                false,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+pub fn run(
+    project_root: &Path,
+    config_path: &Path,
+    report_dir: &Path,
+    emit_json: bool,
+) -> Result<AuditOutcome> {
     let config_str = fs::read_to_string(config_path)
         .with_context(|| format!("read audit config {}", config_path.display()))?;
     let config: Config = toml::from_str(&config_str)
         .with_context(|| format!("parse audit config {}", config_path.display()))?;
+    let exclude_dirs = validate_audit_config(project_root, &config)?;
 
     let mut all_hard_violations = Vec::new();
     for rule in &config.hard_rules {
-        let root_dirs = resolve_root_dirs(&rule.paths, &config.paths.aliases);
+        let root_paths =
+            resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
         let violations = scan_files(
-            &root_dirs,
+            project_root,
+            &root_paths,
             &rule.extensions,
-            &config.paths.exclude,
+            &exclude_dirs,
             &rule.patterns,
             &rule.exclude_patterns,
             &rule.allowlist,
@@ -673,7 +778,7 @@ pub fn run(config_path: &Path, report_dir: &Path, emit_json: bool) -> Result<Aud
         all_hard_violations.extend(violations);
     }
 
-    let arch_violations = scan_arch_rules(&config)?;
+    let arch_violations = scan_arch_rules(project_root, &config, &exclude_dirs)?;
     let report = generate_report(&config, &all_hard_violations, &arch_violations);
     let full_json = serde_json::to_string_pretty(&report)?;
     let outcome = AuditOutcome {
@@ -753,11 +858,9 @@ mod tests {
         fs::write(first.join("one.rs"), "forbidden_call();\n").expect("write first fixture");
         fs::write(second.join("two.rs"), "forbidden_call();\n").expect("write second fixture");
 
-        let roots = vec![
-            first.to_string_lossy().into_owned(),
-            second.to_string_lossy().into_owned(),
-        ];
+        let roots = vec![first, second];
         let violations = scan_files(
+            &test_dir.0,
             &roots,
             &["rs".to_string()],
             &[],
@@ -788,10 +891,7 @@ mod tests {
             arch_rules: vec![ArchRule {
                 name: "component rule".to_string(),
                 layer: "component".to_string(),
-                paths: vec![
-                    pages.to_string_lossy().into_owned(),
-                    layout.to_string_lossy().into_owned(),
-                ],
+                paths: vec!["pages".into(), "layout".into()],
                 extensions: vec!["ts".to_string()],
                 forbidden_patterns: vec!["HttpClient".to_string()],
                 allowed_patterns: Vec::new(),
@@ -801,21 +901,73 @@ mod tests {
             }],
         };
 
-        assert_eq!(scan_arch_rules(&config).expect("scan config").len(), 2);
+        assert_eq!(
+            scan_arch_rules(&test_dir.0, &config, &[])
+                .expect("scan config")
+                .len(),
+            2
+        );
     }
 
     #[test]
     fn literal_allowlist_is_a_path_prefix_not_a_substring() {
         let allowlist = vec!["backend/src/repositories".to_string()];
+        let root = Path::new("/repo");
 
         assert!(is_allowlisted(
-            Path::new("backend/src/repositories/users.rs"),
+            Path::new("/repo/backend/src/repositories/users.rs"),
+            root,
             &allowlist
         ));
         assert!(!is_allowlisted(
-            Path::new("backend/src/repositories_backup/users.rs"),
+            Path::new("/repo/backend/src/repositories_backup/users.rs"),
+            root,
             &allowlist
         ));
+    }
+
+    #[test]
+    fn missing_rule_root_fails_closed() {
+        let test_dir = TestDir::new("missing-root");
+        let config = Config {
+            paths: PathsConfig::default(),
+            hard_rules: vec![HardRule {
+                name: "missing".into(),
+                severity: "blocker".into(),
+                paths: vec!["srrc".into()],
+                extensions: vec!["rs".into()],
+                patterns: vec!["forbidden".into()],
+                exclude_patterns: Vec::new(),
+                allowlist: Vec::new(),
+            }],
+            arch_rules: Vec::new(),
+        };
+
+        let error =
+            validate_audit_config(&test_dir.0, &config).expect_err("missing audit roots must fail");
+        assert!(error.to_string().contains("is missing"));
+    }
+
+    #[test]
+    fn rule_root_cannot_escape_project() {
+        let test_dir = TestDir::new("outside-root");
+        let config = Config {
+            paths: PathsConfig::default(),
+            hard_rules: vec![HardRule {
+                name: "outside".into(),
+                severity: "blocker".into(),
+                paths: vec!["../outside".into()],
+                extensions: vec!["rs".into()],
+                patterns: vec!["forbidden".into()],
+                exclude_patterns: Vec::new(),
+                allowlist: Vec::new(),
+            }],
+            arch_rules: Vec::new(),
+        };
+
+        let error = validate_audit_config(&test_dir.0, &config)
+            .expect_err("audit roots must stay inside project");
+        assert!(error.to_string().contains("may not escape"));
     }
 
     #[test]

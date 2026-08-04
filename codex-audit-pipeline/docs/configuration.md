@@ -86,6 +86,7 @@ version = 2
 | `[project]`         | 是   | 项目标识和默认 profile      |
 | `[paths]`           | 是   | 报告、审计规则和路径别名    |
 | `[policy]`          | 否   | 声明不可缺失的步骤          |
+| `[scope]`           | 否   | 未匹配变更路径的处理策略    |
 | `[[doctor.checks]]` | 否   | 本机环境体检                |
 | `[services.*]`      | 否   | 外部环境或 Docker 临时服务  |
 | `[parsers.*]`       | 否   | 从测试日志计算结果数        |
@@ -161,19 +162,21 @@ required_steps = ["api.format", "api.clippy", "api.tests"]
 id = "tool.git"
 label = "git"
 required = true
+timeout_secs = 15
 help = "install Git and ensure it is on PATH"
 kind = "command"
 program = "git"
 args = ["--version"]
 ```
 
-| 字段       | 默认值 | 说明                                    |
-| ---------- | ------ | --------------------------------------- |
-| `id`       | 无     | 唯一检查 ID                             |
-| `label`    | 无     | 终端和 JSON 报告中的显示名称            |
-| `required` | `true` | `true` 失败计为 FAIL，`false` 计为 WARN |
-| `help`     | 无     | 失败时追加的修复提示                    |
-| `kind`     | 无     | 检查类型                                |
+| 字段           | 默认值 | 说明                                    |
+| -------------- | ------ | --------------------------------------- |
+| `id`           | 无     | 唯一检查 ID                             |
+| `label`        | 无     | 终端和 JSON 报告中的显示名称            |
+| `required`     | `true` | `true` 失败计为 FAIL，`false` 计为 WARN |
+| `timeout_secs` | `15`   | 单项检查硬超时，范围 1 到 300 秒        |
+| `help`         | 无     | 失败时追加的修复提示                    |
+| `kind`         | 无     | 检查类型                                |
 
 支持的 kind：
 
@@ -217,7 +220,7 @@ kind = "service"
 service = "test-postgres"
 ```
 
-`path_type` 可取 `any`、`file`、`directory`，默认 `any`。CI 中通常使用 `arc-flow doctor --strict`，把 WARN 也视为失败。
+`path_type` 可取 `any`、`file`、`directory`，默认 `any`。命令、Git 配置、remote 和 service 探测都受 `timeout_secs` 约束，超时时会终止整个子进程组。CI 中通常使用 `arc-flow doctor --strict`，把 WARN 也视为失败。
 
 ## 8. `[services.*]`
 
@@ -257,14 +260,14 @@ connection = "postgres://test:test@127.0.0.1:{host_port}/app_test"
 | `image_env`            | 否   | 覆盖镜像名                                     |
 | `external_env`         | 否   | 若该变量已设置，直接使用其值并跳过 Docker      |
 | `inject_env`           | 是   | 注入测试步骤的变量名                           |
-| `startup_timeout_secs` | 是   | 等待健康检查的秒数，范围 1 到 300              |
+| `startup_timeout_secs` | 是   | 整个 Docker 启动过程的秒数，范围 1 到 300      |
 | `timeout_env`          | 否   | 覆盖启动超时                                   |
 | `container_port`       | 是   | 容器监听端口；宿主端口随机绑定到 `127.0.0.1`   |
 | `environment`          | 否   | 传给容器的环境变量                             |
 | `healthcheck`          | 是   | `docker exec` 后的参数列表，不能为空           |
 | `connection`           | 是   | 注入值，必须包含 `{host_port}`                 |
 
-服务按需启动，同一轮验证内复用。验证成功、失败、超时或收到中断信号时都会尝试 `docker rm --force`。镜像不会自动拉取，先用 `docker pull <image>` 准备。
+服务按需启动，同一轮验证内复用。Docker daemon 探测、容器创建、端口查询和健康检查共享一个启动截止时间；验证成功、失败、超时或收到中断信号时都会在独立清理超时内尝试 `docker rm --force`。镜像不会自动拉取，先用 `docker pull <image>` 准备。
 
 一个步骤可以依赖多个服务：
 
@@ -296,7 +299,20 @@ minimum = 1
 
 每个正则都必须包含对应的 capture group。步骤成功后才解析日志；计数低于 `minimum` 时，该步骤改判为失败。
 
-## 10. `[[scope.rules]]`
+## 10. `[scope]` 和 `[[scope.rules]]`
+
+```toml
+[scope]
+unmatched = "fail"
+```
+
+| `unmatched` 值 | 行为                                                       |
+| -------------- | ---------------------------------------------------------- |
+| `fail`         | 默认值；列出未命中的变更路径并失败                         |
+| `all`          | 任一路径未命中时选择全部 component，适合通用或未知结构项目 |
+| `ignore`       | 忽略未命中路径，仅适合已明确评估漏测风险的项目             |
+
+`--all` 是显式全量模式，不读取工作区路径，因此不应用 `unmatched` 策略。
 
 ```toml
 [[scope.rules]]
@@ -308,7 +324,7 @@ patterns = [".arc-flow/**", ".github/workflows/**"]
 components = ["api", "web", "workflow"]
 ```
 
-每条规则使用 glob 匹配仓库相对路径，命中后把所有 `components` 加入集合。规则可以重叠，最终 component 去重。每个 component 必须至少有一个步骤。
+每条规则使用 glob 匹配仓库相对路径，命中后把所有 `components` 加入集合。规则可以重叠，最终 component 去重。每个 component 必须至少有一个步骤。`scope` 的文本和 JSON 输出都包含未匹配文件，便于排查规则覆盖缺口。
 
 建议把共享契约、工作流配置和 CI 文件映射到所有受影响组件，避免只验证单端。
 
@@ -349,7 +365,7 @@ remove_env = ["DATABASE_URL"]
 
 命令直接通过 `program + args[]` 启动，不执行 shell 拼接。`sh -c`、`bash -lc` 等命令字符串会被配置校验拒绝；管道、重定向和条件逻辑应拆成多个步骤，或封装成项目内受版本控制的可执行程序。
 
-步骤选择条件是：component 已被 scope 选中，并且步骤包含当前 profile。配置顺序就是执行顺序；任一步失败后，报告判为失败。
+步骤选择条件是：component 已被 scope 选中，并且步骤包含当前 profile。配置顺序就是执行顺序；任一步失败后，报告判为失败，但仍继续执行不依赖该故障 service 的后续步骤。同一 service 启动失败会被缓存，依赖它的步骤快速失败，不会反复等待启动超时。
 
 ## 12. 审计规则文件
 
@@ -395,6 +411,8 @@ exclude_patterns = []
 
 `allowed_patterns` 是逐行允许规则，适合明确的 trait impl 或框架样板；不要用过宽正则隐藏真实违规。`exclude_patterns` 与 hard rule 一样匹配文件路径。任意审计违规都会阻止后续外部步骤。
 
+每个规则的 `paths` 必须解析到项目根内已经存在的目录。路径中的 `..`、逃出项目的绝对路径或符号链接都会被拒绝；目录遍历或文件读取失败也会让审计失败，避免扫描缺失时误报通过。审计报告统一记录仓库相对路径。
+
 auditor 是确定性的逐行正则扫描器，不是语言 parser。它会忽略匹配位置之前已经出现 `//` 的行注释，但不跟踪跨行 `/* ... */` 块注释。需要语法树级判断时，应使用项目语言自己的 lint 工具，并把该工具配置成一个 step。
 
 ## 13. 最小完整示例
@@ -416,6 +434,9 @@ path = "."
 
 [policy]
 required_steps = ["app.format", "app.tests"]
+
+[scope]
+unmatched = "all"
 
 [[doctor.checks]]
 id = "tool.cargo"

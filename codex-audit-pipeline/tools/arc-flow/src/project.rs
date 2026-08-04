@@ -2,6 +2,7 @@ use crate::config::{resolve_config_path, FlowConfig, DEFAULT_CONFIG_PATH};
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -28,14 +29,32 @@ impl Project {
         };
         let config_path = resolve_config_path(&root, config_override)?;
         let config = FlowConfig::load(&config_path)?;
-        let reports = root.join(&config.paths.reports);
-        let audit_config = root.join(&config.paths.audit_config);
+        let reports = resolve_repo_path(
+            &root,
+            Path::new(&config.paths.reports),
+            "report directory",
+            false,
+        )?;
+        let audit_config = resolve_repo_path(
+            &root,
+            Path::new(&config.paths.audit_config),
+            "audit configuration",
+            true,
+        )?;
         let aliases = config
             .paths
             .aliases
             .iter()
-            .map(|(name, entry)| (name.clone(), root.join(&entry.path)))
-            .collect();
+            .map(|(name, entry)| {
+                resolve_repo_path(
+                    &root,
+                    Path::new(&entry.path),
+                    &format!("path alias {name:?}"),
+                    false,
+                )
+                .map(|path| (name.clone(), path))
+            })
+            .collect::<Result<BTreeMap<_, _>>>()?;
 
         let project = Self {
             root,
@@ -60,7 +79,16 @@ impl Project {
     }
 
     pub fn prepare(&self) -> Result<()> {
-        std::fs::create_dir_all(self.reports.join("logs"))?;
+        let reports = resolve_repo_path(
+            &self.root,
+            Path::new(&self.config.paths.reports),
+            "report directory",
+            false,
+        )?;
+        if reports != self.reports {
+            bail!("report directory changed during project discovery");
+        }
+        fs::create_dir_all(self.reports.join("logs"))?;
         env::set_current_dir(&self.root)
             .with_context(|| format!("enter project root {}", self.root.display()))?;
         Ok(())
@@ -89,6 +117,55 @@ impl Project {
         }
         resolved
     }
+}
+
+pub(crate) fn resolve_repo_path(
+    root: &Path,
+    path: &Path,
+    label: &str,
+    must_exist: bool,
+) -> Result<PathBuf> {
+    if path.as_os_str().is_empty() || path.is_absolute() {
+        bail!("{label} must be a non-empty repository-relative path");
+    }
+    if path.components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_)
+        )
+    }) {
+        bail!("{label} may not escape the repository: {}", path.display());
+    }
+
+    let candidate = root.join(path);
+    if fs::symlink_metadata(&candidate).is_ok() {
+        let resolved = candidate
+            .canonicalize()
+            .with_context(|| format!("resolve {label} {}", candidate.display()))?;
+        if !resolved.starts_with(root) {
+            bail!("{label} escapes the repository: {}", candidate.display());
+        }
+        return Ok(resolved);
+    }
+    if must_exist {
+        bail!("{label} is missing: {}", candidate.display());
+    }
+
+    let mut ancestor = candidate.as_path();
+    while fs::symlink_metadata(ancestor).is_err() {
+        ancestor = ancestor
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("cannot resolve {label}: {}", candidate.display()))?;
+    }
+    let resolved_ancestor = ancestor
+        .canonicalize()
+        .with_context(|| format!("resolve {label} parent {}", ancestor.display()))?;
+    if !resolved_ancestor.starts_with(root) {
+        bail!("{label} escapes the repository: {}", candidate.display());
+    }
+    Ok(candidate)
 }
 
 fn canonical_directory(path: &Path) -> Result<PathBuf> {
@@ -130,4 +207,40 @@ fn find_root(start: &Path, config_override: Option<&Path>) -> Result<PathBuf> {
                 DEFAULT_CONFIG_PATH
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn fixture(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "arc-flow-project-{name}-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("create fixture");
+        path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn repository_path_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let root = fixture("root");
+        let outside = fixture("outside");
+        symlink(&outside, root.join("reports")).expect("create symlink");
+
+        let error = resolve_repo_path(&root, Path::new("reports"), "reports", false)
+            .expect_err("symlink escape must fail");
+
+        fs::remove_dir_all(&root).ok();
+        fs::remove_dir_all(&outside).ok();
+        assert!(error.to_string().contains("escapes the repository"));
+    }
 }

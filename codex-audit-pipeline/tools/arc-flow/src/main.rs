@@ -268,7 +268,7 @@ fn run() -> Result<bool> {
             Ok(findings.is_empty())
         }
         Commands::Audit { json } => {
-            let outcome = audit::run(&project.audit_config, &project.reports, json)?;
+            let outcome = audit::run(&project.root, &project.audit_config, &project.reports, json)?;
             if !json {
                 println!(
                     "Audit: {} violation(s), {} blocker(s), {} error(s)",
@@ -372,6 +372,12 @@ fn print_scope(scope: &scope::ScopeResult) {
     println!("Changed files: {}", scope.changed_files.len());
     for file in &scope.changed_files {
         println!("  {file}");
+    }
+    if !scope.unmatched_files.is_empty() {
+        println!("Unmatched files: {}", scope.unmatched_files.len());
+        for file in &scope.unmatched_files {
+            println!("  {file}");
+        }
     }
     let components = scope
         .components

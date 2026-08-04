@@ -65,7 +65,7 @@ exclude_patterns = []
 [[arch_rules]]
 name = "Model 层不应包含业务逻辑（允许常见 trait impl）"
 layer = "model"
-paths = ["backend/src/models"]
+paths = ["backend/src/models.rs"]
 extensions = ["rs"]
 forbidden_patterns = ['^impl\s+']
 allowed_patterns = ['^impl(?:<[^>]+>)?\s+(?:std::fmt::)?(?:Display|Debug|Clone|Copy|Default|PartialEq|Eq|PartialOrd|Ord|Hash|Serialize|Deserialize|From|Into|TryFrom|TryInto|Error|Deref|AsRef|AsMut|Drop|Send|Sync)\b']
