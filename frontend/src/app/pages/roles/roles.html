@@ -74,11 +74,15 @@
               <tr>
                 <td>
                   <div class="list-role-cell">
-                    <span class="role-icon {{ 'ic-' + r.color }} sm"><mat-icon>{{ r.icon }}</mat-icon></span>
+                    <span class="role-icon {{ 'ic-' + r.color }} sm"
+                      ><mat-icon>{{ r.icon }}</mat-icon></span
+                    >
                     <span class="list-role-name">{{ r.name }}</span>
                   </div>
                 </td>
-                <td><span class="list-category">{{ r.category }}</span></td>
+                <td>
+                  <span class="list-category">{{ r.category }}</span>
+                </td>
                 <td class="cell-secondary">{{ r.members }} members</td>
                 <td class="cell-secondary list-desc">{{ r.description }}</td>
                 <td class="th-actions">

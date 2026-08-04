@@ -228,9 +228,7 @@ mod log_parser {
     fn get_last_n_lines(path: &str, n: usize) -> Result<String> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let lines: Vec<String> = reader
-            .lines()
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let lines: Vec<String> = reader.lines().collect::<std::result::Result<Vec<_>, _>>()?;
         let start = lines.len().saturating_sub(n);
         Ok(lines[start..].join("\n"))
     }
@@ -242,7 +240,10 @@ mod log_parser {
 fn compile_regexes(patterns: &[String]) -> Vec<Regex> {
     patterns
         .iter()
-        .map(|p| Regex::new(p).expect(&format!("Invalid regex pattern: {}", p)))
+        .map(|pattern| {
+            Regex::new(pattern)
+                .unwrap_or_else(|error| panic!("invalid regex pattern {pattern:?}: {error}"))
+        })
         .collect()
 }
 
@@ -268,7 +269,7 @@ fn is_allowlisted(path: &Path, allowlist: &[String]) -> bool {
                 .map(|re| re.is_match(path_str))
                 .unwrap_or(false)
         } else {
-            path_str.contains(pattern)
+            path.starts_with(Path::new(pattern))
         }
     })
 }
@@ -339,17 +340,25 @@ fn scan_files(
         return Vec::new();
     }
 
-    let root_paths: Vec<PathBuf> = root_dirs.iter().map(PathBuf::from).collect();
+    let root_paths: Vec<PathBuf> = root_dirs
+        .iter()
+        .map(PathBuf::from)
+        .filter(|path| path.exists())
+        .collect();
     let exclude_set: Vec<PathBuf> = exclude_dirs.iter().map(PathBuf::from).collect();
     let regexes = compile_regexes(patterns);
     let exclude_regexes = compile_regexes(exclude_patterns);
 
-    if !root_paths.iter().any(|p| p.exists()) {
+    if root_paths.is_empty() {
         return Vec::new();
     }
 
     let rule_name = rule_name.to_string();
-    WalkBuilder::new(root_paths[0].clone())
+    let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
+    for root_path in root_paths.iter().skip(1) {
+        walk_builder.add(root_path);
+    }
+    walk_builder
         .add_custom_ignore_filename(".auditignore")
         .follow_links(false)
         .build()
@@ -429,19 +438,27 @@ fn scan_arch_rules(config: &Config) -> Vec<ArchViolation> {
             continue;
         }
 
-        let root_paths: Vec<PathBuf> = root_dirs.iter().map(PathBuf::from).collect();
+        let root_paths: Vec<PathBuf> = root_dirs
+            .iter()
+            .map(PathBuf::from)
+            .filter(|path| path.exists())
+            .collect();
         let exclude_set: Vec<PathBuf> = exclude_dirs.iter().map(PathBuf::from).collect();
         let regexes = compile_regexes(&patterns);
         let exclude_regexes = compile_regexes(&exclude_patterns);
 
-        if !root_paths.iter().any(|p| p.exists()) {
+        if root_paths.is_empty() {
             continue;
         }
 
         let rule_name = rule.name.clone();
         let is_model_layer = rule.layer == "model";
 
-        let rule_violations: Vec<ArchViolation> = WalkBuilder::new(root_paths[0].clone())
+        let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
+        for root_path in root_paths.iter().skip(1) {
+            walk_builder.add(root_path);
+        }
+        let rule_violations: Vec<ArchViolation> = walk_builder
             .add_custom_ignore_filename(".auditignore")
             .follow_links(false)
             .build()
@@ -766,17 +783,126 @@ fn main() -> Result<()> {
                 markdown
             };
 
-            let report_dir =
-                std::env::var("AUDITOR_REPORT_DIR").unwrap_or_else(|_| ".codex/reports".to_string());
+            let report_dir = std::env::var("AUDITOR_REPORT_DIR")
+                .unwrap_or_else(|_| ".codex/reports".to_string());
             fs::create_dir_all(&report_dir)?;
             let truncated_len = truncated.len();
             fs::write(format!("{report_dir}/review_context.md"), &truncated)?;
             fs::write(format!("{report_dir}/review_context.json"), full_json)?;
 
             println!("✅ 审计报告已生成:");
-            println!("   {report_dir}/review_context.md  (截断版, {} 字节)", truncated_len);
+            println!(
+                "   {report_dir}/review_context.md  (截断版, {} 字节)",
+                truncated_len
+            );
             println!("   {report_dir}/review_context.json (完整版)");
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(name: &str) -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time must be after Unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "arc-admin-auditor-{name}-{}-{unique}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).expect("create test directory");
+            Self(path)
+        }
+
+        fn child(&self, name: &str) -> PathBuf {
+            let path = self.0.join(name);
+            fs::create_dir_all(&path).expect("create child directory");
+            path
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn hard_rule_scans_every_configured_root() {
+        let test_dir = TestDir::new("hard-roots");
+        let first = test_dir.child("first");
+        let second = test_dir.child("second");
+        fs::write(first.join("one.rs"), "forbidden_call();\n").expect("write first fixture");
+        fs::write(second.join("two.rs"), "forbidden_call();\n").expect("write second fixture");
+
+        let roots = vec![
+            first.to_string_lossy().into_owned(),
+            second.to_string_lossy().into_owned(),
+        ];
+        let violations = scan_files(
+            &roots,
+            &["rs".to_string()],
+            &[],
+            &["forbidden_call".to_string()],
+            &[],
+            &[],
+            "test rule",
+        );
+
+        assert_eq!(violations.len(), 2);
+    }
+
+    #[test]
+    fn architecture_rule_scans_every_configured_root() {
+        let test_dir = TestDir::new("arch-roots");
+        let pages = test_dir.child("pages");
+        let layout = test_dir.child("layout");
+        fs::write(pages.join("page.ts"), "HttpClient\n").expect("write page fixture");
+        fs::write(layout.join("layout.ts"), "HttpClient\n").expect("write layout fixture");
+
+        let config = Config {
+            paths: PathsConfig {
+                exclude: Vec::new(),
+                aliases: HashMap::new(),
+            },
+            hard_rules: Vec::new(),
+            arch_rules: vec![ArchRule {
+                name: "component rule".to_string(),
+                layer: "component".to_string(),
+                paths: vec![
+                    pages.to_string_lossy().into_owned(),
+                    layout.to_string_lossy().into_owned(),
+                ],
+                extensions: vec!["ts".to_string()],
+                forbidden_patterns: vec!["HttpClient".to_string()],
+                suggestion: "use a service".to_string(),
+                exclude_patterns: Vec::new(),
+                allowlist: Vec::new(),
+            }],
+        };
+
+        assert_eq!(scan_arch_rules(&config).len(), 2);
+    }
+
+    #[test]
+    fn literal_allowlist_is_a_path_prefix_not_a_substring() {
+        let allowlist = vec!["backend/src/repositories".to_string()];
+
+        assert!(is_allowlisted(
+            Path::new("backend/src/repositories/users.rs"),
+            &allowlist
+        ));
+        assert!(!is_allowlisted(
+            Path::new("backend/src/repositories_backup/users.rs"),
+            &allowlist
+        ));
     }
 }

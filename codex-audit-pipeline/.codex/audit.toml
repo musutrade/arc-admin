@@ -25,12 +25,12 @@ patterns = [
   '(?i)DROP\s+TABLE',
   '(?i)ALTER\s+TABLE',
   '(?i)TRUNCATE',
-  '\.execute\(',
-  '\.exec\(',
+  '\.execute\s*\(',
+  '\.exec\s*\(',
 ]
 allowlist = [
   "backend/src/repositories",
-  "backend/src/db",
+  "backend/src/db.rs",
   "backend/migrations",
   "backend/tests",
   "backend/src/seed",
@@ -45,7 +45,7 @@ name = "Service 层不应包含 SQL 查询"
 layer = "service"
 paths = ["backend/src/services"]
 extensions = ["rs"]
-forbidden_patterns = ['sqlx::query']
+forbidden_patterns = ['sqlx::(query|query_as|query_scalar)!?\s*\(']
 suggestion = "请将 SQL 逻辑移至 Repository 层"
 allowlist = []
 exclude_patterns = []
@@ -55,7 +55,7 @@ name = "Handler 层不应包含 SQL 查询"
 layer = "handler"
 paths = ["backend/src/handlers"]
 extensions = ["rs"]
-forbidden_patterns = ['sqlx::query']
+forbidden_patterns = ['sqlx::(query|query_as|query_scalar)!?\s*\(']
 suggestion = "请将 SQL 逻辑移至 Repository 层"
 allowlist = []
 exclude_patterns = []
@@ -87,5 +87,14 @@ paths = ["frontend/src/app/core"]
 extensions = ["ts"]
 forbidden_patterns = ['@ViewChild', '@ViewChildren', 'ElementRef']
 suggestion = "请将 DOM 操作逻辑移到 Component 层"
+allowlist = []
+exclude_patterns = []
+
+[[hard_rules]]
+name = "代码模板不得引用过时框架"
+severity = "error"
+paths = ["codex-audit-pipeline/.codex/templates"]
+extensions = ["tmpl"]
+patterns = ['actix_web', 'actix-web', 'HttpResponse']
 allowlist = []
 exclude_patterns = []

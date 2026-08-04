@@ -7,10 +7,16 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint"
+    "test:ci": "ng test --watch=false --runner=vitest",
+    "lint": "ng lint",
+    "format:check": "prettier --check \"src/**/*.{ts,html,scss}\""
   },
   "private": true,
   "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "npm": ">=11.16.0 <12"
+  },
   "dependencies": {
     "@angular/animations": "^22.1.0",
     "@angular/cdk": "^22.1.0",
@@ -21,6 +27,7 @@
     "@angular/material": "^22.1.0",
     "@angular/platform-browser": "^22.1.0",
     "@angular/router": "^22.1.0",
+    "@fontsource/material-symbols-outlined": "5.3.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

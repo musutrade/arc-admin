@@ -23,14 +23,20 @@
       />
     </div>
     <div class="filter-right">
-      <select class="filter-select" [value]="typeFilter()" (change)="applyTypeFilter($any($event.target).value)">
+      <select
+        class="filter-select"
+        [value]="typeFilter()"
+        (change)="applyTypeFilter($any($event.target).value)"
+      >
         <option value="all">All Module Types</option>
         <option value="menu">Menu</option>
         <option value="button">Button</option>
         <option value="api">API</option>
       </select>
       <div class="filter-divider"></div>
-      <span class="filter-count">Showing <b>{{ totalCount() }}</b> total permissions</span>
+      <span class="filter-count"
+        >Showing <b>{{ totalCount() }}</b> total permissions</span
+      >
     </div>
   </div>
 
@@ -66,7 +72,9 @@
               <tr class="group-row" (click)="toggleGroup(group.id)">
                 <td colspan="5">
                   <div class="group-cell">
-                    <mat-icon class="group-caret">{{ group.collapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down' }}</mat-icon>
+                    <mat-icon class="group-caret">{{
+                      group.collapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down'
+                    }}</mat-icon>
                     <mat-icon class="group-icon filled">{{ group.icon }}</mat-icon>
                     <span class="group-name">{{ group.name }}</span>
                     <span class="root-tag">ROOT</span>
@@ -83,7 +91,9 @@
                         <span class="perm-name">{{ p.name }}</span>
                       </div>
                     </td>
-                    <td><code class="perm-code">{{ p.code }}</code></td>
+                    <td>
+                      <code class="perm-code">{{ p.code }}</code>
+                    </td>
                     <td>
                       <span class="type-badge {{ typeMeta[p.type].cls }}">
                         <mat-icon>{{ typeMeta[p.type].icon }}</mat-icon>
@@ -92,8 +102,12 @@
                     </td>
                     <td class="perm-desc">{{ p.description }}</td>
                     <td class="col-actions">
-                      <button class="row-btn" (click)="onEdit(p)" title="Edit"><mat-icon>edit</mat-icon></button>
-                      <button class="row-btn danger" (click)="onDelete(p)" title="Delete"><mat-icon>delete</mat-icon></button>
+                      <button class="row-btn" (click)="onEdit(p)" title="Edit">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button class="row-btn danger" (click)="onDelete(p)" title="Delete">
+                        <mat-icon>delete</mat-icon>
+                      </button>
                     </td>
                   </tr>
                 }
@@ -107,9 +121,13 @@
       <div class="table-footer">
         <span class="page-info">Page 1 of 1</span>
         <div class="pagination">
-          <button class="page-btn" disabled aria-label="上一页"><mat-icon>chevron_left</mat-icon></button>
+          <button class="page-btn" disabled aria-label="上一页">
+            <mat-icon>chevron_left</mat-icon>
+          </button>
           <button class="page-num active">1</button>
-          <button class="page-btn" disabled aria-label="下一页"><mat-icon>chevron_right</mat-icon></button>
+          <button class="page-btn" disabled aria-label="下一页">
+            <mat-icon>chevron_right</mat-icon>
+          </button>
         </div>
       </div>
     }

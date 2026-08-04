@@ -15,7 +15,10 @@
         <!-- Username -->
         <div class="field">
           <label for="username">Username</label>
-          <div class="input-wrap" [class.input-error]="form.controls.username.touched && form.controls.username.invalid">
+          <div
+            class="input-wrap"
+            [class.input-error]="form.controls.username.touched && form.controls.username.invalid"
+          >
             <mat-icon>person</mat-icon>
             <input
               id="username"
@@ -33,7 +36,10 @@
         <!-- Password -->
         <div class="field">
           <label for="password">Password</label>
-          <div class="input-wrap" [class.input-error]="form.controls.password.touched && form.controls.password.invalid">
+          <div
+            class="input-wrap"
+            [class.input-error]="form.controls.password.touched && form.controls.password.invalid"
+          >
             <mat-icon>lock</mat-icon>
             <input
               id="password"
@@ -42,7 +48,12 @@
               placeholder="Enter your password"
               autocomplete="current-password"
             />
-            <button type="button" class="eye-btn" (click)="togglePassword()" [attr.aria-label]="hidePassword() ? '显示密码' : '隐藏密码'">
+            <button
+              type="button"
+              class="eye-btn"
+              (click)="togglePassword()"
+              [attr.aria-label]="hidePassword() ? '显示密码' : '隐藏密码'"
+            >
               <mat-icon>{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
             </button>
           </div>
@@ -88,7 +99,9 @@
     <footer class="login-footer">
       <button type="button" class="footer-link"><mat-icon>help</mat-icon>Support</button>
       <span class="dot"></span>
-      <button type="button" class="footer-link"><mat-icon>description</mat-icon>Documentation</button>
+      <button type="button" class="footer-link">
+        <mat-icon>description</mat-icon>Documentation
+      </button>
     </footer>
   </main>
 

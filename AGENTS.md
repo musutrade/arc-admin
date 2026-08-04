@@ -7,7 +7,7 @@
 ├── frontend/                  # Angular 22 + Material M3 前端
 ├── backend/                   # Rust + Axum + SQLX 后端（handlers/services/repositories/models）
 └── codex-audit-pipeline/      # 工作流工具（自包含）
-    ├── scripts/               # changed_paths / audit_gate / run_tests
+    ├── scripts/               # changed_paths / audit_gate / run_tests / verify
     ├── hooks/                 # pre-commit
     ├── tools/auditor/         # 正则审计器
     └── .codex/                # 审计规则 / 模板 / 报告产物
@@ -54,7 +54,8 @@
   2. 存在则禁止从零编写，先读模板，仅替换 `{{PLACEHOLDER}}`。
 
 ## 🧭 变更范围路由（替代 git diff HEAD~1）
-- 编码前先执行：`bash codex-audit-pipeline/scripts/changed_paths.sh`
+- 编码前先执行：`bash codex-audit-pipeline/scripts/changed_paths.sh --working-tree`
+- `changed_paths.sh` 支持 `--staged`（pre-commit）、`--base <ref>`（PR 增量）和 `--all`（完整验证），不再依赖 `HEAD~1`。
 - 以输出的 `RUN_RUST` / `RUN_ANGULAR` 决定调用哪些 reviewer 与测试开关：
   - 仅后端 → `reviewer-rust`，`RUN_ANGULAR=false`
   - 仅前端 → `reviewer-angular`，`RUN_RUST=false`
@@ -66,6 +67,7 @@
 - **严禁** `git push` / `git push --force` / `git reset --hard`。
 - 提交完成后输出：`✅ 代码已本地提交，请人工执行 git push 或创建 PR。`
 - 提交前快速门禁由 `codex-audit-pipeline/hooks/pre-commit` 执行（lint + 审计），完整测试不在提交钩子里跑。
+- 提交到远端前必须执行 `bash codex-audit-pipeline/scripts/verify.sh --all`；该命令不会修改源码，后端测试只使用 `TEST_DATABASE_URL` 或一次性 PostgreSQL 容器。
 
 ## 🧠 错误诊断规范
 - `tester` 返回失败时，按顺序排查：
@@ -76,12 +78,12 @@
 ## 🔄 完整工作流
 ```
 用户发起需求
-  → 1. bash codex-audit-pipeline/scripts/changed_paths.sh 确定范围（前端/后端/双端/无变更）
+  → 1. bash codex-audit-pipeline/scripts/changed_paths.sh --working-tree 确定范围
   → 2. 模板优先：命中 CRUD/Repository/Service 则读模板替换占位符
   → 3. 编码（仅输出 diff 补丁）
   → 4. 门禁 A：bash codex-audit-pipeline/scripts/audit_gate.sh（auditor 全量扫描，blocker/error 即失败）
   → 5. 门禁 B：bash codex-audit-pipeline/scripts/run_tests.sh（lint → cargo check → 两端测试）
   → 6. 可选 LLM reviewer：只读变更文件做语义/架构审查
-  → 7. 本地提交（禁止 push），pre-commit 快速门禁
+  → 7. bash codex-audit-pipeline/scripts/verify.sh --all 做交付前完整验证
+  → 8. 本地提交（禁止 push），pre-commit 快速门禁
 ```
-

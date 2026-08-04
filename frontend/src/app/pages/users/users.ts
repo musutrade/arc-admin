@@ -55,9 +55,7 @@ export class UsersPage implements OnInit {
     const status = this.statusFilter();
     return this.users().filter((u) => {
       const matchTerm =
-        !term ||
-        u.name.toLowerCase().includes(term) ||
-        u.email.toLowerCase().includes(term);
+        !term || u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term);
       const matchRole = role === 'all' || u.roles.includes(role);
       const matchStatus = status === 'all' || u.status === status;
       return matchTerm && matchRole && matchStatus;

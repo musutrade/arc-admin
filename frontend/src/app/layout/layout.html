@@ -1,6 +1,5 @@
 <!-- 主布局:左侧固定侧边栏 + 顶部导航栏 + 内容区 -->
 <div class="app-shell">
-
   <!-- ============ 侧边栏 ============ -->
   <aside
     class="sidebar"
@@ -37,7 +36,9 @@
         >
           <mat-icon fontSet="material-symbols-outlined">group</mat-icon>
           <span class="nav-label" [class.hidden]="collapsed()">User Management</span>
-          <mat-icon class="nav-caret" [class.hidden]="collapsed()" [class.rotated]="userSubOpen()">expand_more</mat-icon>
+          <mat-icon class="nav-caret" [class.hidden]="collapsed()" [class.rotated]="userSubOpen()"
+            >expand_more</mat-icon
+          >
         </button>
         <div class="nav-sub" [class.hidden]="collapsed() || !userSubOpen()">
           <a routerLink="/users" routerLinkActive="sub-active" class="nav-sub-item">
@@ -121,12 +122,17 @@
         [class.justify-center]="collapsed()"
         [attr.title]="collapsed() ? 'Documentation' : null"
       >
-        <mat-icon>description</mat-icon><span class="nav-label" [class.hidden]="collapsed()">Documentation</span>
+        <mat-icon>description</mat-icon
+        ><span class="nav-label" [class.hidden]="collapsed()">Documentation</span>
       </button>
     </div>
 
     <!-- 折叠按钮 -->
-    <button class="sidebar-toggle" (click)="$event.stopPropagation(); toggleSidebar()" [attr.aria-label]="collapsed() ? '展开侧边栏' : '收起侧边栏'">
+    <button
+      class="sidebar-toggle"
+      (click)="$event.stopPropagation(); toggleSidebar()"
+      [attr.aria-label]="collapsed() ? '展开侧边栏' : '收起侧边栏'"
+    >
       <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
     </button>
   </aside>
@@ -134,7 +140,11 @@
   <!-- ============ 顶栏 ============ -->
   <header class="topbar">
     <div class="topbar-left">
-      <button class="icon-btn mobile-menu-btn" (click)="sidebarOpen.set(!sidebarOpen())" aria-label="打开菜单">
+      <button
+        class="icon-btn mobile-menu-btn"
+        (click)="sidebarOpen.set(!sidebarOpen())"
+        aria-label="打开菜单"
+      >
         <mat-icon>menu</mat-icon>
       </button>
       <span class="topbar-title">RBAC Control Center</span>
@@ -150,10 +160,20 @@
         <mat-icon>search</mat-icon>
         <input type="text" placeholder="Global Search..." />
       </div>
-      <button class="icon-btn" matBadge="3" matBadgeSize="small" matBadgeColor="warn" aria-label="通知">
+      <button
+        class="icon-btn"
+        matBadge="3"
+        matBadgeSize="small"
+        matBadgeColor="warn"
+        aria-label="通知"
+      >
         <mat-icon>notifications</mat-icon>
       </button>
-      <button class="icon-btn" (click)="toggleTheme()" [attr.aria-label]="isDark() ? '切换到亮色模式' : '切换到暗色模式'">
+      <button
+        class="icon-btn"
+        (click)="toggleTheme()"
+        [attr.aria-label]="isDark() ? '切换到亮色模式' : '切换到暗色模式'"
+      >
         <mat-icon>{{ isDark() ? 'light_mode' : 'contrast' }}</mat-icon>
       </button>
       <button class="icon-btn hide-sm" aria-label="设置">
@@ -171,7 +191,9 @@
         <button mat-menu-item><mat-icon>account_circle</mat-icon><span>个人资料</span></button>
         <button mat-menu-item><mat-icon>settings</mat-icon><span>账户设置</span></button>
         <mat-divider></mat-divider>
-        <button mat-menu-item (click)="logout()"><mat-icon>logout</mat-icon><span>退出登录</span></button>
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon><span>退出登录</span>
+        </button>
       </mat-menu>
     </div>
   </header>

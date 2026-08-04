@@ -275,7 +275,8 @@ export const MOCK_ROLES: Role[] = [
     category: 'Content',
     icon: 'edit_note',
     color: 'warning',
-    description: 'Can create, edit, and publish content. No access to financial or security settings.',
+    description:
+      'Can create, edit, and publish content. No access to financial or security settings.',
     members: 12,
     permissionGroupIds: ['pg-dashboard'],
   },
@@ -285,7 +286,8 @@ export const MOCK_ROLES: Role[] = [
     category: 'Read Only',
     icon: 'visibility',
     color: 'success',
-    description: 'Can view data, reports, and dashboards. No modification rights across the system.',
+    description:
+      'Can view data, reports, and dashboards. No modification rights across the system.',
     members: 84,
     permissionGroupIds: ['pg-dashboard', 'pg-resources'],
   },
@@ -324,16 +326,62 @@ export const MOCK_ROLES: Role[] = [
 
 /** ================= 分配权限(角色行) ================= */
 export const MOCK_ROLE_PERMISSION_ROWS: RolePermissionRow[] = [
-  { roleId: 'r-001', roleName: 'Super Administrator', usersAssigned: 12, active: true, groupIds: ['pg-dashboard', 'pg-identity', 'pg-resources', 'pg-audit', 'pg-security'] },
-  { roleId: 'r-004', roleName: 'Compliance Officer', usersAssigned: 5, active: true, groupIds: ['pg-audit', 'pg-security'] },
-  { roleId: 'r-003', roleName: 'Read Only Viewer', usersAssigned: 84, active: true, groupIds: ['pg-dashboard', 'pg-resources'] },
-  { roleId: 'r-002', roleName: 'Content Editor', usersAssigned: 12, active: false, groupIds: ['pg-dashboard'] },
-  { roleId: 'r-005', roleName: 'Support Agent', usersAssigned: 9, active: true, groupIds: ['pg-identity'] },
+  {
+    roleId: 'r-001',
+    roleName: 'Super Administrator',
+    usersAssigned: 12,
+    active: true,
+    groupIds: ['pg-dashboard', 'pg-identity', 'pg-resources', 'pg-audit', 'pg-security'],
+  },
+  {
+    roleId: 'r-004',
+    roleName: 'Compliance Officer',
+    usersAssigned: 5,
+    active: true,
+    groupIds: ['pg-audit', 'pg-security'],
+  },
+  {
+    roleId: 'r-003',
+    roleName: 'Read Only Viewer',
+    usersAssigned: 84,
+    active: true,
+    groupIds: ['pg-dashboard', 'pg-resources'],
+  },
+  {
+    roleId: 'r-002',
+    roleName: 'Content Editor',
+    usersAssigned: 12,
+    active: false,
+    groupIds: ['pg-dashboard'],
+  },
+  {
+    roleId: 'r-005',
+    roleName: 'Support Agent',
+    usersAssigned: 9,
+    active: true,
+    groupIds: ['pg-identity'],
+  },
 ];
 
 /** 分配权限模态框内,每个权限的勾选状态(以 roleId 为键) */
 export const MOCK_ASSIGNED_MAP: Record<string, string[]> = {
-  'r-001': ['p-dash-1', 'p-dash-2', 'p-dash-3', 'p-ia-1', 'p-ia-2', 'p-ia-3', 'p-ia-4', 'p-res-1', 'p-res-2', 'p-res-3', 'p-aud-1', 'p-aud-2', 'p-sec-1', 'p-sec-2', 'p-sec-3'],
+  'r-001': [
+    'p-dash-1',
+    'p-dash-2',
+    'p-dash-3',
+    'p-ia-1',
+    'p-ia-2',
+    'p-ia-3',
+    'p-ia-4',
+    'p-res-1',
+    'p-res-2',
+    'p-res-3',
+    'p-aud-1',
+    'p-aud-2',
+    'p-sec-1',
+    'p-sec-2',
+    'p-sec-3',
+  ],
   'r-004': ['p-aud-1', 'p-aud-2', 'p-sec-1', 'p-sec-3'],
   'r-003': ['p-dash-1', 'p-res-1'],
   'r-002': ['p-dash-1', 'p-dash-2'],

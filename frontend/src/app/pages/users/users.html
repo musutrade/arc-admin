@@ -24,7 +24,11 @@
     </div>
     <div class="filter-select-group">
       <span>Role:</span>
-      <select class="filter-select" [value]="roleFilter()" (change)="applyRoleFilter($any($event.target).value)">
+      <select
+        class="filter-select"
+        [value]="roleFilter()"
+        (change)="applyRoleFilter($any($event.target).value)"
+      >
         <option value="all">All Roles</option>
         @for (r of roleOptions(); track r) {
           @if (r !== 'all') {
@@ -35,7 +39,11 @@
     </div>
     <div class="filter-select-group">
       <span>Status:</span>
-      <select class="filter-select" [value]="statusFilter()" (change)="applyStatusFilter($any($event.target).value)">
+      <select
+        class="filter-select"
+        [value]="statusFilter()"
+        (change)="applyStatusFilter($any($event.target).value)"
+      >
         <option value="all">All Status</option>
         <option value="active">Active</option>
         <option value="inactive">Inactive</option>
@@ -90,7 +98,9 @@
                 </td>
                 <td>
                   <div class="user-cell">
-                    <span class="avatar" [style.background]="u.avatarColor">{{ initials(u.name) }}</span>
+                    <span class="avatar" [style.background]="u.avatarColor">{{
+                      initials(u.name)
+                    }}</span>
                     <span class="user-name">{{ u.name }}</span>
                   </div>
                 </td>
@@ -98,7 +108,10 @@
                 <td>
                   <div class="role-tags">
                     @for (r of u.roles; track r) {
-                      <span class="role-tag" [class.role-tag-accent]="r.includes('Admin') || r.includes('Lead')">
+                      <span
+                        class="role-tag"
+                        [class.role-tag-accent]="r.includes('Admin') || r.includes('Lead')"
+                      >
                         {{ r }}
                       </span>
                     }
@@ -112,9 +125,15 @@
                 </td>
                 <td class="cell-tertiary">{{ u.lastLogin }}</td>
                 <td class="td-actions">
-                  <button class="row-btn" (click)="onEdit(u)" title="Edit"><mat-icon>edit</mat-icon></button>
-                  <button class="row-btn" (click)="onResetPassword(u)" title="Reset Password"><mat-icon>lock_reset</mat-icon></button>
-                  <button class="row-btn" (click)="onMore(u)" title="More"><mat-icon>more_vert</mat-icon></button>
+                  <button class="row-btn" (click)="onEdit(u)" title="Edit">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button class="row-btn" (click)="onResetPassword(u)" title="Reset Password">
+                    <mat-icon>lock_reset</mat-icon>
+                  </button>
+                  <button class="row-btn" (click)="onMore(u)" title="More">
+                    <mat-icon>more_vert</mat-icon>
+                  </button>
                 </td>
               </tr>
             } @empty {
@@ -134,7 +153,9 @@
       <!-- 批量操作 + 分页 -->
       <div class="table-footer" [class.batch-active]="selectedCount() > 0">
         <div class="batch-actions">
-          <span class="batch-count"><b>{{ selectedCount() }}</b> users selected</span>
+          <span class="batch-count"
+            ><b>{{ selectedCount() }}</b> users selected</span
+          >
           @if (selectedCount() > 0) {
             <span class="batch-divider"></span>
             <button class="batch-btn danger"><mat-icon>delete</mat-icon>Delete Selected</button>
@@ -142,15 +163,34 @@
           }
         </div>
         <div class="pagination">
-          <span class="page-info">Showing {{ pageStart() }}-{{ pageEnd() }} of {{ filteredUsers().length }} entries</span>
+          <span class="page-info"
+            >Showing {{ pageStart() }}-{{ pageEnd() }} of {{ filteredUsers().length }} entries</span
+          >
           <div class="page-btns">
-            <button class="page-btn" [disabled]="page() === 1" (click)="goToPage(page() - 1)" aria-label="上一页">
+            <button
+              class="page-btn"
+              [disabled]="page() === 1"
+              (click)="goToPage(page() - 1)"
+              aria-label="上一页"
+            >
               <mat-icon>chevron_left</mat-icon>
             </button>
             @for (p of pageNumbers(); track p) {
-              <button class="page-num" [class.active]="p === page()" [attr.aria-current]="p === page() ? 'page' : null" (click)="goToPage(p)">{{ p }}</button>
+              <button
+                class="page-num"
+                [class.active]="p === page()"
+                [attr.aria-current]="p === page() ? 'page' : null"
+                (click)="goToPage(p)"
+              >
+                {{ p }}
+              </button>
             }
-            <button class="page-btn" [disabled]="page() === totalPages()" (click)="goToPage(page() + 1)" aria-label="下一页">
+            <button
+              class="page-btn"
+              [disabled]="page() === totalPages()"
+              (click)="goToPage(page() + 1)"
+              aria-label="下一页"
+            >
               <mat-icon>chevron_right</mat-icon>
             </button>
           </div>

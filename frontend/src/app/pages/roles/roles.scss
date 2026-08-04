@@ -50,7 +50,9 @@
   background: var(--arco-bg-white);
   border: 1px solid var(--arco-border);
   border-radius: 12px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
     border-color: color-mix(in srgb, var(--mat-sys-primary) 40%, transparent);

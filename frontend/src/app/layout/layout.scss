@@ -31,7 +31,9 @@
   padding: 16px 0;
   background: var(--mat-sys-surface-container-lowest);
   border-right: 1px solid var(--arco-border);
-  transition: width 0.2s ease, transform 0.2s ease;
+  transition:
+    width 0.2s ease,
+    transform 0.2s ease;
 
   &.collapsed {
     width: var(--sidebar-w-collapsed);
@@ -129,7 +131,10 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
   box-shadow: var(--mat-sys-elevation-level1);
 
   &:hover {
@@ -173,7 +178,9 @@
   text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   white-space: nowrap;
 
   mat-icon {
@@ -244,7 +251,9 @@
   font-size: 13px;
   font-family: inherit;
   text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   cursor: pointer;
 
   &:hover {
@@ -270,7 +279,10 @@
 .sidebar-toggle {
   position: absolute;
   right: -12px;
-  top: calc(var(--sidebar-pad-y) + var(--brand-card-h) + var(--brand-card-gap) + var(--nav-item-h) + var(--nav-item-h) / 2);
+  top: calc(
+    var(--sidebar-pad-y) + var(--brand-card-h) + var(--brand-card-gap) + var(--nav-item-h) +
+      var(--nav-item-h) / 2
+  );
   transform: translateY(-50%);
   width: 24px;
   height: 24px;

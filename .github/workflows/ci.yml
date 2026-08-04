@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+      - name: Check shell scripts
+        run: shellcheck -x codex-audit-pipeline/scripts/*.sh codex-audit-pipeline/hooks/pre-commit
+      - name: Scan tracked files for secrets
+        run: bash codex-audit-pipeline/scripts/secret_scan.sh --all
+      - name: Run architecture audit
+        run: bash codex-audit-pipeline/scripts/audit_gate.sh
+      - name: Test workflow auditor
+        env:
+          RUN_RUST: 'false'
+          RUN_ANGULAR: 'false'
+          RUN_AUDITOR: 'true'
+          RUN_SHELL: 'true'
+        run: bash codex-audit-pipeline/scripts/run_tests.sh
+      - name: Upload quality reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: quality-reports
+          path: codex-audit-pipeline/.codex/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  backend:
+    name: Backend verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: arc_admin_test
+          POSTGRES_PASSWORD: arc_admin_test
+          POSTGRES_DB: arc_admin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arc_admin_test -d arc_admin_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run backend checks and tests
+        env:
+          TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
+          RUN_RUST: 'true'
+          RUN_ANGULAR: 'false'
+          RUN_AUDITOR: 'false'
+          RUN_SHELL: 'false'
+        run: bash codex-audit-pipeline/scripts/run_tests.sh
+      - name: Upload backend report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: backend-report
+          path: codex-audit-pipeline/.codex/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend:
+    name: Frontend verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Audit production dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Run frontend checks and tests
+        env:
+          RUN_RUST: 'false'
+          RUN_ANGULAR: 'true'
+          RUN_AUDITOR: 'false'
+          RUN_SHELL: 'false'
+        run: bash codex-audit-pipeline/scripts/run_tests.sh
+      - name: Upload frontend report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-report
+          path: codex-audit-pipeline/.codex/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: moderate

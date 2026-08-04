@@ -1,29 +1,29 @@
 #!/bin/bash
 # 确定性审计门禁：auditor 全量扫描，存在任何违规即退出非 0
-# 判定依据是完整 JSON（review_context.json），不是截断版 markdown
+# 判定依据是每次运行生成的完整 review_context.json。
 # 用法（仓库根）：bash codex-audit-pipeline/scripts/audit_gate.sh
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/common.sh" "$SCRIPT_DIR"
 
 mkdir -p "$REPORT_DIR"
 
-if [ ! -x "$AUDITOR_BIN" ]; then
-  echo "⚠️ auditor 未编译，正在编译（首次约 1-2 分钟）..."
-  (cd "$PIPELINE_DIR/tools/auditor" && cargo build --release)
-fi
+# Always invoke Cargo so source changes cannot leave a stale release binary.
+(cd "$PIPELINE_DIR/tools/auditor" && cargo build --release --locked --quiet)
 
 (
   cd "$PROJECT_ROOT"
   AUDITOR_CONFIG="$AUDITOR_CONFIG" AUDITOR_REPORT_DIR="$REPORT_DIR" \
-    "$AUDITOR_BIN" audit --json > "$REPORT_DIR/audit_gate.json"
+    "$AUDITOR_BIN" audit >/dev/null
 )
 
-TOTAL=$(jq -r '.summary.total_violations' "$REPORT_DIR/audit_gate.json")
-BLOCKER=$(jq -r '.summary.blocker_count' "$REPORT_DIR/audit_gate.json")
-ERRORS=$(jq -r '.summary.error_count' "$REPORT_DIR/audit_gate.json")
+REPORT_JSON="$REPORT_DIR/review_context.json"
+jq -e '.summary | .total_violations >= 0' "$REPORT_JSON" >/dev/null
+TOTAL=$(jq -r '.summary.total_violations' "$REPORT_JSON")
+BLOCKER=$(jq -r '.summary.blocker_count' "$REPORT_JSON")
+ERRORS=$(jq -r '.summary.error_count' "$REPORT_JSON")
 
 echo "审计结果: total=$TOTAL blocker=$BLOCKER error=$ERRORS"
 
@@ -34,7 +34,7 @@ if [ "$TOTAL" -gt 0 ]; then
      (.occurrences[0:5][] | "     " + .file + ":" + (.line|tostring) + "  " + .content)),
     (.arch_violations[] | select(.count > 0) | "🏗 [" + .layer + "] " + .rule + " x" + (.count|tostring),
      (.occurrences[0:5][] | "     " + .file + ":" + (.line|tostring) + "  " + .content))
-  ' "$REPORT_DIR/audit_gate.json" | head -40
+  ' "$REPORT_JSON" | head -40
   echo "❌ 审计门禁未通过：存在违规，请按行号修复后重跑"
   exit 1
 fi

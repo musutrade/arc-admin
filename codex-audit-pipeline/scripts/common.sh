@@ -1,3 +1,4 @@
+#!/bin/sh
 # scripts/common.sh —— 路径与工具定位（POSIX sh / bash 通用）
 #
 # 调用方必须传入自身所在目录（scripts/ 或 hooks/），例如：
@@ -12,7 +13,7 @@
 #   AUDITOR_CONFIG    audit.toml 路径
 
 CALLER_DIR="$1"
-CALLER_DIR="$(CDPATH= cd -- "$CALLER_DIR" && pwd)"
+CALLER_DIR="$(CDPATH='' cd -- "$CALLER_DIR" && pwd)"
 
 detect_project_root() {
   dir="$1"

@@ -43,10 +43,7 @@ export class LoginPage {
 
     // Mock 登录校验
     setTimeout(() => {
-      if (
-        username === MOCK_CREDENTIALS.username &&
-        password === MOCK_CREDENTIALS.password
-      ) {
+      if (username === MOCK_CREDENTIALS.username && password === MOCK_CREDENTIALS.password) {
         // 勾选"记住我"时持久化到 localStorage,否则仅本次会话有效
         const storage = remember ? localStorage : sessionStorage;
         storage.setItem('arc-auth', 'mock-token');

@@ -1,49 +1,55 @@
-#!/bin/sh
-# 提交前快速门禁：lint + 审计（完整测试请跑 codex-audit-pipeline/scripts/run_tests.sh）
-# 安装：git config core.hooksPath codex-audit-pipeline/hooks
-set -e
+#!/usr/bin/env bash
+# Fast, non-mutating staged gate. Full verification belongs in verify.sh/CI.
+set -uo pipefail
 
-HOOKS_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-# shellcheck source=scripts/common.sh
-. "$HOOKS_DIR/../scripts/common.sh" "$HOOKS_DIR"
+HOOKS_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+# shellcheck source=/dev/null
+source "$HOOKS_DIR/../scripts/common.sh" "$HOOKS_DIR"
 
-cd "$PROJECT_ROOT"
+cd "$PROJECT_ROOT" || exit 1
+bash "$PIPELINE_DIR/scripts/changed_paths.sh" --staged
+# shellcheck source=/dev/null
+source "$REPORT_DIR/scope.env"
 
-BACKEND_DIR="${BACKEND_DIR:-backend}"
-FRONTEND_DIR="${FRONTEND_DIR:-frontend}"
 FAIL=0
+echo "Pre-commit checks"
 
-echo "🔍 提交前检查..."
+echo "  >> Secret scan"
+bash "$PIPELINE_DIR/scripts/secret_scan.sh" --staged || FAIL=1
 
-if [ -f "$BACKEND_DIR/Cargo.toml" ]; then
-  echo "  >> Clippy (-D warnings)..."
-  if ! cargo clippy --manifest-path="$BACKEND_DIR/Cargo.toml" -- -D warnings 2>&1; then
-    echo "❌ Clippy 检查失败，请修复后提交"
+if [ "$RUN_SHELL" = true ]; then
+  echo "  >> Bash syntax + ShellCheck"
+  if ! bash -n "$PIPELINE_DIR"/scripts/*.sh "$PIPELINE_DIR/hooks/pre-commit"; then
     FAIL=1
   fi
+  shellcheck -x "$PIPELINE_DIR"/scripts/*.sh "$PIPELINE_DIR/hooks/pre-commit" || FAIL=1
 fi
 
-if [ -d "$FRONTEND_DIR/src" ]; then
-  echo "  >> ESLint (--max-warnings=0)..."
-  if ! (cd "$FRONTEND_DIR" && npx eslint src --max-warnings=0) 2>&1; then
-    echo "❌ ESLint 检查失败，请修复后提交"
-    FAIL=1
-  fi
+if [ "$RUN_RUST" = true ]; then
+  echo "  >> Rust format + Clippy"
+  cargo fmt --manifest-path="$PROJECT_ROOT/backend/Cargo.toml" -- --check || FAIL=1
+  cargo clippy --manifest-path="$PROJECT_ROOT/backend/Cargo.toml" \
+    --locked --all-targets --all-features -- -D warnings || FAIL=1
 fi
 
-# 审计门禁（仅当 auditor 已编译；首次请先 cargo build --release 避免提交卡顿）
-if [ -x "$AUDITOR_BIN" ]; then
-  echo "  >> 审计门禁..."
-  if ! bash "$PIPELINE_DIR/scripts/audit_gate.sh"; then
-    FAIL=1
-  fi
-else
-  echo "ℹ️ auditor 未编译，跳过审计门禁（先执行: (cd codex-audit-pipeline/tools/auditor && cargo build --release)）"
+if [ "$RUN_ANGULAR" = true ]; then
+  echo "  >> Angular ESLint + format"
+  (cd "$PROJECT_ROOT/frontend" && npm exec --offline eslint -- src --max-warnings=0) || FAIL=1
+  (cd "$PROJECT_ROOT/frontend" && npm run format:check) || FAIL=1
 fi
 
-if [ "$FAIL" -eq 0 ]; then
-  echo "✅ 提交前检查通过"
-  exit 0
+if [ "$RUN_AUDITOR" = true ]; then
+  echo "  >> Auditor format + tests"
+  cargo fmt --manifest-path="$PIPELINE_DIR/tools/auditor/Cargo.toml" -- --check || FAIL=1
+  cargo test --manifest-path="$PIPELINE_DIR/tools/auditor/Cargo.toml" --locked --quiet || FAIL=1
 fi
-echo "❌ 请修复上述问题后重新提交"
-exit 1
+
+echo "  >> Architecture audit"
+bash "$PIPELINE_DIR/scripts/audit_gate.sh" || FAIL=1
+
+if [ "$FAIL" -ne 0 ]; then
+  echo "Pre-commit checks failed"
+  exit 1
+fi
+
+echo "Pre-commit checks passed"

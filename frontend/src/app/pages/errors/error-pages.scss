@@ -373,7 +373,9 @@
     font-family: inherit;
     font-size: 14px;
     color: var(--arco-text-primary);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
 
     &::placeholder {
       color: var(--arco-text-tertiary);
@@ -436,7 +438,9 @@
   border-radius: 12px;
   cursor: pointer;
   text-decoration: none;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
 
   &:hover {
     border-color: color-mix(in srgb, var(--mat-sys-primary) 50%, transparent);

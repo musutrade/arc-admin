@@ -4,15 +4,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/common.sh
+# shellcheck source=/dev/null
 source "$SCRIPT_DIR/common.sh" "$SCRIPT_DIR"
 
 mkdir -p "$REPORT_DIR"
 
-if [ ! -x "$AUDITOR_BIN" ]; then
-  echo "⚠️ auditor 未编译，正在编译..."
-  (cd "$PIPELINE_DIR/tools/auditor" && cargo build --release)
-fi
+(cd "$PIPELINE_DIR/tools/auditor" && cargo build --release --locked --quiet)
 
 (
   cd "$PROJECT_ROOT"

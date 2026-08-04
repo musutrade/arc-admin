@@ -22,10 +22,12 @@ codex-audit-pipeline/
 │   └── reports/           # 运行时产物（已 gitignore）
 ├── scripts/
 │   ├── common.sh               # 路径自动定位（PIPELINE_DIR / PROJECT_ROOT / REPORT_DIR）
-│   ├── changed_paths.sh        # 变更范围检测（替代 git diff HEAD~1）
+│   ├── changed_paths.sh        # 工作区 / 暂存区 / 基线 / 全量范围检测
 │   ├── audit_gate.sh           # 审计门禁（完整 JSON 判定）
 │   ├── generate_review_context.sh
-│   └── run_tests.sh            # lint → cargo check → 两端测试 → 报告
+│   ├── secret_scan.sh          # 高置信凭据扫描（不输出秘密内容）
+│   ├── run_tests.sh            # 非修改式 lint/check/test/build → 报告
+│   └── verify.sh               # scope → secret → audit → test 的统一入口
 ├── hooks/pre-commit            # 快速提交门禁（lint + 审计）
 ├── tools/auditor/              # Rust 审计程序（可独立编译运行）
 └── README.md
@@ -35,33 +37,35 @@ codex-audit-pipeline/
 
 - Rust：`cargo` + `cargo clippy`（后端）
 - Node：`npx eslint` + `@angular-eslint` 配置（前端）
-- 前端测试：项目 `angular.json` 已配置 `@angular/build:unit-test`（Vitest/jsdom，推荐）或 karma + ChromeHeadless
+- 前端测试：`@angular/build:unit-test` + Vitest/jsdom
+- 后端集成测试：Docker + 本地 `postgres:16-alpine`，或显式 `TEST_DATABASE_URL`
 - `jq`（审计门禁解析 JSON）
 
 ## 安装
 
 ```bash
 # 1. 编译审计器（已编译可跳过）
-cd codex-audit-pipeline/tools/auditor && cargo build --release && cd ../..
+cd codex-audit-pipeline/tools/auditor && cargo build --release --locked && cd ../../..
 # 2. 启用版本化的 git hooks（替换原 .git/hooks 方案）
 git config core.hooksPath codex-audit-pipeline/hooks
 # 3. 验证（以下命令都在仓库根执行）
-bash codex-audit-pipeline/scripts/audit_gate.sh
-RUN_RUST=true RUN_ANGULAR=true bash codex-audit-pipeline/scripts/run_tests.sh
+bash codex-audit-pipeline/scripts/verify.sh --all
 ```
 
 ## 使用
 
 ```bash
-# 查看本次变更范围与开关
-bash codex-audit-pipeline/scripts/changed_paths.sh
+# 查看工作区 / 暂存区 / 指定基线的变更范围与开关
+bash codex-audit-pipeline/scripts/changed_paths.sh --working-tree
+bash codex-audit-pipeline/scripts/changed_paths.sh --staged
+bash codex-audit-pipeline/scripts/changed_paths.sh --base origin/main
 
 # 审计门禁（违规即退出非 0）
 bash codex-audit-pipeline/scripts/audit_gate.sh
 
 # 只测后端 / 只测前端
-RUN_RUST=true  RUN_ANGULAR=false bash codex-audit-pipeline/scripts/run_tests.sh
-RUN_RUST=false RUN_ANGULAR=true  bash codex-audit-pipeline/scripts/run_tests.sh
+RUN_RUST=true  RUN_ANGULAR=false RUN_AUDITOR=false RUN_SHELL=false bash codex-audit-pipeline/scripts/run_tests.sh
+RUN_RUST=false RUN_ANGULAR=true  RUN_AUDITOR=false RUN_SHELL=false bash codex-audit-pipeline/scripts/run_tests.sh
 ```
 
 目录名可覆盖：`BACKEND_DIR=server FRONTEND_DIR=web bash codex-audit-pipeline/scripts/run_tests.sh`
@@ -90,8 +94,8 @@ auditor 支持 `AUDITOR_CONFIG`（配置文件）与 `AUDITOR_REPORT_DIR`（报�
 | Repository 模板含 INSERT/UPDATE，与"禁止写操作"红线自相矛盾 | 规则改为"写操作只允许 Repository 层"，allowlist 放行 |
 | `truncate -s 800` 可能截掉 TEST_SUMMARY 协议行 | 全部移除，协议行在文件末尾且永不截断；SKIP 分支也输出 |
 | pre-commit `git add` 被 gitignore 的文件 | 钩子不再 add 报告；hooks 移入版本化目录 + `core.hooksPath` |
-| `ng test --browsers=jsdom`（karma 不支持） | 有 Chrome 用 ChromeHeadless，无 Chrome 则依赖 Vitest unit-test builder，不传无效参数 |
-| 模型名/字段名 `gpt-5.3-codex-spark` 等 | agent 配置省略 model、字段注明"对照 schema 核实"，避免部署即失败 |
+| `ng test --browsers=jsdom`（karma 不支持） | 明确使用 Angular unit-test builder + Vitest/jsdom，不传 Karma 参数 |
+| 过时的 agent TOML schema | 移除未生效配置；当前工作流由根目录 AGENTS.md 与确定性脚本驱动 |
 | reviewer 禁止读源码 → 无增量价值 | reviewer 允许读 changed_files.txt 内的变更文件，做语义审查 |
 | 路由用 `git diff HEAD~1`（首次提交/未提交改动失效） | `changed_paths.sh` 基于 status/diff 合并检测 |
 | `exclude_patterns` 类型错误导致 auditor 编译失败 | 已修复（Vec 直接 clone，去掉了不合法的 `unwrap_or_default`） |
@@ -102,6 +106,6 @@ auditor 支持 `AUDITOR_CONFIG`（配置文件）与 `AUDITOR_REPORT_DIR`（报�
 ## 已知限制
 
 - 正则扫描是文本级，不做语法树解析：字符串字面量里的 SQL 仍可能误报；多行块注释不跳过。
-- `cargo clippy --fix` / `eslint --fix` 会自动改代码，报告会提示"人工复核 git diff"。
-- reviewer 与 tester 的 agent TOML 字段（`reasoning_effort`、`sandbox_mode`、`[instructions].text`）**需对照当前 Codex 子代理 schema 核实**后使用；脚本与审计器本身不依赖这些字段。
+- 门禁全部是非修改式检查；格式或 lint 失败后应由开发者显式修复并复核 diff。
+- 本地 secret scan 仅覆盖高置信模式，仍需在 GitHub 仓库设置中启用 secret scanning 与 push protection。
 - Token 消耗取决于任务复杂度，本仓库不再承诺固定估算值。

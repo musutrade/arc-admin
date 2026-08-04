@@ -131,7 +131,9 @@
     background: transparent;
     color: var(--arco-text-tertiary);
     cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
 
     mat-icon {
       font-size: 20px;

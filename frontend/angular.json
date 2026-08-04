@@ -53,7 +53,10 @@
                 "input": "public"
               }
             ],
-            "styles": ["src/styles.scss"]
+            "styles": [
+              "@fontsource/material-symbols-outlined/index.css",
+              "src/styles.scss"
+            ]
           },
           "configurations": {
             "production": {
