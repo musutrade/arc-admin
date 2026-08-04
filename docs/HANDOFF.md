@@ -49,7 +49,3 @@ RUN_RUST=true RUN_ANGULAR=true bash codex-audit-pipeline/scripts/run_tests.sh
 7. **agent TOML 转 markdown 子代理**（.codex/agents/*.toml 已过时，按当前 Codex schema 处理或删除）。
 8. **`run_tests.sh` 潜伏 bug**：angular.json 是 Vitest builder，`--browsers=ChromeHeadless` 是 karma 参数会报错，按 builder 类型决定参数。
 9. **补 `docs/architecture.md`**：分层、数据模型、环境变量、测试方式，AGENTS.md 引用。
-
-## 未提交文件
-
-根目录两张 QQ 截图与设计稿 zip 在 `60fcbcc` 提交里（`git add -A` 带入）；如不需要可 `git rm --cached` 并加 .gitignore（工作区文件不动）。
