@@ -16,7 +16,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 ├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
 ├── codex-audit-pipeline/      # Codex 工作流工具（自包含）
 │   ├── .codex/                # 审计规则 / 模板 / 报告产物
-│   ├── scripts/               # changed_paths / audit_gate / run_tests
+│   ├── scripts/               # doctor / changed_paths / audit_gate / run_tests
 │   ├── hooks/                 # pre-commit（git config core.hooksPath）
 │   └── tools/auditor/         # 正则审计器（Rust）
 └── extracted/                 # 设计稿参考（Arco 风格 RBAC）
@@ -31,6 +31,12 @@ cd frontend && npm install && npm start   # http://localhost:4200
 # 后端（先创建数据库，再按 .env.example 填 .env）
 cp backend/.env.example backend/.env   # 修改 DATABASE_URL
 cd backend && cargo run                    # http://localhost:8080/api/v1/healthz
+```
+
+首次运行或环境变化后，可从仓库根执行依赖体检（不会连接数据库）：
+
+```bash
+bash codex-audit-pipeline/scripts/doctor.sh
 ```
 
 ## Codex 工作流

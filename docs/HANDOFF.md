@@ -1,4 +1,4 @@
-# 会话交接文档（2026-08-03）
+# 会话交接文档（2026-08-04）
 
 > 用途：保存当前进度，供下次会话直接续接。看完本节即可继续，详细约定见 AGENTS.md 与 docs/openapi.yaml。
 
@@ -10,9 +10,10 @@
 | API 契约 | `docs/openapi.yaml`：auth / users / roles / permissions / dashboard，字段映射表在契约顶部 | 后端实现与其一致 |
 | 数据库 | 迁移 0001 schema + 0002 种子（5 权限组/15 权限/6 角色）+ 0003 admin 种子 | 已应用：`_sqlx_migrations` 1/2/3 均 success |
 | 后端 API | 认证（argon2 + JWT）、users/roles/permissions CRUD、权限组、仪表盘统计；handler→service→repository 分层 | 冒烟 + 写路径测试全过，clippy/audit/test 全绿 |
+| 启动可靠性 | `doctor.sh` 体检本地依赖；迁移变更自动触发重编；启动日志输出迁移计数 | doctor + cargo check + audit/test |
 | 模板 | 5 个 `.tmpl` 更新为 axum + thiserror + camelCase 风格（原为 actix-web） | 与真实代码一致 |
 | 前端 ESLint | `ng add @angular-eslint/schematics` 接入，修复 3 处无障碍违规 | `npx eslint src` 0 错误 |
-| Git | 2 个提交：`60fcbcc chore: init monorepo`、`1b12f2d feat: backend RBAC API + ...`；pre-commit 钩子（clippy+eslint+审计）可用 | 工作区干净 |
+| Git | pre-commit 钩子（clippy + eslint + 审计）可用；提交历史保留在本地 | 提交前自动执行快速门禁 |
 
 ## 运行方式
 
@@ -22,7 +23,8 @@ cd backend && cargo run        # http://localhost:8081/api/v1/healthz
 # 前端
 cd frontend && npm start       # http://localhost:4200（当前仍是 mock 数据）
 
-# 门禁
+# 依赖体检与门禁
+bash codex-audit-pipeline/scripts/doctor.sh
 bash codex-audit-pipeline/scripts/audit_gate.sh
 RUN_RUST=true RUN_ANGULAR=true bash codex-audit-pipeline/scripts/run_tests.sh
 ```
@@ -32,22 +34,21 @@ RUN_RUST=true RUN_ANGULAR=true bash codex-audit-pipeline/scripts/run_tests.sh
 
 ## 已知约定与坑（已记录）
 
-- 迁移通过 `sqlx::migrate!` 编译时嵌入：**新增迁移后必须重编**（`cargo clean -p arc-admin-backend && cargo build` 或 `touch src/main.rs`）——下次改进见待办 1。
+- 迁移通过 `sqlx::migrate!` 编译时嵌入；`backend/build.rs` 已追踪 `migrations`，迁移变化后普通 `cargo build` 即会重编。
 - 沙箱内 `.git` 只读，git 写操作需提权执行；`core.hooksPath` 已设为 `codex-audit-pipeline/hooks`。
-- `npx eslint` 必须在 `frontend/` 目录内执行（脚本已修，用本地 bin 更佳——待办 2）。
+- `npx eslint` 必须在 `frontend/` 目录内执行（脚本已处理工作目录）。
 
-## 明天待办（按优先级，含方案）
+## 后续待办（按优先级，含方案）
 
-1. **doctor.sh + build.rs + 迁移日志**：加 `scripts/doctor.sh` 体检前置依赖；`backend/build.rs` 加 `cargo:rerun-if-changed=migrations` 根治迁移重编坑；启动日志打印实际应用迁移数。
-2. **后端集成测试**：`tower::ServiceExt::oneshot` 进程内测路由 + 测试库（docker 里建 `arc_admin_test`），覆盖登录→CRUD 全链路；当前 `cargo test` 是空跑（假绿）。
-3. **CI workflow**：GitHub Actions 跑 audit_gate + 后端测试（PG service）+ 前端 lint/test。
-4. **前端接真实 API**：DataService 从 mock 换 HTTP + token 拦截器 + MSW 测试；字段映射见 openapi.yaml 顶部（`name→displayName`、id 改 number）。
-5. **JWT_SECRET 生产硬校验**：`APP_ENV=production` 时缺失即启动失败。
-6. **契约防漂移**：后端接入 utoipa 生成 OpenAPI，CI 校验 docs/openapi.yaml；低成本先行版=路由清单测试。
-7. **模板防漂移**：audit.toml 加规则扫 `templates/**`，禁止 actix_web 等旧模式。
-8. **agent TOML 转 markdown 子代理**（.codex/agents/*.toml 已过时，按当前 Codex schema 处理或删除）。
-9. **`run_tests.sh` 潜伏 bug**：angular.json 是 Vitest builder，`--browsers=ChromeHeadless` 是 karma 参数会报错，按 builder 类型决定参数。
-10. **补 `docs/architecture.md`**：分层、数据模型、环境变量、测试方式，AGENTS.md 引用。
+1. **后端集成测试**：`tower::ServiceExt::oneshot` 进程内测路由 + 测试库（docker 里建 `arc_admin_test`），覆盖登录→CRUD 全链路；当前 `cargo test` 是空跑（假绿）。
+2. **CI workflow**：GitHub Actions 跑 audit_gate + 后端测试（PG service）+ 前端 lint/test。
+3. **前端接真实 API**：DataService 从 mock 换 HTTP + token 拦截器 + MSW 测试；字段映射见 openapi.yaml 顶部（`name→displayName`、id 改 number）。
+4. **JWT_SECRET 生产硬校验**：`APP_ENV=production` 时缺失即启动失败。
+5. **契约防漂移**：后端接入 utoipa 生成 OpenAPI，CI 校验 docs/openapi.yaml；低成本先行版=路由清单测试。
+6. **模板防漂移**：audit.toml 加规则扫 `templates/**`，禁止 actix_web 等旧模式。
+7. **agent TOML 转 markdown 子代理**（.codex/agents/*.toml 已过时，按当前 Codex schema 处理或删除）。
+8. **`run_tests.sh` 潜伏 bug**：angular.json 是 Vitest builder，`--browsers=ChromeHeadless` 是 karma 参数会报错，按 builder 类型决定参数。
+9. **补 `docs/architecture.md`**：分层、数据模型、环境变量、测试方式，AGENTS.md 引用。
 
 ## 未提交文件
 

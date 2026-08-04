@@ -66,7 +66,12 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::init_pool(&database_url).await?;
 
     // 启动时自动执行 backend/migrations 下尚未应用的迁移
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    let migrations = db::run_migrations(&pool).await?;
+    tracing::info!(
+        applied_migrations = migrations.applied,
+        embedded_migrations = migrations.embedded,
+        "database migrations ready"
+    );
 
     let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
         eprintln!("⚠️ JWT_SECRET 未设置，使用开发默认值（生产环境必须配置）");

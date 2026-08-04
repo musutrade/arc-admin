@@ -14,9 +14,11 @@
 | `0002_seed_rbac_data.sql` | 5 权限组 + 15 权限 + 6 角色 + 角色-权限分配（与前端 mock 一致） |
 | `0003_seed_admin_user.sql` | 管理员 admin（argon2id 哈希，密码 admin123）并绑定 super_admin |
 
-⚠️ **重要**：迁移文件通过 `sqlx::migrate!` 宏在**编译时**嵌入二进制，新增/修改迁移后
-`cargo build` 不会自动重编译（cargo 不追踪 migrations 目录）。请执行：
+迁移文件通过 `sqlx::migrate!` 宏在**编译时**嵌入二进制。`backend/build.rs` 已声明
+`migrations` 为构建输入，新增或修改迁移后，下一次 `cargo build` 会自动重新编译：
 
 ```bash
-cargo clean -p arc-admin-backend && cargo build   # 或 touch src/main.rs 后重新 build
+cargo build
 ```
+
+后端启动后会记录数据库已成功应用的迁移数和当前二进制内嵌的迁移数。
