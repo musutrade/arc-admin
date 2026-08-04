@@ -1,4 +1,5 @@
 use crate::audit;
+use crate::config::{Profile, StepConfig, TestParser};
 use crate::process::{Task, TaskResult};
 use crate::project::Project;
 use crate::scope::{Component, ScopeResult};
@@ -11,14 +12,6 @@ use std::fs;
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-const POSTGRES_IMAGE: &str = "postgres:16-alpine";
-
-#[derive(Debug, Clone, Copy)]
-pub enum Profile {
-    Full,
-    Hook,
-}
 
 #[derive(Debug, Serialize)]
 pub struct VerificationReport {
@@ -70,6 +63,24 @@ impl VerificationReport {
 }
 
 pub fn run(project: &Project, scope: ScopeResult, profile: Profile) -> Result<VerificationReport> {
+    run_selected(project, scope, profile, None)
+}
+
+pub fn run_step(project: &Project, id: &str) -> Result<VerificationReport> {
+    let step = project
+        .config
+        .step(id)
+        .ok_or_else(|| anyhow::anyhow!("unknown verification step {id:?}"))?;
+    let scope = explicit_scope(&[step.component]);
+    run_selected(project, scope, Profile::Full, Some(id))
+}
+
+fn run_selected(
+    project: &Project,
+    scope: ScopeResult,
+    profile: Profile,
+    only_step: Option<&str>,
+) -> Result<VerificationReport> {
     println!("arc-flow verify");
     let selected = scope
         .components
@@ -140,25 +151,15 @@ pub fn run(project: &Project, scope: ScopeResult, profile: Profile) -> Result<Ve
         bail!("verification cancelled");
     }
     if steps.iter().all(|step| step.passed) {
-        if scope.components.contains(&Component::Backend) {
-            run_backend(project, profile, &mut steps)?;
-        }
-        if scope.components.contains(&Component::Frontend) {
-            run_frontend(project, profile, &mut steps)?;
-        }
-        if scope.components.contains(&Component::Workflow) {
-            run_workflow(project, profile, &mut steps)?;
-        }
+        run_configured_steps(project, &scope, profile, only_step, &mut steps)?;
     }
 
     let passed = steps.iter().all(|step| step.passed);
     let report = VerificationReport {
         timestamp: chrono::Utc::now().to_rfc3339(),
-        profile: match profile {
-            Profile::Full => "full",
-            Profile::Hook => "hook",
-        }
-        .to_string(),
+        profile: only_step
+            .map(|id| format!("step:{id}"))
+            .unwrap_or_else(|| profile.label().to_string()),
         scope,
         steps,
         passed,
@@ -175,254 +176,74 @@ pub fn run(project: &Project, scope: ScopeResult, profile: Profile) -> Result<Ve
     Ok(report)
 }
 
-fn run_backend(project: &Project, profile: Profile, steps: &mut Vec<TaskResult>) -> Result<()> {
-    let manifest = project.backend.join("Cargo.toml");
-    execute(
-        Task::new(
-            "backend format",
-            "cargo",
-            &project.root,
-            log(project, "backend_fmt.log"),
-        )
-        .args([
-            "fmt",
-            "--manifest-path",
-            &manifest.to_string_lossy(),
-            "--",
-            "--check",
-        ]),
-        None,
-        steps,
-    )?;
-    execute(
-        Task::new(
-            "backend Clippy",
-            "cargo",
-            &project.root,
-            log(project, "backend_clippy.log"),
-        )
-        .args([
-            "clippy",
-            "--manifest-path",
-            &manifest.to_string_lossy(),
-            "--locked",
-            "--all-targets",
-            "--all-features",
-            "--",
-            "-D",
-            "warnings",
-        ]),
-        None,
-        steps,
-    )?;
+fn run_configured_steps(
+    project: &Project,
+    scope: &ScopeResult,
+    profile: Profile,
+    only_step: Option<&str>,
+    steps: &mut Vec<TaskResult>,
+) -> Result<()> {
+    let selected = project.config.steps.iter().filter(|step| {
+        scope.components.contains(&step.component)
+            && only_step
+                .map(|id| step.id == id)
+                .unwrap_or_else(|| step.profiles.contains(&profile))
+    });
+    let mut database = None;
 
-    if matches!(profile, Profile::Hook) {
-        return Ok(());
-    }
-
-    execute(
-        Task::new(
-            "backend compile",
-            "cargo",
-            &project.root,
-            log(project, "backend_check.log"),
-        )
-        .args([
-            "check",
-            "--manifest-path",
-            &manifest.to_string_lossy(),
-            "--locked",
-            "--all-targets",
-        ]),
-        None,
-        steps,
-    )?;
-
-    let database = match TestDatabase::prepare(project) {
-        Ok(database) => database,
-        Err(error) => {
-            let result = TaskResult {
-                label: "test database setup".to_string(),
-                passed: false,
-                timed_out: false,
-                cancelled: false,
-                duration_ms: 0,
-                log: String::new(),
-                detail: Some(format!("{error:#}")),
-            };
-            print_result(&result);
-            steps.push(result);
-            return Ok(());
+    for step in selected {
+        if crate::process::cancelled() {
+            bail!("verification cancelled");
         }
-    };
-    let timeout = env_seconds("RUST_TEST_TIMEOUT", 120);
-    execute(
-        Task::new(
-            "backend tests",
-            "cargo",
-            &project.root,
-            log(project, "backend_tests.log"),
-        )
-        .args([
-            "test",
-            "--manifest-path",
-            &manifest.to_string_lossy(),
-            "--locked",
-            "--",
-            "--nocapture",
-        ])
-        .env("TEST_DATABASE_URL", &database.url)
-        .timeout(timeout),
-        Some(TestCount::Rust),
-        steps,
-    )?;
-    Ok(())
-}
-
-fn run_frontend(project: &Project, profile: Profile, steps: &mut Vec<TaskResult>) -> Result<()> {
-    execute(
-        Task::new(
-            "frontend lint",
-            "npm",
-            &project.frontend,
-            log(project, "frontend_lint.log"),
-        )
-        .args([
-            "exec",
-            "--offline",
-            "eslint",
-            "--",
-            "src",
-            "--max-warnings=0",
-        ]),
-        None,
-        steps,
-    )?;
-    execute(
-        Task::new(
-            "frontend format",
-            "npm",
-            &project.frontend,
-            log(project, "frontend_format.log"),
-        )
-        .args(["run", "format:check"]),
-        None,
-        steps,
-    )?;
-
-    if matches!(profile, Profile::Hook) {
-        return Ok(());
-    }
-
-    execute(
-        Task::new(
-            "frontend tests",
-            "npm",
-            &project.frontend,
-            log(project, "frontend_tests.log"),
-        )
-        .args(["test", "--", "--watch=false", "--runner=vitest"])
-        .timeout(env_seconds("ANGULAR_TEST_TIMEOUT", 180)),
-        Some(TestCount::Angular),
-        steps,
-    )?;
-    execute(
-        Task::new(
-            "frontend production build",
-            "npm",
-            &project.frontend,
-            log(project, "frontend_build.log"),
-        )
-        .args(["run", "build"])
-        .timeout(env_seconds("ANGULAR_BUILD_TIMEOUT", 180)),
-        None,
-        steps,
-    )?;
-    Ok(())
-}
-
-fn run_workflow(project: &Project, profile: Profile, steps: &mut Vec<TaskResult>) -> Result<()> {
-    let manifest = project.tool_manifest.to_string_lossy();
-    execute(
-        Task::new(
-            "Git hook syntax",
-            "sh",
-            &project.root,
-            log(project, "git_hook_syntax.log"),
-        )
-        .args([
-            "-n",
-            &project
-                .root
-                .join("codex-audit-pipeline/hooks/pre-commit")
-                .to_string_lossy(),
-        ]),
-        None,
-        steps,
-    )?;
-    execute(
-        Task::new(
-            "arc-flow format",
-            "cargo",
-            &project.root,
-            log(project, "arc_flow_fmt.log"),
-        )
-        .args(["fmt", "--manifest-path", &manifest, "--", "--check"]),
-        None,
-        steps,
-    )?;
-    if matches!(profile, Profile::Full) {
+        if step.requires_test_database && database.is_none() {
+            match TestDatabase::prepare(project) {
+                Ok(value) => database = Some(value),
+                Err(error) => {
+                    let result = TaskResult {
+                        label: "test database setup".to_string(),
+                        passed: false,
+                        timed_out: false,
+                        cancelled: false,
+                        duration_ms: 0,
+                        log: String::new(),
+                        detail: Some(format!("{error:#}")),
+                    };
+                    print_result(&result);
+                    steps.push(result);
+                    break;
+                }
+            }
+        }
+        let database_url = database.as_ref().map(|value| value.url.as_str());
         execute(
-            Task::new(
-                "arc-flow Clippy",
-                "cargo",
-                &project.root,
-                log(project, "arc_flow_clippy.log"),
-            )
-            .args([
-                "clippy",
-                "--manifest-path",
-                &manifest,
-                "--locked",
-                "--all-targets",
-                "--all-features",
-                "--",
-                "-D",
-                "warnings",
-            ]),
-            None,
+            configured_task(project, step, database_url),
+            step.parser,
             steps,
         )?;
     }
-    execute(
-        Task::new(
-            "arc-flow tests",
-            "cargo",
-            &project.root,
-            log(project, "arc_flow_tests.log"),
-        )
-        .args([
-            "test",
-            "--manifest-path",
-            &manifest,
-            "--locked",
-            "--",
-            "--nocapture",
-        ])
-        .timeout(env_seconds("RUST_TEST_TIMEOUT", 120)),
-        Some(TestCount::Rust),
-        steps,
-    )?;
     Ok(())
 }
 
-#[derive(Clone, Copy)]
-enum TestCount {
-    Rust,
-    Angular,
+fn configured_task(project: &Project, step: &StepConfig, database_url: Option<&str>) -> Task {
+    let cwd = std::path::PathBuf::from(project.expand(&step.cwd));
+    let args = step
+        .args
+        .iter()
+        .map(|argument| project.expand(argument))
+        .collect::<Vec<_>>();
+    let mut task = Task::new(&step.label, &step.program, &cwd, log(project, &step.log))
+        .args(args)
+        .timeout(step.timeout_secs);
+    if step.requires_test_database {
+        task = task.env(
+            "TEST_DATABASE_URL",
+            database_url.expect("validated database step has a prepared database"),
+        );
+    }
+    task
 }
 
-fn execute(task: Task, count: Option<TestCount>, steps: &mut Vec<TaskResult>) -> Result<()> {
+fn execute(task: Task, count: Option<TestParser>, steps: &mut Vec<TaskResult>) -> Result<()> {
     print!("[RUN ] {} ... ", task.label);
     use std::io::Write;
     std::io::stdout().flush().ok();
@@ -447,10 +268,10 @@ fn execute(task: Task, count: Option<TestCount>, steps: &mut Vec<TaskResult>) ->
     Ok(())
 }
 
-fn count_tests(content: &str, kind: TestCount) -> Result<usize> {
+fn count_tests(content: &str, kind: TestParser) -> Result<usize> {
     let pattern = match kind {
-        TestCount::Rust => Regex::new(r"(?m)^running ([0-9]+) tests?$")?,
-        TestCount::Angular => Regex::new(r"Tests\s+([0-9]+) passed")?,
+        TestParser::Rust => Regex::new(r"(?m)^running ([0-9]+) tests?$")?,
+        TestParser::Angular => Regex::new(r"Tests\s+([0-9]+) passed")?,
     };
     Ok(pattern
         .captures_iter(content)
@@ -476,13 +297,6 @@ fn print_result_inline(result: &TaskResult) {
 
 fn log(project: &Project, name: &str) -> std::path::PathBuf {
     project.reports.join("logs").join(name)
-}
-
-fn env_seconds(name: &str, default: u64) -> u64 {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(default)
 }
 
 struct TestDatabase {
@@ -513,6 +327,11 @@ impl TestDatabase {
             .unwrap_or_default()
             .as_millis();
         let name = format!("arc-admin-test-{}-{unique}", std::process::id());
+        let config = &project.config.database;
+        let user = format!("POSTGRES_USER={}", config.user);
+        let password = format!("POSTGRES_PASSWORD={}", config.password);
+        let database_name = format!("POSTGRES_DB={}", config.name);
+        let publish = format!("127.0.0.1::{}", config.container_port);
         let output = Command::new("docker")
             .args([
                 "run",
@@ -522,14 +341,14 @@ impl TestDatabase {
                 "--name",
                 &name,
                 "--env",
-                "POSTGRES_USER=arc_admin_test",
+                &user,
                 "--env",
-                "POSTGRES_PASSWORD=arc_admin_test",
+                &password,
                 "--env",
-                "POSTGRES_DB=arc_admin_test",
+                &database_name,
                 "--publish",
-                "127.0.0.1::5432",
-                POSTGRES_IMAGE,
+                &publish,
+                &config.image,
             ])
             .output()
             .context("start temporary PostgreSQL")?;
@@ -544,41 +363,46 @@ impl TestDatabase {
             url: String::new(),
             container: Some(name),
         };
-        for _ in 0..30 {
+        let deadline = Instant::now() + Duration::from_secs(config.startup_timeout_secs);
+        while Instant::now() < deadline {
             if crate::process::cancelled() {
                 bail!("verification cancelled while waiting for PostgreSQL");
             }
-            if let Some(port) = database.port()? {
+            if let Some(port) = database.port(config.container_port)? {
                 let ready = Command::new("docker")
                     .args([
                         "exec",
                         database.container.as_deref().unwrap_or_default(),
                         "pg_isready",
                         "-U",
-                        "arc_admin_test",
+                        &config.user,
                         "-d",
-                        "arc_admin_test",
+                        &config.name,
                     ])
                     .output()
                     .is_ok_and(|value| value.status.success());
                 if ready {
                     database.url = format!(
-                        "postgres://arc_admin_test:arc_admin_test@127.0.0.1:{port}/arc_admin_test"
+                        "postgres://{}:{}@127.0.0.1:{port}/{}",
+                        config.user, config.password, config.name
                     );
                     return Ok(database);
                 }
             }
             thread::sleep(Duration::from_secs(1));
         }
-        bail!("temporary PostgreSQL did not become ready within 30 seconds")
+        bail!(
+            "temporary PostgreSQL did not become ready within {} seconds",
+            config.startup_timeout_secs
+        )
     }
 
-    fn port(&self) -> Result<Option<String>> {
+    fn port(&self, container_port: u16) -> Result<Option<String>> {
         let Some(container) = &self.container else {
             return Ok(None);
         };
         let output = Command::new("docker")
-            .args(["port", container, "5432/tcp"])
+            .args(["port", container, &format!("{container_port}/tcp")])
             .output()?;
         if !output.status.success() {
             return Ok(None);
@@ -616,12 +440,12 @@ mod tests {
     #[test]
     fn counts_rust_tests_across_multiple_binaries() {
         let log = "running 3 tests\n...\nrunning 2 tests\n";
-        assert_eq!(count_tests(log, TestCount::Rust).expect("count"), 5);
+        assert_eq!(count_tests(log, TestParser::Rust).expect("count"), 5);
     }
 
     #[test]
     fn counts_angular_tests() {
         let log = "Tests  19 passed (19)";
-        assert_eq!(count_tests(log, TestCount::Angular).expect("count"), 19);
+        assert_eq!(count_tests(log, TestParser::Angular).expect("count"), 19);
     }
 }

@@ -1,3 +1,4 @@
+use crate::config::{resolve_config_path, FlowConfig};
 use anyhow::{bail, Context, Result};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -5,6 +6,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone)]
 pub struct Project {
     pub root: PathBuf,
+    pub config_path: PathBuf,
+    pub config: FlowConfig,
     pub reports: PathBuf,
     pub backend: PathBuf,
     pub frontend: PathBuf,
@@ -13,7 +16,10 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn discover(override_root: Option<PathBuf>) -> Result<Self> {
+    pub fn discover(
+        override_root: Option<PathBuf>,
+        config_override: Option<PathBuf>,
+    ) -> Result<Self> {
         let start = override_root
             .or_else(|| env::var_os("PROJECT_ROOT").map(PathBuf::from))
             .unwrap_or(env::current_dir().context("read current directory")?);
@@ -31,25 +37,22 @@ impl Project {
             .map(Path::to_path_buf)
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "could not find project root above {}; expected frontend/, backend/, and codex-audit-pipeline/",
+                    "could not find project root above {}; expected codex-audit-pipeline/.codex/ and tools/arc-flow/",
                     start.display()
                 )
             })?;
 
-        let pipeline = root.join("codex-audit-pipeline");
-        let reports = env::var_os("REPORT_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| pipeline.join(".codex/reports"));
-        let audit_config = env::var_os("AUDITOR_CONFIG")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| pipeline.join(".codex/audit.toml"));
+        let config_path = resolve_config_path(&root, config_override)?;
+        let config = FlowConfig::load(&config_path)?;
 
         let project = Self {
-            backend: root.join("backend"),
-            frontend: root.join("frontend"),
-            tool_manifest: pipeline.join("tools/arc-flow/Cargo.toml"),
-            audit_config,
-            reports,
+            backend: root.join(&config.paths.backend),
+            frontend: root.join(&config.paths.frontend),
+            tool_manifest: root.join(&config.paths.tool_manifest),
+            audit_config: root.join(&config.paths.audit_config),
+            reports: root.join(&config.paths.reports),
+            config_path,
+            config,
             root,
         };
         project.validate()?;
@@ -57,10 +60,9 @@ impl Project {
     }
 
     fn is_root(path: &Path) -> bool {
-        path.join("frontend").is_dir()
-            && path.join("backend").is_dir()
+        path.join("codex-audit-pipeline/.codex").is_dir()
             && path
-                .join("codex-audit-pipeline/.codex/audit.toml")
+                .join("codex-audit-pipeline/tools/arc-flow/Cargo.toml")
                 .is_file()
     }
 
@@ -83,5 +85,20 @@ impl Project {
         env::set_current_dir(&self.root)
             .with_context(|| format!("enter project root {}", self.root.display()))?;
         Ok(())
+    }
+
+    pub fn expand(&self, value: &str) -> String {
+        [
+            ("{tool_manifest}", &self.tool_manifest),
+            ("{audit_config}", &self.audit_config),
+            ("{frontend}", &self.frontend),
+            ("{backend}", &self.backend),
+            ("{reports}", &self.reports),
+            ("{root}", &self.root),
+        ]
+        .into_iter()
+        .fold(value.to_string(), |resolved, (placeholder, path)| {
+            resolved.replace(placeholder, &path.to_string_lossy())
+        })
     }
 }

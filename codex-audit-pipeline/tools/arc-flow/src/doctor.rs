@@ -71,7 +71,7 @@ impl DoctorReport {
 pub fn run(project: &Project) -> Result<DoctorReport> {
     let mut report = DoctorReport::new(project);
 
-    for command in ["git", "cargo", "rustc", "node", "npm"] {
+    for command in &project.config.doctor.required_commands {
         match command_version(command) {
             Some(version) => report.push(Level::Pass, command, version),
             None => report.push(Level::Fail, command, "command is not available on PATH"),
@@ -152,22 +152,28 @@ fn check_hooks(project: &Project, report: &mut DoctorReport) -> Result<()> {
         .output()
         .context("read Git hooks path")?;
     let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if value == "codex-audit-pipeline/hooks" {
+    let expected = &project.config.doctor.hooks_path;
+    if value == *expected {
         report.push(Level::Pass, "Git hooks", "versioned hook path configured");
     } else {
         report.push(
             Level::Warn,
             "Git hooks",
-            "run `git config core.hooksPath codex-audit-pipeline/hooks`",
+            format!("run `git config core.hooksPath {expected}`"),
         );
     }
     Ok(())
 }
 
 fn check_node_version(project: &Project, report: &mut DoctorReport) -> Result<()> {
-    let path = project.root.join(".node-version");
+    let version_file = &project.config.doctor.node_version_file;
+    let path = project.root.join(version_file);
     if !path.is_file() {
-        report.push(Level::Warn, "Node version", ".node-version is missing");
+        report.push(
+            Level::Warn,
+            "Node version",
+            format!("{version_file} is missing"),
+        );
         return Ok(());
     }
     let expected = fs::read_to_string(path)?.trim().to_string();
@@ -249,21 +255,22 @@ fn check_test_database(project: &Project, report: &mut DoctorReport) {
         );
         return;
     }
+    let image_name = &project.config.database.image;
     let image = Command::new("docker")
-        .args(["image", "inspect", "postgres:16-alpine"])
+        .args(["image", "inspect", image_name])
         .output()
         .is_ok_and(|output| output.status.success());
     if image {
         report.push(
             Level::Pass,
             "test database",
-            "Docker and postgres:16-alpine ready",
+            format!("Docker and {image_name} ready"),
         );
     } else {
         report.push(
             Level::Warn,
             "test database",
-            "run `docker pull postgres:16-alpine`",
+            format!("run `docker pull {image_name}`"),
         );
     }
 }

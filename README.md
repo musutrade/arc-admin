@@ -16,7 +16,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 │   └── .env.example
 ├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
 ├── codex-audit-pipeline/      # Codex 工作流工具（自包含）
-│   ├── .codex/                # 审计规则 / 模板 / 报告产物
+│   ├── .codex/                # 工作流配置 / 审计规则 / 模板 / 报告产物
 │   ├── hooks/                 # pre-commit（仅启动 arc-flow）
 │   └── tools/arc-flow/        # Rust 工作流 CLI
 └── .github/                   # CI 与 Dependabot 配置
@@ -53,6 +53,10 @@ cargo flow doctor
 # 查看范围并按工作区变更自动验证
 cargo flow scope
 cargo flow verify
+
+# 校验或查看应用环境覆盖后的工作流配置
+cargo flow config check
+cargo flow config print --resolved
 
 # 合并前完整验证（secret scan → audit → lint/check/test/build）
 cargo flow verify --all

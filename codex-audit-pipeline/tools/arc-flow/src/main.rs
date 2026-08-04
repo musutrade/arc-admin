@@ -1,4 +1,5 @@
 mod audit;
+mod config;
 mod doctor;
 mod process;
 mod project;
@@ -8,11 +9,11 @@ mod verify;
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
+use config::Profile;
 use project::Project;
 use scope::{Component, ScopeMode};
 use std::path::PathBuf;
 use std::process::ExitCode;
-use verify::Profile;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -26,6 +27,10 @@ struct Cli {
     /// Override automatic project root discovery.
     #[arg(long, global = true, value_name = "PATH")]
     project_root: Option<PathBuf>,
+
+    /// Override the repository workflow configuration file.
+    #[arg(long, global = true, value_name = "PATH")]
+    config: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Commands,
@@ -89,6 +94,28 @@ enum Commands {
         #[arg(short, long)]
         output: PathBuf,
     },
+    /// Validate or inspect the repository workflow configuration.
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+    /// Run one configured full-profile step after secrets and audit gates.
+    Step {
+        /// Step id from flow.toml, for example backend.clippy.
+        id: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ConfigAction {
+    /// Validate configuration, environment overrides, and protected steps.
+    Check,
+    /// Print the source or effective configuration.
+    Print {
+        /// Include environment overrides in the rendered TOML.
+        #[arg(long)]
+        resolved: bool,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -132,7 +159,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<bool> {
     let cli = Cli::parse();
-    let project = Project::discover(cli.project_root)?;
+    let project = Project::discover(cli.project_root, cli.config)?;
     project.prepare()?;
 
     match cli.command {
@@ -216,6 +243,29 @@ fn run() -> Result<bool> {
             println!("Error context: {}", output.display());
             Ok(true)
         }
+        Commands::Config { action } => match action {
+            ConfigAction::Check => {
+                println!("Configuration valid: {}", project.config_path.display());
+                println!("Schema version: {}", project.config.version);
+                println!("Verification steps: {}", project.config.steps.len());
+                Ok(true)
+            }
+            ConfigAction::Print { resolved } => {
+                if resolved {
+                    println!("{}", toml::to_string_pretty(&project.config)?);
+                } else {
+                    print!(
+                        "{}",
+                        std::fs::read_to_string(&project.config_path).with_context(|| format!(
+                            "read workflow config {}",
+                            project.config_path.display()
+                        ))?
+                    );
+                }
+                Ok(true)
+            }
+        },
+        Commands::Step { id } => Ok(verify::run_step(&project, &id)?.passed),
     }
 }
 

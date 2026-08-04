@@ -1,7 +1,7 @@
 use crate::project::Project;
 use anyhow::{bail, Context, Result};
 use clap::ValueEnum;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::process::Command;
 
@@ -13,7 +13,7 @@ pub enum ScopeMode {
     All,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum Component {
     Backend,
@@ -115,7 +115,7 @@ pub fn detect(project: &Project, mode: &ScopeMode) -> Result<ScopeResult> {
     let changed_files = paths.into_iter().collect::<Vec<_>>();
     Ok(ScopeResult {
         mode: mode_label,
-        components: classify(&changed_files),
+        components: project.config.components_for(&changed_files)?,
         changed_files,
     })
 }
@@ -151,50 +151,27 @@ fn git_paths(project: &Project, args: &[&str]) -> Result<Vec<String>> {
         .collect()
 }
 
-fn classify(paths: &[String]) -> BTreeSet<Component> {
-    let mut components = BTreeSet::new();
-    for path in paths {
-        if path.starts_with("backend/") {
-            components.insert(Component::Backend);
-        }
-        if path.starts_with("frontend/") || path == ".node-version" {
-            components.insert(Component::Frontend);
-        }
-        if path == "rust-toolchain.toml" {
-            components.insert(Component::Backend);
-            components.insert(Component::Workflow);
-        }
-        if path.starts_with("codex-audit-pipeline/tools/arc-flow/")
-            || path.starts_with("codex-audit-pipeline/hooks/")
-            || path == ".cargo/config.toml"
-        {
-            components.extend([Component::Backend, Component::Frontend, Component::Workflow]);
-        }
-        if path == "docs/openapi.yaml" || path.starts_with(".github/workflows/") {
-            components.extend([Component::Backend, Component::Frontend, Component::Workflow]);
-        }
-        if path.starts_with("codex-audit-pipeline/.codex/audit.toml")
-            || path.starts_with("codex-audit-pipeline/.codex/templates/")
-        {
-            components.insert(Component::Workflow);
-        }
-    }
-    components
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn config() -> crate::config::FlowConfig {
+        toml::from_str(include_str!("../../../.codex/flow.toml")).expect("parse config")
+    }
+
     #[test]
     fn workflow_changes_force_all_components() {
-        let components = classify(&["codex-audit-pipeline/tools/arc-flow/src/main.rs".into()]);
+        let components = config()
+            .components_for(&["codex-audit-pipeline/tools/arc-flow/src/main.rs".into()])
+            .expect("classify");
         assert_eq!(components.len(), 3);
     }
 
     #[test]
     fn frontend_change_only_selects_frontend() {
-        let components = classify(&["frontend/src/main.ts".into()]);
+        let components = config()
+            .components_for(&["frontend/src/main.ts".into()])
+            .expect("classify");
         assert_eq!(components, BTreeSet::from([Component::Frontend]));
     }
 }
