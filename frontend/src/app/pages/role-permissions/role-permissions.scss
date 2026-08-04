@@ -13,8 +13,8 @@
 .role-avatar {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-primary-soft);
   color: var(--mat-sys-primary);
   display: flex;
   align-items: center;
@@ -32,7 +32,7 @@
 }
 
 .cell-secondary {
-  color: var(--arco-text-secondary);
+  color: var(--ui-color-text-secondary);
 }
 
 .status-pill {
@@ -40,12 +40,12 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-lg);
   font-size: 13px;
   font-weight: 500;
   background: var(--mat-sys-surface-container);
   color: var(--mat-sys-primary);
-  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+  border: 1px solid var(--ui-color-primary-border);
 
   .dot {
     width: 6px;
@@ -55,10 +55,10 @@
   }
 
   &.inactive {
-    color: var(--arco-text-secondary);
-    border-color: var(--arco-border);
+    color: var(--ui-color-text-secondary);
+    border-color: var(--ui-color-border);
     .dot {
-      background: var(--arco-text-tertiary);
+      background: var(--ui-color-text-tertiary);
     }
   }
 }
@@ -69,14 +69,14 @@
   gap: 6px;
   padding: 8px 12px;
   border: none;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-primary-soft);
   color: var(--mat-sys-primary);
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 
   mat-icon {
     font-size: 18px;
@@ -84,6 +84,6 @@
     height: 18px;
   }
   &:hover {
-    background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent);
+    background: var(--ui-color-selected);
   }
 }

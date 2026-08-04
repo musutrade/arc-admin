@@ -1,7 +1,7 @@
 .editor-dialog {
   width: min(620px, calc(100vw - 32px));
   padding: 24px;
-  color: var(--arco-text-primary);
+  color: var(--ui-color-text-primary);
 }
 
 .compact-dialog {
@@ -28,7 +28,7 @@
 
 .dialog-message {
   margin: 0 0 24px;
-  color: var(--arco-text-secondary);
+  color: var(--ui-color-text-secondary);
 }
 
 .form-grid {
@@ -48,7 +48,7 @@
   }
 
   label {
-    color: var(--arco-text-secondary);
+    color: var(--ui-color-text-secondary);
     font-size: 13px;
     font-weight: 600;
   }
@@ -59,16 +59,16 @@
     width: 100%;
     min-height: 40px;
     padding: 8px 11px;
-    border: 1px solid var(--arco-border);
-    border-radius: 6px;
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-md);
     outline: none;
-    background: var(--arco-bg-white);
-    color: var(--arco-text-primary);
+    background: var(--ui-color-surface-panel);
+    color: var(--ui-color-text-primary);
     font: inherit;
 
     &:focus {
-      border-color: var(--mat-sys-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+      border-color: var(--ui-color-primary);
+      box-shadow: var(--ui-focus-ring);
     }
 
     &:disabled {

@@ -5,7 +5,7 @@
 ## 技术栈
 
 - **Angular 22.1**(Standalone Components, signal-based 状态管理)
-- **Angular Material 22.1**(M3 主题系统,通过 `--mat-sys-*` token 覆盖为 Arco 蓝)
+- **Angular Material 22.1**(M3 主题系统,通过语义 token 映射 Material 变量)
 - 字体:Ant Design 中后台系统字体栈(系统优先)+ Material Symbols Outlined
 - 样式:SCSS + CSS 变量(light / dark 双主题)
 - **Zoneless** 变更检测(`provideZonelessChangeDetection`)+ 全组件 `OnPush`
@@ -37,14 +37,14 @@ npm run build         # 输出到 dist/arc-admin
 
 ## 页面清单
 
-| 路由 | 页面 | 设计稿来源 |
-| ---- | ---- | ---- |
-| `/login` | 登录页(网格背景 + 表单校验) | `rbac_admin` |
-| `/permissions` | 权限目录(层级分组表格、搜索、类型过滤，只读) | `arco_style_1` |
-| `/users` | 用户增删改、密码重置、角色分配、筛选和批量操作 | `arco_style_3` |
-| `/roles` | 角色增删改和权限分配 | `arco_style_4` |
-| `/role-permissions` | 角色权限矩阵和 `mat-dialog` 分配流程 | `arco_style_5` |
-| `/403` `/404` `/500` | 错误页 | `403/404/500_arco_style` |
+| 路由                 | 页面                                           | 设计稿来源               |
+| -------------------- | ---------------------------------------------- | ------------------------ |
+| `/login`             | 登录页(表单校验 + 响应式布局)                  | `rbac_admin`             |
+| `/permissions`       | 权限目录(层级分组表格、搜索、类型过滤，只读)   | `arco_style_1`           |
+| `/users`             | 用户增删改、密码重置、角色分配、筛选和批量操作 | `arco_style_3`           |
+| `/roles`             | 角色增删改和权限分配                           | `arco_style_4`           |
+| `/role-permissions`  | 角色权限矩阵和 `mat-dialog` 分配流程           | `arco_style_5`           |
+| `/403` `/404` `/500` | 错误页                                         | `403/404/500_arco_style` |
 
 - 未登录访问主页面会被 `authGuard` 重定向到 `/login`。
 - 顶栏 `contrast` 按钮切换暗色模式,偏好持久化到 `localStorage('arc-theme')`,并支持 `[data-theme="dark"]` 手动覆盖。
@@ -53,12 +53,21 @@ npm run build         # 输出到 dist/arc-admin
 
 ## 主题令牌
 
-`src/styles.scss` 内通过覆盖 Material 22 M3 的 `--mat-sys-*` 变量实现 Arco 设计系统:
+主题基础值集中在 `src/styles/_tokens.scss`,`src/styles.scss` 只负责装配 Material M3 主题和全局组件样式。组件应优先使用 `--ui-*` 语义 token,不要直接声明色值或依赖具体色阶。
 
-- Primary `#165dff`(Arco Blue),语义色 success `#00B42A` / warning `#FF7D00` / danger `#F53F3F`
-- 圆角:4px(小)/ 8px(中)/ 12px(大)
-- 字体族:Inter + 中文字体回退
-- 暗色模式:表面色 `#131315` 系列、容器层级 `#0e0e10 → #333335`
+| Token 分组                                         | 用途                  | 示例                        |
+| -------------------------------------------------- | --------------------- | --------------------------- |
+| `--ui-color-surface-*`                             | 页面、面板和弱化背景  | `--ui-color-surface-panel`  |
+| `--ui-color-text-*`                                | 主、次、辅助文本      | `--ui-color-text-secondary` |
+| `--ui-color-{success,warning,error,info,feature}*` | 状态及其弱背景、边框  | `--ui-color-error-soft`     |
+| `--ui-radius-*`                                    | 2px 至 8px 的统一圆角 | `--ui-radius-lg`            |
+| `--ui-shadow-*` / `--ui-focus-ring`                | 层级和键盘焦点        | `--ui-shadow-md`            |
+| `--ui-duration-*` / `--ui-ease-*`                  | 交互动效              | `--ui-duration-fast`        |
+
+- `:root` 装配亮色 token,`[data-theme='dark']` 只覆盖颜色层;间距、圆角和动效保持一致。
+- `_tokens.scss` 同时映射 Angular Material 的 `--mat-sys-*` 变量,因此 Material 组件与自定义组件共享同一语义体系。
+- 新增状态样式时先组合现有 token;只有确实新增设计语义时才同时补齐 light/dark 两组定义。
+- 所有可聚焦控件必须保留全局 `:focus-visible` 或组件内 `--ui-focus-ring`,动效需服从 `prefers-reduced-motion`。
 
 ## 目录结构
 

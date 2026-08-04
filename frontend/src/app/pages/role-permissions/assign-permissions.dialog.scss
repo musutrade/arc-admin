@@ -13,19 +13,19 @@
   justify-content: space-between;
   gap: 16px;
   padding: 24px 32px 16px;
-  border-bottom: 1px solid var(--arco-border);
+  border-bottom: 1px solid var(--ui-color-border);
 
   h2 {
     margin: 0;
     font-size: 20px;
     font-weight: 600;
     line-height: 28px;
-    color: var(--arco-text-primary);
+    color: var(--ui-color-text-primary);
   }
   p {
     margin: 4px 0 0;
     font-size: 13px;
-    color: var(--arco-text-tertiary);
+    color: var(--ui-color-text-tertiary);
   }
 }
 
@@ -35,14 +35,14 @@
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--arco-text-tertiary);
+  color: var(--ui-color-text-tertiary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition:
-    background 0.15s ease,
-    color 0.15s ease;
+    background-color var(--ui-duration-fast) var(--ui-ease-standard),
+    color var(--ui-duration-fast) var(--ui-ease-standard);
 
   mat-icon {
     font-size: 20px;
@@ -50,7 +50,7 @@
     height: 20px;
   }
   &:hover {
-    background: var(--arco-fill-hover);
+    background: var(--ui-color-hover);
   }
 }
 
@@ -62,7 +62,7 @@
   flex-wrap: wrap;
   padding: 16px 32px;
   background: var(--mat-sys-surface-container-low);
-  border-bottom: 1px solid var(--arco-border);
+  border-bottom: 1px solid var(--ui-color-border);
 }
 
 .toolbar-search {
@@ -75,7 +75,7 @@
   mat-icon {
     position: absolute;
     left: 12px;
-    color: var(--arco-text-tertiary);
+    color: var(--ui-color-text-tertiary);
     font-size: 20px;
     width: 20px;
     height: 20px;
@@ -85,23 +85,23 @@
   input {
     width: 100%;
     padding: 8px 12px 8px 40px;
-    border: 1px solid var(--arco-border);
-    border-radius: 8px;
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-lg);
     background: var(--mat-sys-surface-container-lowest);
     outline: none;
     font-family: inherit;
     font-size: 14px;
-    color: var(--arco-text-primary);
+    color: var(--ui-color-text-primary);
     transition:
-      border-color 0.15s ease,
-      box-shadow 0.15s ease;
+      border-color var(--ui-duration-fast) var(--ui-ease-standard),
+      box-shadow var(--ui-duration-fast) var(--ui-ease-standard);
 
     &::placeholder {
-      color: var(--arco-text-tertiary);
+      color: var(--ui-color-text-tertiary);
     }
     &:focus {
       border-color: var(--mat-sys-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+      box-shadow: var(--ui-focus-ring);
     }
   }
 }
@@ -118,7 +118,7 @@
   gap: 4px;
   border: none;
   background: transparent;
-  color: var(--arco-link);
+  color: var(--ui-color-link);
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -138,7 +138,7 @@
 .toolbar-divider {
   width: 1px;
   height: 16px;
-  background: var(--arco-border);
+  background: var(--ui-color-border);
 }
 
 .dialog-body {
@@ -173,8 +173,8 @@
     font-size: 14px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--arco-text-primary);
+    letter-spacing: 0;
+    color: var(--ui-color-text-primary);
   }
 }
 
@@ -189,15 +189,15 @@
   align-items: flex-start;
   gap: 12px;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-lg);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 
   &:hover {
     background: var(--mat-sys-surface-container-low);
   }
   &.checked {
-    background: color-mix(in srgb, var(--mat-sys-primary) 4%, transparent);
+    background: var(--ui-color-selected);
   }
 }
 
@@ -208,12 +208,12 @@
 .perm-name {
   font-size: 14px;
   font-weight: 500;
-  color: var(--arco-text-primary);
+  color: var(--ui-color-text-primary);
 }
 
 .perm-desc {
   font-size: 11px;
-  color: var(--arco-text-tertiary);
+  color: var(--ui-color-text-tertiary);
   line-height: 16px;
   margin-top: 2px;
 }
@@ -225,13 +225,13 @@
   gap: 16px;
   flex-wrap: wrap;
   padding: 16px 32px;
-  border-top: 1px solid var(--arco-border);
+  border-top: 1px solid var(--ui-color-border);
   background: var(--mat-sys-surface-container-lowest);
 }
 
 .footer-count {
   font-size: 13px;
-  color: var(--arco-text-secondary);
+  color: var(--ui-color-text-secondary);
   b {
     color: var(--mat-sys-primary);
   }

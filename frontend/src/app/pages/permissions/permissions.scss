@@ -7,12 +7,12 @@
   thead th {
     padding: 12px 24px;
     background: var(--mat-sys-surface-container-low);
-    border-bottom: 1px solid var(--arco-border);
+    border-bottom: 1px solid var(--ui-color-border);
     font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0;
     text-transform: uppercase;
-    color: var(--arco-text-secondary);
+    color: var(--ui-color-text-secondary);
     white-space: nowrap;
   }
 
@@ -26,14 +26,14 @@
   }
 
   tbody tr {
-    transition: background-color 0.15s ease;
+    transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
   }
 
   /* 模块分组行 */
   .group-row {
-    background: color-mix(in srgb, var(--mat-sys-surface-container-low) 50%, transparent);
+    background: var(--ui-color-surface-subtle);
     font-weight: 700;
-    border-bottom: 1px solid var(--arco-border);
+    border-bottom: 1px solid var(--ui-color-border);
     cursor: pointer;
 
     td {
@@ -60,26 +60,26 @@
       height: 20px;
     }
     .group-name {
-      color: var(--arco-text-primary);
+      color: var(--ui-color-text-primary);
     }
     .root-tag {
       margin-left: 8px;
       padding: 2px 8px;
-      border-radius: 4px;
+      border-radius: var(--ui-radius-sm);
       font-size: 10px;
       font-weight: 600;
       color: var(--mat-sys-primary);
-      background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
-      border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+      background: var(--ui-color-primary-soft);
+      border: 1px solid var(--ui-color-primary-border);
     }
   }
 
   /* 权限行 */
   .perm-row {
-    border-bottom: 1px solid var(--arco-border);
+    border-bottom: 1px solid var(--ui-color-border);
 
     &:hover {
-      background: color-mix(in srgb, var(--mat-sys-surface-container-low) 30%, transparent);
+      background: var(--ui-color-hover);
     }
 
     td {
@@ -100,19 +100,19 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--arco-border);
+      background: var(--ui-color-border);
     }
     .perm-name {
       font-weight: 500;
-      color: var(--arco-text-primary);
+      color: var(--ui-color-text-primary);
       white-space: nowrap;
     }
   }
 
   .perm-code {
     padding: 4px 8px;
-    border-radius: 4px;
-    background: var(--arco-fill-hover);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-color-hover);
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
     font-size: 13px;
     color: var(--mat-sys-primary);
@@ -120,20 +120,20 @@
   }
 
   .perm-desc {
-    color: var(--arco-text-secondary);
+    color: var(--ui-color-text-secondary);
   }
 
   .row-btn {
     width: 32px;
     height: 32px;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--ui-radius-md);
     background: transparent;
-    color: var(--arco-text-tertiary);
+    color: var(--ui-color-text-tertiary);
     cursor: pointer;
     transition:
-      color 0.15s ease,
-      background 0.15s ease;
+      color var(--ui-duration-fast) var(--ui-ease-standard),
+      background-color var(--ui-duration-fast) var(--ui-ease-standard);
 
     mat-icon {
       font-size: 20px;
@@ -142,7 +142,7 @@
     }
     &:hover {
       color: var(--mat-sys-primary);
-      background: var(--arco-fill-hover);
+      background: var(--ui-color-hover);
     }
     &.danger:hover {
       color: var(--mat-sys-error);
@@ -156,7 +156,7 @@
   align-items: center;
   gap: 4px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--ui-radius-pill);
   font-size: 13px;
   font-weight: 500;
   border: 1px solid;
@@ -169,35 +169,17 @@
 }
 
 .badge-menu {
-  color: #2563eb;
-  background: #eff6ff;
-  border-color: #dbeafe;
+  color: var(--ui-color-info);
+  background: var(--ui-color-info-soft);
+  border-color: var(--ui-color-info-border);
 }
 .badge-button {
-  color: #ea580c;
-  background: #fff7ed;
-  border-color: #ffedd5;
+  color: var(--ui-color-warning);
+  background: var(--ui-color-warning-soft);
+  border-color: var(--ui-color-warning-border);
 }
 .badge-api {
-  color: #7c3aed;
-  background: #faf5ff;
-  border-color: #f3e8ff;
-}
-
-[data-theme='dark'] {
-  .badge-menu {
-    color: #93c5fd;
-    background: rgba(37, 99, 235, 0.15);
-    border-color: rgba(37, 99, 235, 0.35);
-  }
-  .badge-button {
-    color: #fdba74;
-    background: rgba(234, 88, 12, 0.15);
-    border-color: rgba(234, 88, 12, 0.35);
-  }
-  .badge-api {
-    color: #c4b5fd;
-    background: rgba(124, 58, 237, 0.15);
-    border-color: rgba(124, 58, 237, 0.35);
-  }
+  color: var(--ui-color-feature);
+  background: var(--ui-color-feature-soft);
+  border-color: var(--ui-color-feature-border);
 }

@@ -3,6 +3,7 @@
    主题:通过覆盖 M3 --mat-sys-* 令牌实现 Arco 蓝视觉
    ============================================================ */
 @use '@angular/material' as mat;
+@use './styles/tokens';
 
 /* 1) Material 基础主题:生成组件所需的完整 --mat-sys-* 变量集 */
 $theme: mat.define-theme(
@@ -45,164 +46,13 @@ $dark-theme: mat.define-theme(
 
 :root {
   @include mat.theme($theme);
+  @include tokens.foundation;
+  @include tokens.light;
 }
 
 [data-theme='dark'] {
   @include mat.theme($dark-theme);
-}
-
-/* ============================================================
-   2) Arco 设计令牌覆盖(light)
-   ============================================================ */
-:root {
-  /* --- Primary Brand Colors (Arco Blue) --- */
-  --mat-sys-primary: #165dff;
-  --mat-sys-on-primary: #ffffff;
-  --mat-sys-primary-container: #e8f3ff;
-  --mat-sys-on-primary-container: #165dff;
-  --mat-sys-inverse-primary: #94bfff;
-
-  /* --- Surface & Background --- */
-  --mat-sys-surface: #f8f9ff;
-  --mat-sys-on-surface: #1d2129;
-  --mat-sys-surface-variant: #f2f3f5;
-  --mat-sys-on-surface-variant: #4e5969;
-
-  /* Container Levels */
-  --mat-sys-surface-container-lowest: #ffffff;
-  --mat-sys-surface-container-low: #f7f8fa;
-  --mat-sys-surface-container: #ffffff;
-  --mat-sys-surface-container-high: #e5e6eb;
-  --mat-sys-surface-container-highest: #f2f3f5;
-
-  /* --- Secondary / Neutral --- */
-  --mat-sys-secondary: #4e5969;
-  --mat-sys-on-secondary: #ffffff;
-  --mat-sys-secondary-container: #f2f3f5;
-  --mat-sys-on-secondary-container: #1d2129;
-
-  /* --- Semantic Colors (Arco Standard) --- */
-  --mat-sys-success: #00b42a;
-  --mat-sys-on-success: #ffffff;
-  --mat-sys-success-container: #e8ffea;
-
-  --mat-sys-error: #f53f3f;
-  --mat-sys-on-error: #ffffff;
-  --mat-sys-error-container: #ffece8;
-
-  --mat-sys-warning: #ff7d00;
-  --mat-sys-on-warning: #ffffff;
-  --mat-sys-warning-container: #fff7e8;
-
-  /* --- Outline & Borders --- */
-  --mat-sys-outline: #e5e6eb;
-  --mat-sys-outline-variant: #f2f3f5;
-
-  /* --- Typography (Ant Design 中后台字体规范) --- */
-  --mat-sys-font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC',
-    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-
-  --mat-sys-display-large-size: 56px;
-  --mat-sys-headline-large-size: 32px;
-  --mat-sys-headline-large-weight: 600;
-  --mat-sys-headline-medium-size: 24px;
-  --mat-sys-headline-medium-weight: 600;
-
-  --mat-sys-title-large-size: 18px;
-  --mat-sys-title-large-weight: 500;
-  --mat-sys-title-medium-size: 16px;
-  --mat-sys-title-medium-weight: 500;
-  --mat-sys-body-large-size: 16px;
-  --mat-sys-body-medium-size: 14px;
-  --mat-sys-body-small-size: 12px;
-
-  /* --- Shapes & Elevation --- */
-  --mat-sys-corner-none: 0px;
-  --mat-sys-corner-extra-small: 2px;
-  --mat-sys-corner-small: 4px; /* Arco Standard Rounding */
-  --mat-sys-corner-medium: 8px;
-  --mat-sys-corner-large: 12px;
-  --mat-sys-corner-full: 9999px;
-
-  /* Elevation (Arco Shadows) */
-  --mat-sys-elevation-level1: 0 2px 4px rgba(0, 0, 0, 0.08);
-  --mat-sys-elevation-level2: 0 4px 10px rgba(0, 0, 0, 0.1);
-  --mat-sys-elevation-level3: 0 8px 20px rgba(0, 0, 0, 0.12);
-
-  /* --- Arco 扩展语义令牌(供自定义样式使用) --- */
-  --arco-link: #165dff;
-  --arco-border: #e5e6eb;
-  --arco-fill-hover: #f2f3f5;
-  --arco-text-primary: #1d2129;
-  --arco-text-secondary: #4e5969;
-  --arco-text-tertiary: #86909c;
-  --arco-bg-white: #ffffff;
-  --arco-bg-mesh: #f8f9ff;
-
-  color-scheme: light;
-}
-
-/* ============================================================
-   3) Arco 设计令牌覆盖(dark)
-   ============================================================ */
-[data-theme='dark'] {
-  --mat-sys-primary: #165dff;
-  --mat-sys-on-primary: #ffffff;
-  --mat-sys-primary-container: #165dff33;
-  --mat-sys-on-primary-container: #6ab1ff;
-
-  --mat-sys-surface: #131315;
-  --mat-sys-on-surface: #f2f3f5;
-  --mat-sys-surface-variant: #232324;
-  --mat-sys-on-surface-variant: #86909c;
-
-  --mat-sys-surface-container-lowest: #0e0e10;
-  --mat-sys-surface-container-low: #1b1b1d;
-  --mat-sys-surface-container: #1d1d1f;
-  --mat-sys-surface-container-high: #2e2e30;
-  --mat-sys-surface-container-highest: #333335;
-
-  --mat-sys-outline: #333335;
-  --mat-sys-outline-variant: #232324;
-
-  --mat-sys-secondary: #86909c;
-  --mat-sys-on-secondary: #ffffff;
-
-  --mat-sys-success-container: #00b42a33;
-  --mat-sys-error-container: #f53f3f33;
-  --mat-sys-warning-container: #ff7d0033;
-
-  --mat-sys-elevation-level1: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --mat-sys-elevation-level2: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --mat-sys-elevation-level3: 0 8px 24px rgba(0, 0, 0, 0.6);
-
-  /* 补充:组件可能用到的 fixed / tint / inverse 系列(dark) */
-  --mat-sys-primary-fixed: #b6c4ff;
-  --mat-sys-primary-fixed-dim: #94bfff;
-  --mat-sys-on-primary-fixed: #00164f;
-  --mat-sys-on-primary-fixed-variant: #6ab1ff;
-  --mat-sys-surface-tint: #6ab1ff;
-  --mat-sys-inverse-surface: #e1e2e4;
-  --mat-sys-inverse-on-surface: #2b2b2d;
-  --mat-sys-inverse-primary: #165dff;
-  --mat-sys-on-secondary-container: #c9c9cf;
-  --mat-sys-on-error-container: #ffb4ab;
-  --mat-sys-error: #f53f3f;
-  --mat-sys-on-success: #ffffff;
-  --mat-sys-on-warning: #ffffff;
-
-  /* Arco 扩展语义令牌(dark) */
-  --arco-link: #6ab1ff;
-  --arco-border: #333335;
-  --arco-fill-hover: #2e2e30;
-  --arco-text-primary: #f2f3f5;
-  --arco-text-secondary: #86909c;
-  --arco-text-tertiary: #6b6f76;
-  --arco-bg-white: #1d1d1f;
-  --arco-bg-mesh: #131315;
-
-  color-scheme: dark;
+  @include tokens.dark;
 }
 
 /* ============================================================
@@ -216,16 +66,26 @@ body {
 }
 
 body {
-  font-family: var(--mat-sys-font-family);
+  font-family: var(--ui-font-sans);
   background-color: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
   font-size: 14px;
   line-height: 22px;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 * {
   box-sizing: border-box;
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ui-color-primary);
+  outline-offset: 2px;
+}
+
+:where(button, input, select, textarea):disabled {
+  cursor: not-allowed;
 }
 
 /* Material Symbols 图标统一风格 */
@@ -248,12 +108,12 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--arco-border);
-  border-radius: 10px;
+  background: var(--ui-color-border);
+  border-radius: var(--ui-radius-pill);
 }
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--arco-border) transparent;
+  scrollbar-color: var(--ui-color-border) transparent;
 }
 
 /* 动画 */
@@ -268,7 +128,7 @@ body {
   }
 }
 .arco-animate-in {
-  animation: arco-fade-in 0.3s ease both;
+  animation: arco-fade-in var(--ui-duration-slow) var(--ui-ease-standard) both;
 }
 
 /* Material 组件微调:form-field 圆角/描边更贴近 Arco */
@@ -281,7 +141,7 @@ body {
   font-family: 'Material Symbols Outlined' !important;
   font-weight: 400;
   font-style: normal;
-  letter-spacing: normal;
+  letter-spacing: 0;
   text-transform: none;
   display: inline-block;
   white-space: nowrap;
@@ -320,10 +180,11 @@ body {
    5) 页面通用样式(Arco 风格)
    ============================================================ */
 .page {
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
-  animation: arco-fade-in 0.25s ease both;
+  padding: var(--ui-space-6);
+  animation: arco-fade-in var(--ui-duration-slow) var(--ui-ease-standard) both;
 }
 
 .page-header {
@@ -339,13 +200,13 @@ body {
     font-size: 24px;
     font-weight: 600;
     line-height: 32px;
-    color: var(--arco-text-primary);
+    color: var(--ui-color-text-primary);
   }
 
   p {
     margin: 4px 0 0;
     font-size: 14px;
-    color: var(--arco-text-secondary);
+    color: var(--ui-color-text-secondary);
   }
 }
 
@@ -362,20 +223,21 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
+  min-height: var(--ui-control-md);
+  padding: 0 var(--ui-space-5);
   border: none;
-  border-radius: 8px;
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-primary);
+  color: var(--ui-color-on-primary);
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.1s ease;
-  box-shadow: var(--mat-sys-elevation-level1);
+    background-color var(--ui-duration-fast) var(--ui-ease-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-ease-standard),
+    transform var(--ui-duration-fast) var(--ui-ease-standard);
+  box-shadow: var(--ui-shadow-sm);
 
   mat-icon {
     font-size: 20px;
@@ -384,12 +246,13 @@ body {
   }
 
   &:hover {
-    background: var(--mat-sys-primary-container);
-    color: var(--mat-sys-on-primary-container);
-    box-shadow: var(--mat-sys-elevation-level2);
+    background: var(--ui-color-primary-hover);
+    color: var(--ui-color-on-primary);
+    box-shadow: var(--ui-shadow-md);
   }
   &:active {
-    transform: scale(0.97);
+    background: var(--ui-color-primary-active);
+    transform: translateY(1px);
   }
   &:disabled {
     opacity: 0.6;
@@ -402,16 +265,19 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 16px;
-  border: 1px solid var(--arco-border);
-  border-radius: 8px;
-  background: var(--arco-bg-white);
-  color: var(--arco-text-primary);
+  min-height: var(--ui-control-md);
+  padding: 0 var(--ui-space-4);
+  border: 1px solid var(--ui-color-border-strong);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-surface-panel);
+  color: var(--ui-color-text-primary);
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition:
+    background-color var(--ui-duration-fast) var(--ui-ease-standard),
+    border-color var(--ui-duration-fast) var(--ui-ease-standard);
 
   mat-icon {
     font-size: 20px;
@@ -420,7 +286,12 @@ body {
   }
 
   &:hover {
-    background: var(--arco-fill-hover);
+    background: var(--ui-color-hover);
+    border-color: var(--ui-color-text-tertiary);
+  }
+
+  &:disabled {
+    opacity: 0.55;
   }
 }
 
@@ -432,10 +303,10 @@ body {
   gap: 24px;
   padding: 16px;
   margin-bottom: 24px;
-  background: var(--arco-bg-white);
-  border: 1px solid var(--arco-border);
-  border-radius: 12px;
-  box-shadow: var(--mat-sys-elevation-level1);
+  background: var(--ui-color-surface-panel);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow-sm);
 }
 
 .filter-search {
@@ -448,7 +319,7 @@ body {
   mat-icon {
     position: absolute;
     left: 12px;
-    color: var(--arco-text-tertiary);
+    color: var(--ui-color-text-tertiary);
     font-size: 20px;
     width: 20px;
     height: 20px;
@@ -457,24 +328,25 @@ body {
 
   input {
     width: 100%;
-    padding: 9px 12px 9px 40px;
-    border: 1px solid var(--arco-border);
-    border-radius: 8px;
+    min-height: var(--ui-control-md);
+    padding: 0 var(--ui-space-3) 0 40px;
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-lg);
     background: var(--mat-sys-surface-container-lowest);
     outline: none;
     font-family: inherit;
     font-size: 14px;
-    color: var(--arco-text-primary);
+    color: var(--ui-color-text-primary);
     transition:
-      border-color 0.15s ease,
-      box-shadow 0.15s ease;
+      border-color var(--ui-duration-fast) var(--ui-ease-standard),
+      box-shadow var(--ui-duration-fast) var(--ui-ease-standard);
 
     &::placeholder {
-      color: var(--arco-text-tertiary);
+      color: var(--ui-color-text-tertiary);
     }
     &:focus {
-      border-color: var(--mat-sys-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+      border-color: var(--ui-color-primary);
+      box-shadow: var(--ui-focus-ring);
     }
   }
 }
@@ -486,46 +358,47 @@ body {
 }
 
 .filter-select {
-  padding: 9px 12px;
-  border: 1px solid var(--arco-border);
-  border-radius: 8px;
+  min-height: var(--ui-control-md);
+  padding: 0 var(--ui-space-3);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-lg);
   background: var(--mat-sys-surface-container-lowest);
-  color: var(--arco-text-primary);
+  color: var(--ui-color-text-primary);
   font-family: inherit;
   font-size: 14px;
   outline: none;
   cursor: pointer;
   transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+    border-color var(--ui-duration-fast) var(--ui-ease-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-ease-standard);
 
   &:focus {
-    border-color: var(--mat-sys-primary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+    border-color: var(--ui-color-primary);
+    box-shadow: var(--ui-focus-ring);
   }
 }
 
 .filter-divider {
   width: 1px;
   height: 24px;
-  background: var(--arco-border);
+  background: var(--ui-color-border);
 }
 
 .filter-count {
   font-size: 13px;
-  color: var(--arco-text-secondary);
+  color: var(--ui-color-text-secondary);
   white-space: nowrap;
   b {
-    color: var(--arco-text-primary);
+    color: var(--ui-color-text-primary);
   }
 }
 
 /* 卡片 */
 .table-card {
-  background: var(--arco-bg-white);
-  border: 1px solid var(--arco-border);
-  border-radius: 12px;
-  box-shadow: var(--mat-sys-elevation-level1);
+  background: var(--ui-color-surface-panel);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow-sm);
   overflow: hidden;
 }
 
@@ -542,30 +415,30 @@ body {
   thead th {
     padding: 12px 16px;
     background: var(--mat-sys-surface-container-low);
-    border-bottom: 1px solid var(--arco-border);
+    border-bottom: 1px solid var(--ui-color-border);
     font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0;
     text-transform: uppercase;
-    color: var(--arco-text-secondary);
+    color: var(--ui-color-text-secondary);
     white-space: nowrap;
   }
 
   tbody {
     tr {
-      transition: background-color 0.15s ease;
+      transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
       &:hover {
-        background: var(--arco-fill-hover);
+        background: var(--ui-color-hover);
       }
       &.selected {
-        background: color-mix(in srgb, var(--mat-sys-primary) 5%, transparent);
+        background: var(--ui-color-selected);
       }
     }
     td {
       padding: 14px 16px;
-      border-bottom: 1px solid var(--arco-border);
+      border-bottom: 1px solid var(--ui-color-border);
       font-size: 14px;
-      color: var(--arco-text-primary);
+      color: var(--ui-color-text-primary);
       vertical-align: middle;
     }
     tr:last-child td {
@@ -588,7 +461,7 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 64px 0;
-  color: var(--arco-text-tertiary);
+  color: var(--ui-color-text-tertiary);
 
   mat-icon {
     font-size: 40px;
@@ -609,13 +482,13 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid var(--arco-border);
-  background: var(--arco-bg-white);
+  border-top: 1px solid var(--ui-color-border);
+  background: var(--ui-color-surface-panel);
 }
 
 .page-info {
   font-size: 13px;
-  color: var(--arco-text-tertiary);
+  color: var(--ui-color-text-tertiary);
 }
 
 .pagination {
@@ -629,12 +502,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--arco-border);
-    border-radius: 8px;
-    background: var(--arco-bg-white);
-    color: var(--arco-text-secondary);
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-lg);
+    background: var(--ui-color-surface-panel);
+    color: var(--ui-color-text-secondary);
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 
     mat-icon {
       font-size: 20px;
@@ -642,7 +515,7 @@ body {
       height: 20px;
     }
     &:hover:not(:disabled) {
-      background: var(--arco-fill-hover);
+      background: var(--ui-color-hover);
     }
     &:disabled {
       opacity: 0.4;
@@ -658,16 +531,16 @@ body {
     align-items: center;
     justify-content: center;
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: var(--ui-radius-lg);
     background: transparent;
-    color: var(--arco-text-secondary);
+    color: var(--ui-color-text-secondary);
     font-family: inherit;
     font-size: 14px;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 
     &:hover {
-      background: var(--arco-fill-hover);
+      background: var(--ui-color-hover);
     }
     &.active {
       background: var(--mat-sys-primary);
@@ -679,6 +552,37 @@ body {
 
   .page-ellipsis {
     padding: 0 8px;
-    color: var(--arco-text-tertiary);
+    color: var(--ui-color-text-tertiary);
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: var(--ui-space-4);
+  }
+
+  .filter-bar {
+    gap: var(--ui-space-3);
+  }
+
+  .filter-search {
+    min-width: 100%;
+  }
+
+  .filter-right {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: var(--ui-space-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
 }

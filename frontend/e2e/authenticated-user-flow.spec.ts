@@ -51,7 +51,9 @@ const roles: ApiRole[] = [
   },
 ];
 
-test('logs in, uses permission-aware navigation, and creates a user', async ({ page }) => {
+test('logs in, uses permission-aware navigation, and creates a user', async ({
+  page,
+}, testInfo) => {
   let users: ApiUser[] = [administrator];
   let createdRequest: Record<string, unknown> | null = null;
 
@@ -139,6 +141,32 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({ p
     displayName: 'New User',
     roleIds: [2],
   });
+
+  const rootToken = (name: string) =>
+    page.evaluate((tokenName) => {
+      return getComputedStyle(document.documentElement).getPropertyValue(tokenName).trim();
+    }, name);
+
+  await expect.poll(() => rootToken('--ui-color-surface-page')).toBe('#f6f8fc');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
+
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('users-light.png'), fullPage: true });
+  }
+
+  await page.getByRole('button', { name: '切换到暗色模式' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect.poll(() => rootToken('--ui-color-surface-page')).toBe('#141414');
+
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('users-dark.png'), fullPage: true });
+  }
 });
 
 test('redirects an unauthenticated deep link to login', async ({ page }) => {
