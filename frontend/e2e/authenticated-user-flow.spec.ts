@@ -214,7 +214,8 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   const viewerRow = roleTable.getByRole('row').filter({ hasText: 'Viewer' });
   await expect(viewerRow).toContainText('viewer');
   await expect(viewerRow.getByText('Active', { exact: true })).toBeVisible();
-  await expect(viewerRow.getByRole('button', { name: 'Edit Viewer' })).toBeVisible();
+  const editViewer = viewerRow.getByRole('button', { name: 'Edit Viewer' });
+  await expect(editViewer).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(
@@ -232,6 +233,20 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     await expect(page.getByText('New User created', { exact: true })).toBeHidden();
     await page.screenshot({ path: testInfo.outputPath('roles-list-light.png'), fullPage: true });
   }
+
+  await editViewer.click();
+  const roleDialog = page.getByRole('dialog');
+  await expect(roleDialog.getByRole('heading', { name: 'Edit Role' })).toBeVisible();
+  const iconSelect = roleDialog.getByRole('combobox', { name: 'Role icon' });
+  await expect(iconSelect).toContainText('Read only');
+  await iconSelect.click();
+  await expect(page.getByRole('option', { name: 'Administrator', exact: true })).toBeVisible();
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('role-icon-picker.png'), fullPage: true });
+  }
+  await page.getByRole('option', { name: 'Review', exact: true }).click();
+  await expect(iconSelect).toContainText('Review');
+  await roleDialog.getByRole('button', { name: 'Cancel' }).click();
 });
 
 test('redirects an unauthenticated deep link to login', async ({ page }) => {

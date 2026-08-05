@@ -94,6 +94,32 @@
   }
 }
 
+.icon-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-color-surface-panel);
+
+  &:focus-within {
+    border-color: var(--ui-color-primary);
+    box-shadow: var(--ui-focus-ring);
+  }
+}
+
+.icon-select-value {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+
+  mat-icon {
+    flex: 0 0 auto;
+    color: var(--mat-sys-primary);
+  }
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

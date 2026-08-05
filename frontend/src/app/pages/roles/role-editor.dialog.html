@@ -21,8 +21,31 @@
       <input id="role-category" formControlName="category" />
     </div>
     <div class="form-field">
-      <label for="role-icon">Material icon</label>
-      <input id="role-icon" formControlName="icon" />
+      <label for="role-icon">Icon</label>
+      <mat-select id="role-icon" class="icon-select" formControlName="icon" aria-label="Role icon">
+        <mat-select-trigger>
+          <span class="icon-select-value">
+            <mat-icon>{{ form.controls.icon.value }}</mat-icon>
+            <span>{{ iconLabel(form.controls.icon.value) }}</span>
+          </span>
+        </mat-select-trigger>
+        @if (role?.icon && !isKnownIcon(role!.icon)) {
+          <mat-option [value]="role!.icon">
+            <mat-icon>{{ role!.icon }}</mat-icon>
+            <span>Current icon</span>
+          </mat-option>
+        }
+        @for (group of iconGroups; track group.label) {
+          <mat-optgroup [label]="group.label">
+            @for (option of group.options; track option.value) {
+              <mat-option [value]="option.value">
+                <mat-icon>{{ option.value }}</mat-icon>
+                <span>{{ option.label }}</span>
+              </mat-option>
+            }
+          </mat-optgroup>
+        }
+      </mat-select>
     </div>
     <div class="form-field">
       <label for="role-color">Color</label>
