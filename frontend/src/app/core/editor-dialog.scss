@@ -1,11 +1,14 @@
 .editor-dialog {
-  width: min(620px, calc(100vw - 32px));
-  padding: 24px;
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 28px 32px;
   color: var(--ui-color-text-primary);
 }
 
 .compact-dialog {
-  width: min(440px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
 }
 
 .dialog-title-row {
@@ -104,7 +107,7 @@
 
 @media (max-width: 640px) {
   .editor-dialog {
-    padding: 20px;
+    padding: 20px 16px;
   }
 
   .form-grid {

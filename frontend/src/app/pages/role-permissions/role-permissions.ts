@@ -62,8 +62,9 @@ export class RolePermissionsPage implements OnInit {
       const permissionIds: string[] | undefined = await firstValueFrom(
         this.dialog
           .open(AssignPermissionsDialog, {
-            width: '720px',
-            maxWidth: '94vw',
+            width: '960px',
+            maxWidth: 'calc(100vw - 32px)',
+            maxHeight: 'calc(100dvh - 32px)',
             panelClass: 'assign-dialog-panel',
             data: { role: row, groups, assigned },
           })

@@ -128,6 +128,32 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await page.getByRole('link', { name: 'Active Users' }).click();
   await expect(page.getByRole('heading', { name: 'User Management' })).toBeVisible();
   await page.getByRole('button', { name: 'Add User' }).click();
+
+  const dialog = page.getByRole('dialog');
+  const editor = dialog.locator('.editor-dialog');
+  await expect(dialog).toBeVisible();
+  await editor.evaluate(async (element) => {
+    await Promise.allSettled(
+      element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+    );
+  });
+  const dialogBox = await dialog.boundingBox();
+  const viewport = page.viewportSize();
+  expect(dialogBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(dialogBox!.width).toBeLessThanOrEqual(viewport!.width - 16);
+  expect(dialogBox!.height).toBeLessThanOrEqual(viewport!.height - 16);
+  await expect
+    .poll(() => editor.evaluate((element) => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
+  if (viewport!.width >= 800) {
+    expect(dialogBox!.width).toBeGreaterThanOrEqual(720);
+  }
+
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('add-user-dialog.png'), fullPage: true });
+  }
+
   await page.getByLabel('Username').fill('new_user');
   await page.getByLabel('Password').fill('new-user-password');
   await page.getByLabel('Display name').fill('New User');
