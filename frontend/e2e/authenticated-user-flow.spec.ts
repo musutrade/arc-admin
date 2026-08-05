@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
-import type { ApiRole, ApiUser, CreateUserRequest } from '../src/app/core/api.models';
+import type {
+  ApiRole,
+  ApiUser,
+  ChangePasswordRequest,
+  CreateUserRequest,
+} from '../src/app/core/api.models';
 
 const administrator: ApiUser = {
   id: 1,
@@ -56,6 +61,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
 }, testInfo) => {
   let users: ApiUser[] = [administrator];
   let createdRequest: Record<string, unknown> | null = null;
+  let passwordChangeRequest: ChangePasswordRequest | null = null;
 
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
@@ -73,6 +79,9 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       await route.fulfill({ json: administrator });
     } else if (path === '/api/v1/auth/me/permissions') {
       await route.fulfill({ json: { codes: permissions } });
+    } else if (path === '/api/v1/auth/me/password' && request.method() === 'PUT') {
+      passwordChangeRequest = request.postDataJSON() as ChangePasswordRequest;
+      await route.fulfill({ status: 204 });
     } else if (path === '/api/v1/permissions/groups') {
       await route.fulfill({ json: [] });
     } else if (path === '/api/v1/dashboard/stats') {
@@ -119,6 +128,41 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await page.getByLabel('Password').fill('safe-password');
   await page.getByRole('button', { name: 'Login' }).click();
   await expect(page.getByRole('heading', { name: 'Resource Access Control' })).toBeVisible();
+
+  await page.getByRole('button', { name: '账户菜单' }).click();
+  await expect(page.getByRole('menuitem', { name: '修改密码' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '退出登录' })).toBeVisible();
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('account-menu.png') });
+  }
+  await page.getByRole('menuitem', { name: '修改密码' }).click();
+
+  const changePasswordDialog = page.getByRole('dialog');
+  await expect(changePasswordDialog.getByRole('heading', { name: '修改密码' })).toBeVisible();
+  await changePasswordDialog.locator('.editor-dialog').evaluate(async (element) => {
+    await Promise.allSettled(
+      element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+    );
+  });
+  await changePasswordDialog.getByLabel('当前密码', { exact: true }).fill('safe-password');
+  await changePasswordDialog.getByLabel('新密码', { exact: true }).fill('updated-safe-password');
+  await changePasswordDialog.getByLabel('确认新密码').fill('different-password');
+  await changePasswordDialog.getByLabel('确认新密码').blur();
+  await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeVisible();
+  await changePasswordDialog.getByLabel('确认新密码').fill('updated-safe-password');
+
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('change-password-dialog.png') });
+  }
+
+  await changePasswordDialog.getByRole('button', { name: '保存修改' }).click();
+  await expect(changePasswordDialog).toBeHidden();
+  expect(passwordChangeRequest).toEqual({
+    currentPassword: 'safe-password',
+    newPassword: 'updated-safe-password',
+  });
+  await expect(page.getByText('密码修改成功', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '关闭' }).click();
 
   const mobileMenu = page.getByRole('button', { name: '打开菜单' });
   if (await mobileMenu.isVisible()) {

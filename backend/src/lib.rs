@@ -25,6 +25,7 @@ const HEALTHZ_PATH: &str = "/api/v1/healthz";
 const READYZ_PATH: &str = "/api/v1/readyz";
 const LOGIN_PATH: &str = "/api/v1/auth/login";
 const CURRENT_USER_PATH: &str = "/api/v1/auth/me";
+const CURRENT_USER_PASSWORD_PATH: &str = "/api/v1/auth/me/password";
 const CURRENT_USER_PERMISSIONS_PATH: &str = "/api/v1/auth/me/permissions";
 const USERS_PATH: &str = "/api/v1/users";
 const USER_PATH: &str = "/api/v1/users/{id}";
@@ -41,6 +42,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (READYZ_PATH, &["get"]),
     (LOGIN_PATH, &["post"]),
     (CURRENT_USER_PATH, &["get"]),
+    (CURRENT_USER_PASSWORD_PATH, &["put"]),
     (CURRENT_USER_PERMISSIONS_PATH, &["get"]),
     (USERS_PATH, &["get", "post"]),
     (USER_PATH, &["get", "put", "delete"]),
@@ -138,6 +140,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(READYZ_PATH, get(readyz))
         .route(LOGIN_PATH, post(handlers::auth::login))
         .route(CURRENT_USER_PATH, get(handlers::auth::me))
+        .route(
+            CURRENT_USER_PASSWORD_PATH,
+            put(handlers::auth::change_password),
+        )
         .route(
             CURRENT_USER_PERMISSIONS_PATH,
             get(handlers::auth::me_permissions),

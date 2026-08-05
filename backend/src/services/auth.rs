@@ -2,7 +2,10 @@
 
 use crate::auth::Claims;
 use crate::error::{db_error, ApiError};
-use crate::models::{user_response, LoginRequest, LoginResponse, PermissionCodes, UserResponse};
+use crate::models::{
+    user_response, ChangePasswordRequest, LoginRequest, LoginResponse, PermissionCodes,
+    UserResponse,
+};
 use crate::repositories;
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
@@ -66,6 +69,41 @@ pub async fn me(pool: &PgPool, user_id: i64) -> Result<UserResponse, ApiError> {
         .await
         .map_err(db_error)?;
     Ok(user_response(row, roles))
+}
+
+pub async fn change_password(
+    pool: &PgPool,
+    user_id: i64,
+    req: &ChangePasswordRequest,
+) -> Result<(), ApiError> {
+    if req.current_password.is_empty() {
+        return Err(ApiError::validation("当前密码不能为空"));
+    }
+    if req.new_password.len() < 8 {
+        return Err(ApiError::validation("新密码长度不能少于 8 位"));
+    }
+    if req.current_password == req.new_password {
+        return Err(ApiError::validation("新密码不能与当前密码相同"));
+    }
+
+    let row = repositories::users::find_by_id(pool, user_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(ApiError::unauthorized)?;
+    let parsed = PasswordHash::new(&row.password_hash)
+        .map_err(|error| ApiError::internal(format!("invalid stored password hash: {error}")))?;
+    Argon2::default()
+        .verify_password(req.current_password.as_bytes(), &parsed)
+        .map_err(|_| ApiError::validation("当前密码不正确"))?;
+
+    let password_hash = hash_password(&req.new_password)?;
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    repositories::users::update_password(&mut transaction, user_id, &password_hash)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(ApiError::unauthorized)?;
+    transaction.commit().await.map_err(db_error)?;
+    Ok(())
 }
 
 pub async fn permission_codes(pool: &PgPool, user_id: i64) -> Result<PermissionCodes, ApiError> {

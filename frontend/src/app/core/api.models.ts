@@ -23,6 +23,11 @@ export interface LoginResponse {
   user: ApiUser;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface PermissionCodes {
   codes: string[];
 }

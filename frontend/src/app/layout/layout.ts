@@ -3,13 +3,24 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ThemeService } from '../core/theme.service';
 import { AuthService } from '../core/auth.service';
+import { ChangePasswordDialog } from '../core/change-password.dialog';
 
 @Component({
   selector: 'app-layout',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, MatMenuModule],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    MatIconModule,
+    MatDialogModule,
+    MatMenuModule,
+    MatSnackBarModule,
+  ],
   templateUrl: './layout.html',
   styleUrl: './layout.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,6 +35,8 @@ export class LayoutComponent {
   private readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dialog = inject(MatDialog);
+  private readonly snackBar = inject(MatSnackBar);
   readonly auth = inject(AuthService);
   readonly isDark = this.theme.isDark;
 
@@ -63,6 +76,18 @@ export class LayoutComponent {
 
   can(permission: string): boolean {
     return this.auth.hasPermission(permission);
+  }
+
+  openChangePassword(): void {
+    this.dialog
+      .open(ChangePasswordDialog)
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((changed: boolean | undefined) => {
+        if (changed) {
+          this.snackBar.open('密码修改成功', '关闭', { duration: 3000 });
+        }
+      });
   }
 
   logout(): void {

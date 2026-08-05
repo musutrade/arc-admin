@@ -78,4 +78,18 @@ describe('AuthService', () => {
     expect(service.currentUser()).toBeNull();
     expect(service.permissions().size).toBe(0);
   });
+
+  it('changes the current user password', async () => {
+    const request = {
+      currentPassword: 'current-password',
+      newPassword: 'updated-password',
+    };
+    const result = service.changePassword(request);
+    const apiRequest = http.expectOne('/api/v1/auth/me/password');
+
+    expect(apiRequest.request.method).toBe('PUT');
+    expect(apiRequest.request.body).toEqual(request);
+    apiRequest.flush(null, { status: 204, statusText: 'No Content' });
+    await result;
+  });
 });

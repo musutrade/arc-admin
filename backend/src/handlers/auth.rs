@@ -2,10 +2,13 @@
 
 use crate::auth::AuthUser;
 use crate::error::ApiError;
-use crate::models::{LoginRequest, LoginResponse, PermissionCodes, UserResponse};
+use crate::models::{
+    ChangePasswordRequest, LoginRequest, LoginResponse, PermissionCodes, UserResponse,
+};
 use crate::services;
 use crate::AppState;
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::Json;
 
 pub async fn login(
@@ -24,6 +27,15 @@ pub async fn me(
     services::auth::me(&state.pool, auth.user_id)
         .await
         .map(Json)
+}
+
+pub async fn change_password(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(req): Json<ChangePasswordRequest>,
+) -> Result<StatusCode, ApiError> {
+    services::auth::change_password(&state.pool, auth.user_id, &req).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn me_permissions(auth: AuthUser) -> Result<Json<PermissionCodes>, ApiError> {

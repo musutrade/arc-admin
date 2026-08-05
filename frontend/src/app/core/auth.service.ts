@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL } from './api.config';
-import { ApiUser, LoginResponse, PermissionCodes } from './api.models';
+import { ApiUser, ChangePasswordRequest, LoginResponse, PermissionCodes } from './api.models';
 import { AuthTokenStore } from './auth-token.store';
 
 @Injectable({ providedIn: 'root' })
@@ -61,6 +61,10 @@ export class AuthService {
 
   hasPermission(code: string): boolean {
     return this.permissionState().has(code);
+  }
+
+  async changePassword(request: ChangePasswordRequest): Promise<void> {
+    await firstValueFrom(this.http.put<void>(`${this.apiBaseUrl}/auth/me/password`, request));
   }
 
   logout(): void {

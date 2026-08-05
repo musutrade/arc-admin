@@ -115,6 +115,25 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /auth/me/password:
+    put:
+      tags: [auth]
+      summary: 修改当前用户密码
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: 密码修改成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /auth/me/permissions:
     get:
       tags: [auth]
@@ -537,6 +556,17 @@ components:
       properties:
         username: { type: string }
         password: { type: string, format: password }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
     LoginResponse:
       type: object
       required: [accessToken, tokenType, expiresIn, user]

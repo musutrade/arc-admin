@@ -106,6 +106,100 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::OK);
     let token = login["accessToken"].as_str().expect("access token");
 
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        "/api/v1/auth/me/password",
+        None,
+        Some(json!({
+            "currentPassword": "integration-admin-password",
+            "newPassword": "updated-integration-admin-password"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, error) = send(
+        &app,
+        Method::PUT,
+        "/api/v1/auth/me/password",
+        Some(token),
+        Some(json!({
+            "currentPassword": "integration-admin-password",
+            "newPassword": "short"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(error["error"]["message"], "新密码长度不能少于 8 位");
+
+    let (status, error) = send(
+        &app,
+        Method::PUT,
+        "/api/v1/auth/me/password",
+        Some(token),
+        Some(json!({
+            "currentPassword": "integration-admin-password",
+            "newPassword": "integration-admin-password"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(error["error"]["message"], "新密码不能与当前密码相同");
+
+    let (status, error) = send(
+        &app,
+        Method::PUT,
+        "/api/v1/auth/me/password",
+        Some(token),
+        Some(json!({
+            "currentPassword": "incorrect-password",
+            "newPassword": "updated-integration-admin-password"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(error["error"]["message"], "当前密码不正确");
+
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        "/api/v1/auth/me/password",
+        Some(token),
+        Some(json!({
+            "currentPassword": "integration-admin-password",
+            "newPassword": "updated-integration-admin-password"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": "admin",
+            "password": "integration-admin-password"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": "admin",
+            "password": "updated-integration-admin-password"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, permission_groups) = send(
         &app,
         Method::GET,
