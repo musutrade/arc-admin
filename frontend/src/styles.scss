@@ -176,6 +176,19 @@ body {
   overflow: hidden;
 }
 
+/* 顶部消息避开固定顶栏，并为刘海屏保留安全区。 */
+.mat-mdc-snack-bar-container.app-snackbar {
+  margin-top: calc(56px + max(var(--ui-space-3), env(safe-area-inset-top, 0px)));
+
+  .mdc-snackbar__surface {
+    background-color: var(--ui-color-surface-panel);
+  }
+
+  .mat-mdc-snack-bar-label {
+    color: var(--ui-color-text-primary);
+  }
+}
+
 /* ============================================================
    5) 页面通用样式(Arco 风格)
    ============================================================ */
@@ -557,6 +570,11 @@ body {
 }
 
 @media (max-width: 768px) {
+  .mat-mdc-snack-bar-container.app-snackbar {
+    width: calc(100vw - var(--ui-space-4) * 2);
+    margin-top: calc(56px + max(var(--ui-space-2), env(safe-area-inset-top, 0px)));
+  }
+
   .page {
     padding: var(--ui-space-4);
   }

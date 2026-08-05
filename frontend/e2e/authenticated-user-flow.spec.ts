@@ -167,6 +167,30 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     displayName: 'New User',
     roleIds: [2],
   });
+  const snackBar = page.locator('mat-snack-bar-container');
+  await expect(snackBar).toBeVisible();
+  await snackBar.evaluate(async (element) => {
+    await Promise.allSettled(
+      element.getAnimations({ subtree: true }).map(({ finished }) => finished),
+    );
+  });
+  await expect
+    .poll(() =>
+      snackBar
+        .locator('.mdc-snackbar__surface')
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .not.toBe('rgba(0, 0, 0, 0)');
+  const snackBarBox = await snackBar.boundingBox();
+  expect(snackBarBox).not.toBeNull();
+  expect(snackBarBox!.y).toBeGreaterThanOrEqual(64);
+  expect(snackBarBox!.width).toBeLessThanOrEqual(viewport!.width - 16);
+  expect(snackBarBox!.x + snackBarBox!.width / 2).toBeCloseTo(viewport!.width / 2, 0);
+
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('users-snackbar.png'), fullPage: true });
+  }
+
   const closeSnackBar = page.getByRole('button', { name: 'Close' });
   if (await closeSnackBar.isVisible()) {
     await closeSnackBar.click();
