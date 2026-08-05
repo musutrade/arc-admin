@@ -20,7 +20,7 @@ export interface ConfirmDialogData {
       </div>
       <p class="dialog-message">{{ data.message }}</p>
       <div class="dialog-actions">
-        <button type="button" class="btn-outline" mat-dialog-close>Cancel</button>
+        <button type="button" class="btn-outline" mat-dialog-close>取消</button>
         <button
           type="button"
           class="btn-primary"

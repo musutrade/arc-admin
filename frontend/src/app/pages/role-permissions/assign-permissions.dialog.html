@@ -2,8 +2,8 @@
   <!-- Header -->
   <div class="dialog-header">
     <div>
-      <h2>Assign Permissions - {{ data.role.roleName }}</h2>
-      <p>Configure functional access rights for this role level.</p>
+      <h2>分配权限 - {{ data.role.roleName }}</h2>
+      <p>为当前角色配置功能访问权限。</p>
     </div>
     <button class="close-btn" (click)="onCancel()" aria-label="关闭">
       <mat-icon>close</mat-icon>
@@ -16,7 +16,7 @@
       <mat-icon>search</mat-icon>
       <input
         type="text"
-        placeholder="Search permissions (e.g. 'audit', 'user')..."
+        placeholder="搜索权限名称或编码，例如 audit、user..."
         [value]="search()"
         (input)="searchPermissions($any($event.target).value)"
       />
@@ -24,12 +24,12 @@
     <div class="toolbar-actions">
       <button class="toolbar-link" (click)="selectAll()">
         <mat-icon>done_all</mat-icon>
-        Select All
+        全选
       </button>
       <span class="toolbar-divider"></span>
       <button class="toolbar-link" (click)="invertSelection()">
         <mat-icon>swap_horiz</mat-icon>
-        Invert Selection
+        反选
       </button>
     </div>
   </div>
@@ -73,8 +73,8 @@
       已选择 <b>{{ selectedCount() }}</b> / {{ visibleCount() }} 个可见权限
     </span>
     <div class="footer-actions">
-      <button class="btn-outline" (click)="onCancel()">Cancel</button>
-      <button class="btn-primary" (click)="onSave()">Save Changes</button>
+      <button class="btn-outline" (click)="onCancel()">取消</button>
+      <button class="btn-primary" (click)="onSave()">保存修改</button>
     </div>
   </div>
 </div>

@@ -2,8 +2,8 @@
   <!-- 页面头部 -->
   <div class="page-header">
     <div>
-      <h1>Role Management</h1>
-      <p>Define, organize, and assign granular permissions to organizational roles.</p>
+      <h1>角色管理</h1>
+      <p>定义和组织系统角色，并为角色分配精细化权限。</p>
     </div>
     <div class="header-actions">
       <div class="view-toggle">
@@ -27,7 +27,7 @@
       @if (canWrite()) {
         <button class="btn-primary" (click)="onCreateRole()" [disabled]="busy()">
           <mat-icon>add_circle</mat-icon>
-          <span>Create Role</span>
+          <span>创建角色</span>
         </button>
       }
     </div>
@@ -56,7 +56,7 @@
           <div class="role-card-foot">
             <div class="role-members">
               <mat-icon>group</mat-icon>
-              <span>{{ r.members }} Members</span>
+              <span>{{ r.members }} 名成员</span>
             </div>
             <div class="role-card-actions">
               @if (canWrite()) {
@@ -66,7 +66,7 @@
                   (click)="onEditRole(r)"
                   [disabled]="busy()"
                 >
-                  Edit Role
+                  编辑角色
                 </button>
               }
               @if (canAssign() && r.code !== 'super_admin') {
@@ -76,7 +76,7 @@
                   (click)="onEditPermissions(r)"
                   [disabled]="busy()"
                 >
-                  Permissions <mat-icon>arrow_forward</mat-icon>
+                  权限设置 <mat-icon>arrow_forward</mat-icon>
                 </button>
               }
             </div>
@@ -91,12 +91,12 @@
         <table class="data-table roles-table">
           <thead>
             <tr>
-              <th>Role</th>
-              <th>Category</th>
-              <th>Members</th>
-              <th>Status</th>
-              <th>Description</th>
-              <th class="th-actions">Actions</th>
+              <th>角色</th>
+              <th>分类</th>
+              <th>成员</th>
+              <th>状态</th>
+              <th>描述</th>
+              <th class="th-actions">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -122,7 +122,7 @@
                 <td>
                   <span class="status-badge" [class.st-active]="r.isActive">
                     <span class="status-dot"></span>
-                    {{ r.isActive ? 'Active' : 'Inactive' }}
+                    {{ r.isActive ? '启用' : '停用' }}
                   </span>
                 </td>
                 <td class="cell-secondary list-desc" [title]="r.description">
@@ -135,8 +135,8 @@
                       class="row-btn"
                       (click)="onEditRole(r)"
                       [disabled]="busy()"
-                      [attr.aria-label]="'Edit ' + r.name"
-                      title="Edit role"
+                      [attr.aria-label]="'编辑角色 ' + r.name"
+                      title="编辑角色"
                     >
                       <mat-icon>edit</mat-icon>
                     </button>
@@ -147,8 +147,8 @@
                       class="row-btn"
                       (click)="onEditPermissions(r)"
                       [disabled]="busy()"
-                      [attr.aria-label]="'Edit permissions for ' + r.name"
-                      title="Edit permissions"
+                      [attr.aria-label]="'编辑权限 ' + r.name"
+                      title="编辑权限"
                     >
                       <mat-icon>tune</mat-icon>
                     </button>
@@ -159,8 +159,8 @@
                       class="row-btn danger"
                       (click)="onDeleteRole(r)"
                       [disabled]="busy()"
-                      [attr.aria-label]="'Delete ' + r.name"
-                      title="Delete role"
+                      [attr.aria-label]="'删除角色 ' + r.name"
+                      title="删除角色"
                     >
                       <mat-icon>delete</mat-icon>
                     </button>
@@ -182,10 +182,10 @@
       </div>
       <div class="table-footer role-table-footer">
         <span class="page-info">
-          Showing {{ roles().length > 0 ? 1 : 0 }}-{{ roles().length }} of
-          {{ roles().length }} entries
+          显示第 {{ roles().length > 0 ? 1 : 0 }}-{{ roles().length }} 条，共
+          {{ roles().length }} 条
         </span>
-        <span class="role-total"><mat-icon>badge</mat-icon>{{ roles().length }} roles</span>
+        <span class="role-total"><mat-icon>badge</mat-icon>{{ roles().length }} 个角色</span>
       </div>
     </div>
   }

@@ -1,28 +1,28 @@
 <form class="editor-dialog" [formGroup]="form" (ngSubmit)="submit()">
   <div class="dialog-title-row">
     <mat-icon>{{ role ? 'edit' : 'add_circle' }}</mat-icon>
-    <h2>{{ role ? 'Edit Role' : 'Create Role' }}</h2>
+    <h2>{{ role ? '编辑角色' : '创建角色' }}</h2>
   </div>
 
   <div class="form-grid">
     <div class="form-field">
-      <label for="role-code">Code</label>
+      <label for="role-code">角色编码</label>
       <input id="role-code" formControlName="code" autocomplete="off" />
       @if (form.controls.code.touched && form.controls.code.invalid) {
-        <small>Use 3-64 lowercase letters, numbers, or underscores.</small>
+        <small>请输入 3-64 位小写字母、数字或下划线。</small>
       }
     </div>
     <div class="form-field">
-      <label for="role-name">Name</label>
+      <label for="role-name">角色名称</label>
       <input id="role-name" formControlName="name" />
     </div>
     <div class="form-field">
-      <label for="role-category">Category</label>
+      <label for="role-category">角色分类</label>
       <input id="role-category" formControlName="category" />
     </div>
     <div class="form-field">
-      <label for="role-icon">Icon</label>
-      <mat-select id="role-icon" class="icon-select" formControlName="icon" aria-label="Role icon">
+      <label for="role-icon">图标</label>
+      <mat-select id="role-icon" class="icon-select" formControlName="icon" aria-label="角色图标">
         <mat-select-trigger>
           <span class="icon-select-value">
             <mat-icon>{{ form.controls.icon.value }}</mat-icon>
@@ -32,7 +32,7 @@
         @if (role?.icon && !isKnownIcon(role!.icon)) {
           <mat-option [value]="role!.icon">
             <mat-icon>{{ role!.icon }}</mat-icon>
-            <span>Current icon</span>
+            <span>当前图标</span>
           </mat-option>
         }
         @for (group of iconGroups; track group.label) {
@@ -48,30 +48,30 @@
       </mat-select>
     </div>
     <div class="form-field">
-      <label for="role-color">Color</label>
+      <label for="role-color">颜色</label>
       <select id="role-color" formControlName="color">
-        <option value="primary">Primary</option>
-        <option value="success">Success</option>
-        <option value="warning">Warning</option>
-        <option value="danger">Danger</option>
-        <option value="neutral">Neutral</option>
+        <option value="primary">主色</option>
+        <option value="success">成功</option>
+        <option value="warning">警告</option>
+        <option value="danger">危险</option>
+        <option value="neutral">中性</option>
       </select>
     </div>
     <div class="form-field">
-      <label for="role-active">Status</label>
+      <label for="role-active">状态</label>
       <select id="role-active" formControlName="isActive">
-        <option [ngValue]="true">Active</option>
-        <option [ngValue]="false">Inactive</option>
+        <option [ngValue]="true">启用</option>
+        <option [ngValue]="false">停用</option>
       </select>
     </div>
     <div class="form-field full-width">
-      <label for="role-description">Description</label>
+      <label for="role-description">描述</label>
       <textarea id="role-description" formControlName="description"></textarea>
     </div>
   </div>
 
   <div class="dialog-actions">
-    <button type="button" class="btn-outline" mat-dialog-close>Cancel</button>
-    <button type="submit" class="btn-primary">Save Role</button>
+    <button type="button" class="btn-outline" mat-dialog-close>取消</button>
+    <button type="submit" class="btn-primary">保存角色</button>
   </div>
 </form>

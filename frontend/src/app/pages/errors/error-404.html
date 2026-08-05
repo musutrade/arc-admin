@@ -13,11 +13,8 @@
 
     <!-- 文案 -->
     <div class="n404-text">
-      <h2 class="error-title large">System Endpoint Not Found</h2>
-      <p class="error-desc wide">
-        The requested access control node or resource page does not exist. It might have been
-        migrated, deleted, or you may have entered an incorrect path.
-      </p>
+      <h2 class="error-title large">页面不存在</h2>
+      <p class="error-desc wide">请求的页面不存在，可能已被移动、删除，或访问地址有误。</p>
     </div>
 
     <!-- Actions -->
@@ -25,11 +22,11 @@
       <div class="n404-buttons">
         <button class="btn-primary" (click)="goHome()">
           <mat-icon>home</mat-icon>
-          Back to Dashboard
+          返回首页
         </button>
         <button class="btn-secondary" (click)="goBack()">
           <mat-icon>arrow_back</mat-icon>
-          Previous Page
+          返回上一页
         </button>
       </div>
     </div>

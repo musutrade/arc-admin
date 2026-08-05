@@ -17,55 +17,55 @@ interface RoleIconGroup {
 
 const ROLE_ICON_GROUPS: readonly RoleIconGroup[] = [
   {
-    label: 'People',
+    label: '人员',
     options: [
-      { value: 'badge', label: 'Role badge' },
-      { value: 'person', label: 'Person' },
-      { value: 'group', label: 'Team' },
-      { value: 'groups', label: 'Organization' },
-      { value: 'supervisor_account', label: 'Supervisor' },
-      { value: 'manage_accounts', label: 'Account manager' },
-      { value: 'engineering', label: 'Engineer' },
-      { value: 'support_agent', label: 'Support' },
+      { value: 'badge', label: '角色徽章' },
+      { value: 'person', label: '人员' },
+      { value: 'group', label: '团队' },
+      { value: 'groups', label: '组织' },
+      { value: 'supervisor_account', label: '主管' },
+      { value: 'manage_accounts', label: '账号管理员' },
+      { value: 'engineering', label: '工程师' },
+      { value: 'support_agent', label: '客服支持' },
     ],
   },
   {
-    label: 'Access and security',
+    label: '访问与安全',
     options: [
-      { value: 'admin_panel_settings', label: 'Administrator' },
-      { value: 'shield', label: 'Security' },
-      { value: 'verified_user', label: 'Verified user' },
-      { value: 'lock', label: 'Restricted access' },
-      { value: 'key', label: 'Access key' },
-      { value: 'policy', label: 'Policy' },
-      { value: 'gavel', label: 'Compliance' },
-      { value: 'visibility', label: 'Read only' },
+      { value: 'admin_panel_settings', label: '管理员' },
+      { value: 'shield', label: '安全' },
+      { value: 'verified_user', label: '已验证用户' },
+      { value: 'lock', label: '受限访问' },
+      { value: 'key', label: '访问密钥' },
+      { value: 'policy', label: '策略' },
+      { value: 'gavel', label: '合规' },
+      { value: 'visibility', label: '只读' },
     ],
   },
   {
-    label: 'Organization',
+    label: '组织',
     options: [
-      { value: 'business', label: 'Business' },
-      { value: 'corporate_fare', label: 'Company' },
-      { value: 'account_balance', label: 'Institution' },
-      { value: 'apartment', label: 'Department' },
-      { value: 'store', label: 'Branch' },
-      { value: 'public', label: 'Global' },
-      { value: 'hub', label: 'Network' },
-      { value: 'folder', label: 'Group' },
+      { value: 'business', label: '业务' },
+      { value: 'corporate_fare', label: '公司' },
+      { value: 'account_balance', label: '机构' },
+      { value: 'apartment', label: '部门' },
+      { value: 'store', label: '分支' },
+      { value: 'public', label: '全局' },
+      { value: 'hub', label: '网络' },
+      { value: 'folder', label: '分组' },
     ],
   },
   {
-    label: 'Work and workflow',
+    label: '工作与流程',
     options: [
-      { value: 'work', label: 'Work' },
-      { value: 'assignment', label: 'Assignment' },
-      { value: 'task_alt', label: 'Tasks' },
-      { value: 'approval', label: 'Approval' },
-      { value: 'fact_check', label: 'Review' },
-      { value: 'dashboard', label: 'Dashboard' },
-      { value: 'settings', label: 'Settings' },
-      { value: 'tune', label: 'Configuration' },
+      { value: 'work', label: '工作' },
+      { value: 'assignment', label: '分派' },
+      { value: 'task_alt', label: '任务' },
+      { value: 'approval', label: '审批' },
+      { value: 'fact_check', label: '审核' },
+      { value: 'dashboard', label: '仪表盘' },
+      { value: 'settings', label: '设置' },
+      { value: 'tune', label: '配置' },
     ],
   },
 ];
@@ -103,7 +103,7 @@ export class RoleEditorDialog {
       [Validators.required, Validators.pattern(/^[a-z][a-z0-9_]{2,63}$/)],
     ],
     name: [this.role?.name ?? '', [Validators.required, Validators.maxLength(128)]],
-    category: [this.role?.category ?? 'general', [Validators.required]],
+    category: [this.role?.category ?? '通用', [Validators.required]],
     icon: [this.role?.icon ?? 'badge', [Validators.required]],
     color: [this.role?.color ?? ('neutral' as Role['color'])],
     description: [this.role?.description ?? ''],
@@ -111,7 +111,7 @@ export class RoleEditorDialog {
   });
 
   iconLabel(icon: string): string {
-    return ROLE_ICON_LABELS.get(icon) ?? 'Current icon';
+    return ROLE_ICON_LABELS.get(icon) ?? '当前图标';
   }
 
   isKnownIcon(icon: string): boolean {

@@ -15,6 +15,8 @@
 | `0003_seed_admin_user.sql` | 历史演示管理员种子，仅为保持已发布迁移不可变而保留 |
 | `0004_disable_default_admin.sql` | 仅当历史管理员仍使用已知密码哈希时禁用该账号 |
 | `0005_add_rbac_management_permissions.sql` | 增加角色、权限目录及角色授权管理权限码，并更新内置角色授权 |
+| `0006_remove_unused_permissions.sql` | 删除没有 API 授权或前端守卫消费者的演示权限 |
+| `0007_localize_default_copy_zh_cn.sql` | 将仍为原始英文值的内置角色、权限组和权限文案更新为简体中文 |
 
 迁移文件通过 `sqlx::migrate!` 宏在**编译时**嵌入二进制。`backend/build.rs` 已声明
 `migrations` 为构建输入，新增或修改迁移后，下一次 `cargo build` 会自动重新编译：

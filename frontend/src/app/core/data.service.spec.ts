@@ -11,7 +11,7 @@ const apiUser: ApiUser = {
   displayName: 'Sarah Chen',
   email: 'sarah@example.com',
   status: 'active',
-  roles: ['Viewer'],
+  roles: ['查看者'],
   lastLoginAt: null,
   createdAt: '2026-08-01T00:00:00Z',
 };
@@ -19,8 +19,8 @@ const apiUser: ApiUser = {
 const apiRole: ApiRole = {
   id: 3,
   code: 'viewer',
-  name: 'Viewer',
-  category: 'Read Only',
+  name: '查看者',
+  category: '只读',
   icon: null,
   color: 'success',
   description: null,
@@ -55,7 +55,12 @@ describe('DataService', () => {
     request.flush({ items: [apiUser], total: 1, page: 1, pageSize: 100 });
 
     await expect(result).resolves.toEqual([
-      expect.objectContaining({ id: '7', username: 'sarah', name: 'Sarah Chen' }),
+      expect.objectContaining({
+        id: '7',
+        username: 'sarah',
+        name: 'Sarah Chen',
+        lastLogin: '从未登录',
+      }),
     ]);
   });
 
@@ -69,7 +74,12 @@ describe('DataService', () => {
       suspendedUsers: 1,
     });
 
-    await expect(result).resolves.toHaveLength(4);
+    await expect(result).resolves.toEqual([
+      expect.objectContaining({ label: '用户总数', value: '10' }),
+      expect.objectContaining({ label: '启用用户', value: '8' }),
+      expect.objectContaining({ label: '角色总数', value: '6' }),
+      expect.objectContaining({ label: '已暂停用户', value: '1' }),
+    ]);
   });
 
   it('maps permission groups and nullable fields', async () => {
@@ -77,13 +87,13 @@ describe('DataService', () => {
     const group: ApiPermissionGroup = {
       id: 2,
       code: 'identity',
-      name: 'Identity',
+      name: '身份与访问模块',
       icon: null,
       permissions: [
         {
           id: 9,
           code: 'user:directory:read',
-          name: 'View Users',
+          name: '查看用户目录',
           type: 'menu',
           description: null,
         },
@@ -106,7 +116,7 @@ describe('DataService', () => {
     const rows = service.getRolePermissionRows();
     http.expectOne('/api/v1/roles').flush([apiRole]);
     await expect(rows).resolves.toEqual([
-      expect.objectContaining({ roleId: '3', roleName: 'Viewer', usersAssigned: 4 }),
+      expect.objectContaining({ roleId: '3', roleName: '查看者', usersAssigned: 4 }),
     ]);
   });
 

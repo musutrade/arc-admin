@@ -10,11 +10,11 @@ import { MatIconModule } from '@angular/material/icon';
     <form class="editor-dialog compact-dialog" [formGroup]="form" (ngSubmit)="submit()">
       <div class="dialog-title-row">
         <mat-icon>lock_reset</mat-icon>
-        <h2>Reset Password</h2>
+        <h2>重置密码</h2>
       </div>
-      <p class="dialog-message">Set a new password for {{ username }}.</p>
+      <p class="dialog-message">为 {{ username }} 设置新密码。</p>
       <div class="form-field">
-        <label for="new-password">New password</label>
+        <label for="new-password">新密码</label>
         <input
           id="new-password"
           type="password"
@@ -22,12 +22,12 @@ import { MatIconModule } from '@angular/material/icon';
           autocomplete="new-password"
         />
         @if (form.controls.password.touched && form.controls.password.invalid) {
-          <small>Password must contain at least 8 characters.</small>
+          <small>密码至少需要 8 个字符。</small>
         }
       </div>
       <div class="dialog-actions">
-        <button type="button" class="btn-outline" mat-dialog-close>Cancel</button>
-        <button type="submit" class="btn-primary">Reset Password</button>
+        <button type="button" class="btn-outline" mat-dialog-close>取消</button>
+        <button type="submit" class="btn-primary">重置密码</button>
       </div>
     </form>
   `,

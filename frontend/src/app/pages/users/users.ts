@@ -22,9 +22,9 @@ import { RoleSelectionDialog } from './role-selection.dialog';
 import { UserEditorDialog, UserEditorResult } from './user-editor.dialog';
 
 const STATUS_META: Record<UserStatus, { cls: string; label: string }> = {
-  active: { cls: 'st-active', label: 'Active' },
-  inactive: { cls: 'st-inactive', label: 'Inactive' },
-  suspended: { cls: 'st-suspended', label: 'Suspended' },
+  active: { cls: 'st-active', label: '启用' },
+  inactive: { cls: 'st-inactive', label: '停用' },
+  suspended: { cls: 'st-suspended', label: '已暂停' },
 };
 
 @Component({
@@ -144,7 +144,7 @@ export class UsersPage implements OnInit {
       this.selected.set(new Set());
       this.goToPage(this.page());
     } catch (error) {
-      this.error.set(apiErrorMessage(error, '用户数据加载失败,请稍后重试'));
+      this.error.set(apiErrorMessage(error, '用户数据加载失败，请稍后重试'));
     } finally {
       this.loading.set(false);
     }
@@ -219,37 +219,33 @@ export class UsersPage implements OnInit {
     }
     await this.runMutation(
       () => this.data.updateUser(user.id, { password }),
-      `Password reset for ${user.name}`,
+      `已重置 ${user.name} 的密码`,
     );
   }
 
   async onDelete(user: User): Promise<void> {
     const confirmed = await this.confirm(
-      'Delete user',
-      `Delete ${user.name}? This action disables the account immediately.`,
-      'Delete User',
+      '删除用户',
+      `确定删除 ${user.name} 吗？删除后该账号将立即停用。`,
+      '删除用户',
     );
     if (!confirmed) {
       return;
     }
-    await this.runMutation(() => this.data.deleteUser(user.id), `${user.name} deleted`);
+    await this.runMutation(() => this.data.deleteUser(user.id), `已删除 ${user.name}`);
   }
 
   async deleteSelected(): Promise<void> {
     const ids = [...this.selected()];
     if (
       ids.length === 0 ||
-      !(await this.confirm(
-        'Delete selected users',
-        `Delete ${ids.length} selected account(s)?`,
-        'Delete Users',
-      ))
+      !(await this.confirm('删除所选用户', `确定删除选中的 ${ids.length} 个账号吗？`, '删除用户'))
     ) {
       return;
     }
     await this.runMutation(
       () => Promise.all(ids.map((id) => this.data.deleteUser(id))).then(() => undefined),
-      `${ids.length} users deleted`,
+      `已删除 ${ids.length} 个用户`,
     );
   }
 
@@ -271,7 +267,7 @@ export class UsersPage implements OnInit {
           Promise.all(ids.map((id) => this.data.assignUserRoles(id, roleIds))).then(
             () => undefined,
           ),
-        `Roles updated for ${ids.length} users`,
+        `已更新 ${ids.length} 个用户的角色`,
       );
     } catch (error) {
       this.showError(error, '角色数据加载失败');
@@ -296,7 +292,7 @@ export class UsersPage implements OnInit {
             ...(result.password ? { password: result.password } : {}),
           });
           await this.data.assignUserRoles(user.id, result.roleIds);
-        }, `${result.displayName} updated`);
+        }, `已更新 ${result.displayName}`);
       } else {
         await this.runMutation(
           () =>
@@ -308,7 +304,7 @@ export class UsersPage implements OnInit {
               status: result.status,
               roleIds: result.roleIds.map(Number),
             }),
-          `${result.displayName} created`,
+          `已创建 ${result.displayName}`,
         );
       }
     } catch (error) {
@@ -320,10 +316,10 @@ export class UsersPage implements OnInit {
     this.busy.set(true);
     try {
       await action();
-      this.snackBar.open(success, 'Close', { duration: 3000 });
+      this.snackBar.open(success, '关闭', { duration: 3000 });
       await this.loadData();
     } catch (error) {
-      this.showError(error, '操作失败,请稍后重试');
+      this.showError(error, '操作失败，请稍后重试');
     } finally {
       this.busy.set(false);
     }
@@ -340,7 +336,7 @@ export class UsersPage implements OnInit {
   }
 
   private showError(error: unknown, fallback: string): void {
-    this.snackBar.open(apiErrorMessage(error, fallback), 'Close', { duration: 5000 });
+    this.snackBar.open(apiErrorMessage(error, fallback), '关闭', { duration: 5000 });
   }
 
   initials(name: string): string {

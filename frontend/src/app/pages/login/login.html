@@ -5,8 +5,8 @@
       <div class="logo-badge">
         <mat-icon class="filled">shield</mat-icon>
       </div>
-      <h1>Welcome back!</h1>
-      <p>Enter your credentials to access RBAC Admin</p>
+      <h1>欢迎回来</h1>
+      <p>请输入账号信息以登录 RBAC 管理中心</p>
     </div>
 
     <!-- Login Card -->
@@ -14,7 +14,7 @@
       <form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
         <!-- Username -->
         <div class="field">
-          <label for="username">Username</label>
+          <label for="username">用户名</label>
           <div
             class="input-wrap"
             [class.input-error]="form.controls.username.touched && form.controls.username.invalid"
@@ -24,7 +24,7 @@
               id="username"
               type="text"
               formControlName="username"
-              placeholder="Enter your username"
+              placeholder="请输入用户名"
               autocomplete="username"
             />
           </div>
@@ -35,7 +35,7 @@
 
         <!-- Password -->
         <div class="field">
-          <label for="password">Password</label>
+          <label for="password">密码</label>
           <div
             class="input-wrap"
             [class.input-error]="form.controls.password.touched && form.controls.password.invalid"
@@ -45,7 +45,7 @@
               id="password"
               [type]="hidePassword() ? 'password' : 'text'"
               formControlName="password"
-              placeholder="Enter your password"
+              placeholder="请输入密码"
               autocomplete="current-password"
             />
             <button
@@ -72,16 +72,16 @@
 
         <!-- Session preference -->
         <div class="login-options">
-          <mat-checkbox formControlName="remember" color="primary">Remember me</mat-checkbox>
+          <mat-checkbox formControlName="remember" color="primary">记住登录状态</mat-checkbox>
         </div>
 
         <!-- Submit -->
         <button type="submit" class="submit-btn" [disabled]="loading()">
           @if (loading()) {
             <mat-progress-spinner diameter="18" mode="indeterminate" />
-            <span>Processing...</span>
+            <span>正在登录...</span>
           } @else {
-            <span>Login</span>
+            <span>登录</span>
             <mat-icon>arrow_forward</mat-icon>
           }
         </button>

@@ -2,8 +2,8 @@
   <!-- 页面头部 -->
   <div class="page-header">
     <div>
-      <h1>Resource Access Control</h1>
-      <p>Manage granular permission codes and their hierarchy across the enterprise platform.</p>
+      <h1>权限目录</h1>
+      <p>查看和管理系统权限编码及其层级关系。</p>
     </div>
   </div>
 
@@ -13,7 +13,7 @@
       <mat-icon>search</mat-icon>
       <input
         type="text"
-        placeholder="Search by name, code or description..."
+        placeholder="按名称、编码或描述搜索..."
         [value]="search()"
         (input)="searchPermissions($any($event.target).value)"
       />
@@ -24,14 +24,14 @@
         [value]="typeFilter()"
         (change)="applyTypeFilter($any($event.target).value)"
       >
-        <option value="all">All Module Types</option>
-        <option value="menu">Menu</option>
-        <option value="button">Button</option>
+        <option value="all">全部权限类型</option>
+        <option value="menu">菜单</option>
+        <option value="button">按钮</option>
         <option value="api">API</option>
       </select>
       <div class="filter-divider"></div>
       <span class="filter-count"
-        >Showing <b>{{ totalCount() }}</b> total permissions</span
+        >共 <b>{{ totalCount() }}</b> 个权限</span
       >
     </div>
   </div>
@@ -55,10 +55,10 @@
         <table class="perm-table">
           <thead>
             <tr>
-              <th class="col-name">Permission Name</th>
-              <th>Code Identifier</th>
-              <th>Type</th>
-              <th>Description</th>
+              <th class="col-name">权限名称</th>
+              <th>权限编码</th>
+              <th>类型</th>
+              <th>描述</th>
             </tr>
           </thead>
           <tbody>
@@ -72,7 +72,7 @@
                     }}</mat-icon>
                     <mat-icon class="group-icon filled">{{ group.icon }}</mat-icon>
                     <span class="group-name">{{ group.name }}</span>
-                    <span class="root-tag">ROOT</span>
+                    <span class="root-tag">根级</span>
                   </div>
                 </td>
               </tr>
@@ -92,7 +92,7 @@
                     <td>
                       <span class="type-badge {{ typeMeta[p.type].cls }}">
                         <mat-icon>{{ typeMeta[p.type].icon }}</mat-icon>
-                        {{ p.type }}
+                        {{ typeMeta[p.type].label }}
                       </span>
                     </td>
                     <td class="perm-desc">{{ p.description }}</td>

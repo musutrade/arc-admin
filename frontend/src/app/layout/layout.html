@@ -9,8 +9,8 @@
           <mat-icon fontSet="material-symbols-outlined" class="filled">shield</mat-icon>
         </div>
         <div class="brand-text" [class.hidden]="collapsed()">
-          <h2>RBAC Admin</h2>
-          <p>Enterprise Tier</p>
+          <h2>RBAC 管理中心</h2>
+          <p>企业版</p>
         </div>
       </div>
     </div>
@@ -25,10 +25,10 @@
             [class.active]="usersActive()"
             [attr.aria-expanded]="userSubOpen()"
             (click)="toggleUserMenu()"
-            [attr.title]="collapsed() ? 'User Management' : null"
+            [attr.title]="collapsed() ? '用户管理' : null"
           >
             <mat-icon fontSet="material-symbols-outlined">group</mat-icon>
-            <span class="nav-label" [class.hidden]="collapsed()">User Management</span>
+            <span class="nav-label" [class.hidden]="collapsed()">用户管理</span>
             <mat-icon class="nav-caret" [class.hidden]="collapsed()" [class.rotated]="userSubOpen()"
               >expand_more</mat-icon
             >
@@ -40,7 +40,7 @@
               class="nav-sub-item"
               (click)="sidebarOpen.set(false)"
             >
-              <span>Active Users</span>
+              <span>用户列表</span>
             </a>
           </div>
         </div>
@@ -53,10 +53,10 @@
           class="nav-item"
           [class.justify-center]="collapsed()"
           (click)="closeUserMenu(); sidebarOpen.set(false)"
-          [attr.title]="collapsed() ? 'Role Permissions' : null"
+          [attr.title]="collapsed() ? '角色管理' : null"
         >
           <mat-icon fontSet="material-symbols-outlined">badge</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">Role Permissions</span>
+          <span class="nav-label" [class.hidden]="collapsed()">角色管理</span>
         </a>
       }
       @if (can('permission:directory:read')) {
@@ -66,10 +66,10 @@
           class="nav-item"
           [class.justify-center]="collapsed()"
           (click)="closeUserMenu(); sidebarOpen.set(false)"
-          [attr.title]="collapsed() ? 'Resource Access' : null"
+          [attr.title]="collapsed() ? '权限目录' : null"
         >
           <mat-icon fontSet="material-symbols-outlined">lock_person</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">Resource Access</span>
+          <span class="nav-label" [class.hidden]="collapsed()">权限目录</span>
         </a>
       }
       @if (can('role:permissions:write')) {
@@ -79,10 +79,10 @@
           class="nav-item"
           [class.justify-center]="collapsed()"
           (click)="closeUserMenu(); sidebarOpen.set(false)"
-          [attr.title]="collapsed() ? 'Assign Permissions' : null"
+          [attr.title]="collapsed() ? '权限分配' : null"
         >
           <mat-icon fontSet="material-symbols-outlined">shield</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">Assign Permissions</span>
+          <span class="nav-label" [class.hidden]="collapsed()">权限分配</span>
         </a>
       }
     </nav>
@@ -115,7 +115,7 @@
       >
         <mat-icon>menu</mat-icon>
       </button>
-      <span class="topbar-title">RBAC Control Center</span>
+      <span class="topbar-title">RBAC 管理中心</span>
     </div>
 
     <div class="topbar-right">
@@ -135,8 +135,8 @@
       >
         <span class="avatar">{{ auth.currentUser()?.displayName?.charAt(0) ?? 'A' }}</span>
         <span class="user-meta hide-sm">
-          <span class="user-name">{{ auth.currentUser()?.displayName ?? 'Account' }}</span>
-          <span class="user-role">{{ auth.currentUser()?.roles?.[0] ?? 'User' }}</span>
+          <span class="user-name">{{ auth.currentUser()?.displayName ?? '账户' }}</span>
+          <span class="user-role">{{ auth.currentUser()?.roles?.[0] ?? '用户' }}</span>
         </span>
       </button>
       <mat-menu #userMenu="matMenu" xPosition="before" class="user-menu">

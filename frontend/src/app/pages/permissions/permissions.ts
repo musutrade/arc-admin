@@ -11,10 +11,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { DataService } from '../../core/data.service';
 import { PermissionGroup, PermissionType } from '../../core/models';
 
-const TYPE_META: Record<PermissionType, { icon: string; cls: string }> = {
-  menu: { icon: 'table_chart', cls: 'badge-menu' },
-  button: { icon: 'smart_button', cls: 'badge-button' },
-  api: { icon: 'api', cls: 'badge-api' },
+const TYPE_META: Record<PermissionType, { icon: string; cls: string; label: string }> = {
+  menu: { icon: 'table_chart', cls: 'badge-menu', label: '菜单' },
+  button: { icon: 'smart_button', cls: 'badge-button', label: '按钮' },
+  api: { icon: 'api', cls: 'badge-api', label: 'API' },
 };
 
 interface FilteredGroup extends PermissionGroup {
@@ -81,7 +81,7 @@ export class PermissionsPage implements OnInit {
         this.loading.set(false);
       })
       .catch(() => {
-        this.error.set('权限数据加载失败,请稍后重试');
+        this.error.set('权限数据加载失败，请稍后重试');
         this.loading.set(false);
       });
   }

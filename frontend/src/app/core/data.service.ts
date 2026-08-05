@@ -40,10 +40,10 @@ export class DataService {
       this.http.get<DashboardStats>(`${this.apiBaseUrl}/dashboard/stats`),
     );
     return [
-      { label: 'Total Users', value: String(stats.totalUsers), icon: 'group' },
-      { label: 'Active Users', value: String(stats.activeUsers), icon: 'verified_user' },
-      { label: 'Roles', value: String(stats.totalRoles), icon: 'badge' },
-      { label: 'Suspended', value: String(stats.suspendedUsers), icon: 'person_off' },
+      { label: '用户总数', value: String(stats.totalUsers), icon: 'group' },
+      { label: '启用用户', value: String(stats.activeUsers), icon: 'verified_user' },
+      { label: '角色总数', value: String(stats.totalRoles), icon: 'badge' },
+      { label: '已暂停用户', value: String(stats.suspendedUsers), icon: 'person_off' },
     ];
   }
 
@@ -152,7 +152,7 @@ function mapUser(user: ApiUser): User {
     email: user.email ?? '',
     roles: user.roles,
     status: user.status,
-    lastLogin: user.lastLoginAt ?? 'Never',
+    lastLogin: user.lastLoginAt ?? '从未登录',
     createdAt: user.createdAt,
     avatarColor: AVATAR_COLORS[user.id % AVATAR_COLORS.length],
   };

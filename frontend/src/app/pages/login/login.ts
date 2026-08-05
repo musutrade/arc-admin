@@ -50,7 +50,7 @@ export class LoginPage {
       this.error.set(
         error instanceof HttpErrorResponse && error.status === 401
           ? '用户名、密码或账号状态无效'
-          : '登录服务暂时不可用,请稍后重试',
+          : '登录服务暂时不可用，请稍后重试',
       );
       this.loading.set(false);
     }

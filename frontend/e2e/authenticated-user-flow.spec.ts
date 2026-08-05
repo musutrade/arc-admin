@@ -9,10 +9,10 @@ import type {
 const administrator: ApiUser = {
   id: 1,
   username: 'admin',
-  displayName: 'Administrator',
+  displayName: '管理员',
   email: 'admin@example.test',
   status: 'active',
-  roles: ['Super Admin'],
+  roles: ['超级管理员'],
   lastLoginAt: null,
   createdAt: '2026-08-01T00:00:00Z',
 };
@@ -33,11 +33,11 @@ const roles: ApiRole[] = [
   {
     id: 1,
     code: 'super_admin',
-    name: 'Super Admin',
-    category: 'System Core',
+    name: '超级管理员',
+    category: '系统核心',
     icon: 'shield',
     color: 'primary',
-    description: 'Full access',
+    description: '拥有所有系统权限',
     isActive: true,
     members: 1,
     permissionGroupIds: [1],
@@ -45,11 +45,11 @@ const roles: ApiRole[] = [
   {
     id: 2,
     code: 'viewer',
-    name: 'Viewer',
-    category: 'Read Only',
+    name: '查看者',
+    category: '只读',
     icon: 'visibility',
     color: 'success',
-    description: 'Read-only access',
+    description: '仅可查看系统内容',
     isActive: true,
     members: 0,
     permissionGroupIds: [1],
@@ -105,7 +105,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
         displayName: payload.displayName,
         email: payload.email ?? null,
         status: payload.status ?? 'active',
-        roles: ['Viewer'],
+        roles: ['查看者'],
         lastLoginAt: null,
         createdAt: '2026-08-04T00:00:00Z',
       };
@@ -124,10 +124,10 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   });
 
   await page.goto('/login');
-  await page.getByLabel('Username').fill('admin');
-  await page.getByLabel('Password').fill('safe-password');
-  await page.getByRole('button', { name: 'Login' }).click();
-  await expect(page.getByRole('heading', { name: 'Resource Access Control' })).toBeVisible();
+  await page.getByLabel('用户名').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill('safe-password');
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page.getByRole('heading', { name: '权限目录' })).toBeVisible();
 
   await page.getByRole('button', { name: '账户菜单' }).click();
   await expect(page.getByRole('menuitem', { name: '修改密码' })).toBeVisible();
@@ -146,10 +146,12 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   });
   await changePasswordDialog.getByLabel('当前密码', { exact: true }).fill('safe-password');
   await changePasswordDialog.getByLabel('新密码', { exact: true }).fill('updated-safe-password');
-  await changePasswordDialog.getByLabel('确认新密码').fill('different-password');
-  await changePasswordDialog.getByLabel('确认新密码').blur();
+  await changePasswordDialog.getByLabel('确认新密码', { exact: true }).fill('different-password');
+  await changePasswordDialog.getByLabel('确认新密码', { exact: true }).blur();
   await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeVisible();
-  await changePasswordDialog.getByLabel('确认新密码').fill('updated-safe-password');
+  await changePasswordDialog
+    .getByLabel('确认新密码', { exact: true })
+    .fill('updated-safe-password');
 
   if (process.env['VISUAL_REVIEW']) {
     await page.screenshot({ path: testInfo.outputPath('change-password-dialog.png') });
@@ -168,15 +170,15 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   if (await mobileMenu.isVisible()) {
     await mobileMenu.click();
   }
-  await page.getByRole('button', { name: 'User Management' }).click();
-  await page.getByRole('link', { name: 'Active Users' }).click();
-  await expect(page.getByRole('heading', { name: 'User Management' })).toBeVisible();
-  await page.getByRole('button', { name: 'Add User' }).click();
+  await page.getByRole('button', { name: '用户管理' }).click();
+  await page.getByRole('link', { name: '用户列表' }).click();
+  await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
+  await page.getByRole('button', { name: '新增用户' }).click();
 
   const dialog = page.getByRole('dialog');
   const editor = dialog.locator('.editor-dialog');
   await expect(dialog).toBeVisible();
-  await editor.evaluate(async (element) => {
+  await dialog.evaluate(async (element) => {
     await Promise.allSettled(
       element.getAnimations({ subtree: true }).map((animation) => animation.finished),
     );
@@ -198,17 +200,17 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     await page.screenshot({ path: testInfo.outputPath('add-user-dialog.png'), fullPage: true });
   }
 
-  await page.getByLabel('Username').fill('new_user');
-  await page.getByLabel('Password').fill('new-user-password');
-  await page.getByLabel('Display name').fill('New User');
-  await page.getByLabel('Email').fill('new.user@example.test');
-  await page.getByLabel('Roles').selectOption({ label: 'Viewer' });
-  await page.getByRole('button', { name: 'Save User' }).click();
+  await page.getByLabel('用户名').fill('new_user');
+  await page.getByLabel('密码').fill('new-user-password');
+  await page.getByLabel('显示名称').fill('新用户');
+  await page.getByLabel('邮箱').fill('new.user@example.test');
+  await page.getByLabel('角色').selectOption({ label: '查看者' });
+  await page.getByRole('button', { name: '保存用户' }).click();
 
-  await expect(page.getByText('New User', { exact: true })).toBeVisible();
+  await expect(page.getByText('新用户', { exact: true })).toBeVisible();
   expect(createdRequest).toMatchObject({
     username: 'new_user',
-    displayName: 'New User',
+    displayName: '新用户',
     roleIds: [2],
   });
   const snackBar = page.locator('mat-snack-bar-container');
@@ -235,9 +237,10 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     await page.screenshot({ path: testInfo.outputPath('users-snackbar.png'), fullPage: true });
   }
 
-  const closeSnackBar = page.getByRole('button', { name: 'Close' });
+  const closeSnackBar = page.getByRole('button', { name: '关闭' });
   if (await closeSnackBar.isVisible()) {
     await closeSnackBar.click();
+    await expect(snackBar).toBeHidden();
   }
 
   const rootToken = (name: string) =>
@@ -271,18 +274,18 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   if (await mobileMenu.isVisible()) {
     await mobileMenu.click();
   }
-  await page.getByRole('link', { name: 'Role Permissions' }).click();
-  await expect(page.getByRole('heading', { name: 'Role Management' })).toBeVisible();
+  await page.getByRole('link', { name: '角色管理' }).click();
+  await expect(page.getByRole('heading', { name: '角色管理' })).toBeVisible();
   await page.getByRole('button', { name: '列表视图' }).click();
 
   const roleTable = page.locator('.roles-table');
   const roleTableScroll = page.locator('.role-table-scroll');
   await expect(roleTable).toBeVisible();
-  await expect(roleTable.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-  const viewerRow = roleTable.getByRole('row').filter({ hasText: 'Viewer' });
+  await expect(roleTable.getByRole('columnheader', { name: '状态' })).toBeVisible();
+  const viewerRow = roleTable.getByRole('row').filter({ hasText: '查看者' });
   await expect(viewerRow).toContainText('viewer');
-  await expect(viewerRow.getByText('Active', { exact: true })).toBeVisible();
-  const editViewer = viewerRow.getByRole('button', { name: 'Edit Viewer' });
+  await expect(viewerRow.getByText('启用', { exact: true })).toBeVisible();
+  const editViewer = viewerRow.getByRole('button', { name: '编辑角色 查看者' });
   await expect(editViewer).toBeVisible();
   await expect
     .poll(() =>
@@ -298,27 +301,27 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   }
 
   if (process.env['VISUAL_REVIEW']) {
-    await expect(page.getByText('New User created', { exact: true })).toBeHidden();
+    await expect(page.getByText('已创建 新用户', { exact: true })).toBeHidden();
     await page.screenshot({ path: testInfo.outputPath('roles-list-light.png'), fullPage: true });
   }
 
   await editViewer.click();
   const roleDialog = page.getByRole('dialog');
-  await expect(roleDialog.getByRole('heading', { name: 'Edit Role' })).toBeVisible();
-  const iconSelect = roleDialog.getByRole('combobox', { name: 'Role icon' });
-  await expect(iconSelect).toContainText('Read only');
+  await expect(roleDialog.getByRole('heading', { name: '编辑角色' })).toBeVisible();
+  const iconSelect = roleDialog.getByRole('combobox', { name: '角色图标' });
+  await expect(iconSelect).toContainText('只读');
   await iconSelect.click();
-  await expect(page.getByRole('option', { name: 'Administrator', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: '管理员', exact: true })).toBeVisible();
   if (process.env['VISUAL_REVIEW']) {
     await page.screenshot({ path: testInfo.outputPath('role-icon-picker.png'), fullPage: true });
   }
-  await page.getByRole('option', { name: 'Review', exact: true }).click();
-  await expect(iconSelect).toContainText('Review');
-  await roleDialog.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('option', { name: '审核', exact: true }).click();
+  await expect(iconSelect).toContainText('审核');
+  await roleDialog.getByRole('button', { name: '取消' }).click();
 });
 
 test('redirects an unauthenticated deep link to login', async ({ page }) => {
   await page.goto('/users');
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
 });

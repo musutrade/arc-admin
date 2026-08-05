@@ -48,28 +48,26 @@ pub async fn get(pool: &PgPool, id: i64) -> Result<UserResponse, ApiError> {
 pub async fn create(pool: &PgPool, req: &CreateUserRequest) -> Result<UserResponse, ApiError> {
     let username = req.username.trim();
     if !(3..=64).contains(&username.len()) {
-        return Err(ApiError::validation("username 长度需在 3-64 之间"));
+        return Err(ApiError::validation("用户名长度需在 3-64 个字符之间"));
     }
     if !username
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
         return Err(ApiError::validation(
-            "username 仅允许字母、数字、下划线、连字符",
+            "用户名仅允许字母、数字、下划线或连字符",
         ));
     }
     if req.password.len() < 8 {
-        return Err(ApiError::validation("password 长度不能少于 8 位"));
+        return Err(ApiError::validation("密码长度不能少于 8 位"));
     }
     let display_name = req.display_name.trim();
     if display_name.is_empty() || display_name.len() > 128 {
-        return Err(ApiError::validation("displayName 长度需在 1-128 之间"));
+        return Err(ApiError::validation("显示名称长度需在 1-128 个字符之间"));
     }
     let status = req.status.clone().unwrap_or_else(|| "active".to_string());
     if !["active", "inactive", "suspended"].contains(&status.as_str()) {
-        return Err(ApiError::validation(
-            "status 只能是 active/inactive/suspended",
-        ));
+        return Err(ApiError::validation("状态只能为启用、停用或已暂停"));
     }
 
     let hash = auth::hash_password(&req.password)?;
@@ -109,18 +107,16 @@ pub async fn update(
         .as_deref()
         .is_some_and(|value| value.is_empty() || value.len() > 128)
     {
-        return Err(ApiError::validation("displayName 长度需在 1-128 之间"));
+        return Err(ApiError::validation("显示名称长度需在 1-128 个字符之间"));
     }
     if let Some(status) = &req.status {
         if !["active", "inactive", "suspended"].contains(&status.as_str()) {
-            return Err(ApiError::validation(
-                "status 只能是 active/inactive/suspended",
-            ));
+            return Err(ApiError::validation("状态只能为启用、停用或已暂停"));
         }
     }
     let password_hash = if let Some(password) = &req.password {
         if password.len() < 8 {
-            return Err(ApiError::validation("password 长度不能少于 8 位"));
+            return Err(ApiError::validation("密码长度不能少于 8 位"));
         }
         Some(auth::hash_password(password)?)
     } else {
@@ -216,7 +212,7 @@ async fn protect_last_super_admin(
     }
     if active_count <= 1 {
         return Err(ApiError::forbidden(
-            "不能停用、删除或移除最后一个 active super_admin",
+            "不能停用、删除或移除最后一个处于启用状态的超级管理员",
         ));
     }
     Ok(())

@@ -47,7 +47,7 @@ export class RolePermissionsPage implements OnInit {
     try {
       this.rows.set(await this.data.getRolePermissionRows());
     } catch (error) {
-      this.error.set(apiErrorMessage(error, '角色权限数据加载失败,请稍后重试'));
+      this.error.set(apiErrorMessage(error, '角色权限数据加载失败，请稍后重试'));
     } finally {
       this.loading.set(false);
     }
@@ -75,10 +75,10 @@ export class RolePermissionsPage implements OnInit {
       }
       this.busy.set(true);
       await this.data.assignRolePermissions(row.roleId, permissionIds);
-      this.snackBar.open(`${row.roleName} permissions updated`, 'Close', { duration: 3000 });
+      this.snackBar.open(`已更新 ${row.roleName} 的权限`, '关闭', { duration: 3000 });
       await this.loadRows();
     } catch (error) {
-      this.snackBar.open(apiErrorMessage(error, '权限保存失败'), 'Close', { duration: 5000 });
+      this.snackBar.open(apiErrorMessage(error, '权限保存失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }
@@ -101,10 +101,10 @@ export class RolePermissionsPage implements OnInit {
         color: result.color,
         description: result.description || null,
       });
-      this.snackBar.open(`${result.name} created`, 'Close', { duration: 3000 });
+      this.snackBar.open(`已创建 ${result.name}`, '关闭', { duration: 3000 });
       await this.loadRows();
     } catch (error) {
-      this.snackBar.open(apiErrorMessage(error, '角色创建失败'), 'Close', { duration: 5000 });
+      this.snackBar.open(apiErrorMessage(error, '角色创建失败'), '关闭', { duration: 5000 });
     } finally {
       this.busy.set(false);
     }

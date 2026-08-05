@@ -2,13 +2,13 @@
   <!-- 页面头部 -->
   <div class="page-header">
     <div>
-      <h1>User Management</h1>
-      <p>Manage system access levels, account statuses, and assigned security roles.</p>
+      <h1>用户管理</h1>
+      <p>管理系统用户、账号状态及其安全角色。</p>
     </div>
     @if (canWrite()) {
       <button class="btn-primary" (click)="onCreate()" [disabled]="busy()">
         <mat-icon>person_add</mat-icon>
-        <span>Add User</span>
+        <span>新增用户</span>
       </button>
     }
   </div>
@@ -19,19 +19,19 @@
       <mat-icon>search</mat-icon>
       <input
         type="text"
-        placeholder="Search by username or email..."
+        placeholder="按用户名或邮箱搜索..."
         [value]="search()"
         (input)="searchUsers($any($event.target).value)"
       />
     </div>
     <div class="filter-select-group">
-      <span>Role:</span>
+      <span>角色：</span>
       <select
         class="filter-select"
         [value]="roleFilter()"
         (change)="applyRoleFilter($any($event.target).value)"
       >
-        <option value="all">All Roles</option>
+        <option value="all">全部角色</option>
         @for (r of roleOptions(); track r) {
           @if (r !== 'all') {
             <option [value]="r">{{ r }}</option>
@@ -40,21 +40,21 @@
       </select>
     </div>
     <div class="filter-select-group">
-      <span>Status:</span>
+      <span>状态：</span>
       <select
         class="filter-select"
         [value]="statusFilter()"
         (change)="applyStatusFilter($any($event.target).value)"
       >
-        <option value="all">All Status</option>
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-        <option value="suspended">Suspended</option>
+        <option value="all">全部状态</option>
+        <option value="active">启用</option>
+        <option value="inactive">停用</option>
+        <option value="suspended">已暂停</option>
       </select>
     </div>
     <button class="reset-filters" (click)="resetFilters()">
       <mat-icon>filter_list</mat-icon>
-      <span>Reset Filters</span>
+      <span>重置筛选</span>
     </button>
   </div>
 
@@ -80,12 +80,12 @@
                   color="primary"
                 />
               </th>
-              <th>User</th>
-              <th>Email Address</th>
-              <th>Roles</th>
-              <th>Status</th>
-              <th>Last Login</th>
-              <th class="th-actions">Actions</th>
+              <th>用户</th>
+              <th>邮箱</th>
+              <th>角色</th>
+              <th>状态</th>
+              <th>最近登录</th>
+              <th class="th-actions">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -112,7 +112,12 @@
                     @for (r of u.roles; track r) {
                       <span
                         class="role-tag"
-                        [class.role-tag-accent]="r.includes('Admin') || r.includes('Lead')"
+                        [class.role-tag-accent]="
+                          r.includes('管理员') ||
+                          r.includes('负责人') ||
+                          r.includes('Admin') ||
+                          r.includes('Lead')
+                        "
                       >
                         {{ r }}
                       </span>
@@ -128,7 +133,7 @@
                 <td class="cell-tertiary">{{ u.lastLogin }}</td>
                 <td class="td-actions">
                   @if (canWrite()) {
-                    <button class="row-btn" (click)="onEdit(u)" title="Edit" [disabled]="busy()">
+                    <button class="row-btn" (click)="onEdit(u)" title="编辑" [disabled]="busy()">
                       <mat-icon>edit</mat-icon>
                     </button>
                   }
@@ -136,7 +141,7 @@
                     <button
                       class="row-btn"
                       (click)="onResetPassword(u)"
-                      title="Reset Password"
+                      title="重置密码"
                       [disabled]="busy()"
                     >
                       <mat-icon>lock_reset</mat-icon>
@@ -146,7 +151,7 @@
                     <button
                       class="row-btn danger"
                       (click)="onDelete(u)"
-                      title="Delete"
+                      title="删除"
                       [disabled]="busy()"
                     >
                       <mat-icon>delete</mat-icon>
@@ -172,25 +177,25 @@
       <div class="table-footer" [class.batch-active]="selectedCount() > 0">
         <div class="batch-actions">
           <span class="batch-count"
-            ><b>{{ selectedCount() }}</b> users selected</span
+            >已选择 <b>{{ selectedCount() }}</b> 个用户</span
           >
           @if (selectedCount() > 0) {
             <span class="batch-divider"></span>
             @if (canDeactivate()) {
               <button class="batch-btn danger" (click)="deleteSelected()" [disabled]="busy()">
-                <mat-icon>delete</mat-icon>Delete Selected
+                <mat-icon>delete</mat-icon>删除所选用户
               </button>
             }
             @if (canWrite()) {
               <button class="batch-btn primary" (click)="changeSelectedRoles()" [disabled]="busy()">
-                <mat-icon>rule</mat-icon>Change Role
+                <mat-icon>rule</mat-icon>修改角色
               </button>
             }
           }
         </div>
         <div class="pagination">
           <span class="page-info"
-            >Showing {{ pageStart() }}-{{ pageEnd() }} of {{ filteredUsers().length }} entries</span
+            >显示第 {{ pageStart() }}-{{ pageEnd() }} 条，共 {{ filteredUsers().length }} 条</span
           >
           <div class="page-btns">
             <button

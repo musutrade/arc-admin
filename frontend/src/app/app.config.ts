@@ -1,8 +1,11 @@
 import {
   ApplicationConfig,
+  LOCALE_ID,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
 } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeZh from '@angular/common/locales/zh';
 import { provideRouter } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
@@ -11,6 +14,8 @@ import { MAT_SNACK_BAR_DEFAULT_OPTIONS, MatSnackBarConfig } from '@angular/mater
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
+
+registerLocaleData(localeZh);
 
 function dialogDefaults(): MatDialogConfig {
   return Object.assign(new MatDialogConfig(), {
@@ -34,6 +39,7 @@ export const appConfig: ApplicationConfig = {
     provideAnimationsAsync(),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideRouter(routes),
+    { provide: LOCALE_ID, useValue: 'zh-CN' },
     {
       provide: MAT_DIALOG_DEFAULT_OPTIONS,
       useFactory: dialogDefaults,

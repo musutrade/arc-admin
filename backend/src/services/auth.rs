@@ -127,7 +127,7 @@ pub async fn bootstrap_super_admin(
         })
     {
         return Err(ApiError::validation(
-            "username 需为 3-64 位字母、数字、下划线或连字符",
+            "管理员用户名需为 3-64 位字母、数字、下划线或连字符",
         ));
     }
     if password.len() < 16 {
@@ -135,13 +135,13 @@ pub async fn bootstrap_super_admin(
     }
     let display_name = display_name.trim();
     if display_name.is_empty() || display_name.len() > 128 {
-        return Err(ApiError::validation("displayName 长度需在 1-128 之间"));
+        return Err(ApiError::validation("显示名称长度需在 1-128 个字符之间"));
     }
 
     let role_id = repositories::roles::id_by_code(pool, "super_admin")
         .await
         .map_err(db_error)?
-        .ok_or_else(|| ApiError::internal("缺少内置角色 super_admin"))?;
+        .ok_or_else(|| ApiError::internal("缺少内置超级管理员角色"))?;
     let existing = repositories::users::find_by_username(pool, username)
         .await
         .map_err(db_error)?;

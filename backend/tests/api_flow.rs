@@ -210,11 +210,19 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let groups = permission_groups.as_array().expect("permission groups");
+    assert_eq!(groups[0]["name"], "仪表盘模块");
+    assert_eq!(groups[1]["name"], "身份与访问模块");
     let group_codes = groups
         .iter()
         .filter_map(|group| group["code"].as_str())
         .collect::<Vec<_>>();
     assert_eq!(group_codes, vec!["dashboard", "identity"]);
+    let view_permissions = groups
+        .iter()
+        .flat_map(|group| group["permissions"].as_array().into_iter().flatten())
+        .find(|permission| permission["code"] == "permission:directory:read")
+        .expect("view permissions entry");
+    assert_eq!(view_permissions["name"], "查看权限");
     let permission_codes = groups
         .iter()
         .flat_map(|group| {
@@ -242,13 +250,15 @@ async fn login_and_user_crud_flow() {
 
     let (status, roles) = send(&app, Method::GET, "/api/v1/roles", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
-    let viewer_role_id = roles
+    let viewer_role = roles
         .as_array()
         .expect("roles array")
         .iter()
         .find(|role| role["code"] == "viewer")
-        .and_then(|role| role["id"].as_i64())
-        .expect("viewer role id");
+        .expect("viewer role");
+    assert_eq!(viewer_role["name"], "查看者");
+    assert_eq!(viewer_role["category"], "只读");
+    let viewer_role_id = viewer_role["id"].as_i64().expect("viewer role id");
     let super_admin_role_id = roles
         .as_array()
         .expect("roles array")
@@ -353,7 +363,7 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::CREATED);
     let user_id = created["id"].as_i64().expect("created user id");
-    assert_eq!(created["roles"], json!(["Viewer"]));
+    assert_eq!(created["roles"], json!(["查看者"]));
 
     let (status, updated) = send(
         &app,
@@ -505,4 +515,25 @@ async fn login_and_user_crud_flow() {
         services::users::update(&pool, second_admin_id, &second_request),
     );
     assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
+
+    sqlx::query(
+        "UPDATE roles SET name = '自定义查看角色', category = 'Read Only' WHERE code = 'viewer'",
+    )
+    .execute(&pool)
+    .await
+    .expect("prepare customized role");
+    sqlx::raw_sql(include_str!(
+        "../migrations/0007_localize_default_copy_zh_cn.sql"
+    ))
+    .execute(&pool)
+    .await
+    .expect("rerun localization migration");
+    let localized_role = sqlx::query_as::<_, (String, String)>(
+        "SELECT name, category FROM roles WHERE code = 'viewer'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("localized viewer role");
+    assert_eq!(localized_role.0, "自定义查看角色");
+    assert_eq!(localized_role.1, "只读");
 }

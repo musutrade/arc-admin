@@ -51,7 +51,7 @@ export class RolesPage implements OnInit {
     try {
       this.roles.set(await this.data.getRoles());
     } catch (error) {
-      this.error.set(apiErrorMessage(error, '角色数据加载失败,请稍后重试'));
+      this.error.set(apiErrorMessage(error, '角色数据加载失败，请稍后重试'));
     } finally {
       this.loading.set(false);
     }
@@ -74,9 +74,9 @@ export class RolesPage implements OnInit {
       this.dialog
         .open(ConfirmDialog, {
           data: {
-            title: 'Delete role',
-            message: `Delete ${role.name}? Assigned users must be moved first.`,
-            confirmLabel: 'Delete Role',
+            title: '删除角色',
+            message: `确定删除 ${role.name} 吗？请先迁移已分配的用户。`,
+            confirmLabel: '删除角色',
             danger: true,
           },
         })
@@ -85,7 +85,7 @@ export class RolesPage implements OnInit {
     if (!confirmed) {
       return;
     }
-    await this.runMutation(() => this.data.deleteRole(role.id), `${role.name} deleted`);
+    await this.runMutation(() => this.data.deleteRole(role.id), `已删除 ${role.name}`);
   }
 
   async onEditPermissions(role: Role): Promise<void> {
@@ -116,7 +116,7 @@ export class RolesPage implements OnInit {
       if (permissionIds) {
         await this.runMutation(
           () => this.data.assignRolePermissions(role.id, permissionIds),
-          `${role.name} permissions updated`,
+          `已更新 ${role.name} 的权限`,
         );
       }
     } catch (error) {
@@ -142,7 +142,7 @@ export class RolesPage implements OnInit {
             description: result.description || null,
             isActive: result.isActive,
           }),
-        `${result.name} updated`,
+        `已更新 ${result.name}`,
       );
     } else {
       await this.runMutation(
@@ -155,7 +155,7 @@ export class RolesPage implements OnInit {
             color: result.color,
             description: result.description || null,
           }),
-        `${result.name} created`,
+        `已创建 ${result.name}`,
       );
     }
   }
@@ -164,16 +164,16 @@ export class RolesPage implements OnInit {
     this.busy.set(true);
     try {
       await action();
-      this.snackBar.open(success, 'Close', { duration: 3000 });
+      this.snackBar.open(success, '关闭', { duration: 3000 });
       await this.loadRoles();
     } catch (error) {
-      this.showError(error, '操作失败,请稍后重试');
+      this.showError(error, '操作失败，请稍后重试');
     } finally {
       this.busy.set(false);
     }
   }
 
   private showError(error: unknown, fallback: string): void {
-    this.snackBar.open(apiErrorMessage(error, fallback), 'Close', { duration: 5000 });
+    this.snackBar.open(apiErrorMessage(error, fallback), '关闭', { duration: 5000 });
   }
 }

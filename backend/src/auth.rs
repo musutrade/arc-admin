@@ -82,7 +82,7 @@ impl<P> RequirePermission<P> {
         if self.permission_codes.contains(code) {
             Ok(())
         } else {
-            Err(ApiError::forbidden(format!("缺少权限: {code}")))
+            Err(ApiError::forbidden(format!("缺少权限：{code}")))
         }
     }
 }

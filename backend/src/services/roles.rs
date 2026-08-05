@@ -67,16 +67,16 @@ pub async fn create(pool: &PgPool, req: &CreateRoleRequest) -> Result<RoleRespon
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
     if !valid_code {
         return Err(ApiError::validation(
-            "code 需为 3-64 位小写字母/数字/下划线，且以字母开头",
+            "角色编码需为 3-64 位小写字母、数字或下划线，且以字母开头",
         ));
     }
     if req.name.trim().is_empty() {
-        return Err(ApiError::validation("name 不能为空"));
+        return Err(ApiError::validation("角色名称不能为空"));
     }
     let color = req.color.clone().unwrap_or_else(|| "neutral".to_string());
     if !ROLE_COLORS.contains(&color.as_str()) {
         return Err(ApiError::validation(
-            "color 只能是 primary/warning/success/danger/neutral",
+            "颜色只能是 primary、warning、success、danger 或 neutral",
         ));
     }
     let category = req
@@ -112,11 +112,11 @@ pub async fn update(
 ) -> Result<RoleResponse, ApiError> {
     let name = req.name.as_ref().map(|value| value.trim().to_string());
     if name.as_deref().is_some_and(str::is_empty) {
-        return Err(ApiError::validation("name 不能为空"));
+        return Err(ApiError::validation("角色名称不能为空"));
     }
     let category = req.category.as_ref().map(|value| value.trim().to_string());
     if category.as_deref().is_some_and(str::is_empty) {
-        return Err(ApiError::validation("category 不能为空"));
+        return Err(ApiError::validation("角色分类不能为空"));
     }
     if req.is_active == Some(false) {
         let role = repositories::roles::find_by_id(pool, id)
@@ -124,13 +124,13 @@ pub async fn update(
             .map_err(db_error)?
             .ok_or_else(|| ApiError::not_found("角色不存在"))?;
         if role.code == "super_admin" {
-            return Err(ApiError::forbidden("内置角色 super_admin 不可停用"));
+            return Err(ApiError::forbidden("内置超级管理员角色不可停用"));
         }
     }
     if let Some(color) = &req.color {
         if !ROLE_COLORS.contains(&color.as_str()) {
             return Err(ApiError::validation(
-                "color 只能是 primary/warning/success/danger/neutral",
+                "颜色只能是 primary、warning、success、danger 或 neutral",
             ));
         }
     }
@@ -162,7 +162,7 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), ApiError> {
         .map_err(db_error)?
     {
         if row.code == "super_admin" {
-            return Err(ApiError::forbidden("内置角色 super_admin 不可删除"));
+            return Err(ApiError::forbidden("内置超级管理员角色不可删除"));
         }
     }
     let deleted = repositories::roles::delete(pool, id)
@@ -195,7 +195,7 @@ pub async fn assign_permissions(
         .map_err(db_error)?
         .ok_or_else(|| ApiError::not_found("角色不存在"))?;
     if role.code == "super_admin" {
-        return Err(ApiError::forbidden("内置角色 super_admin 的权限不可修改"));
+        return Err(ApiError::forbidden("内置超级管理员角色的权限不可修改"));
     }
     let mut transaction = pool.begin().await.map_err(db_error)?;
     repositories::roles::assign_permissions(&mut transaction, id, &req.permission_ids)

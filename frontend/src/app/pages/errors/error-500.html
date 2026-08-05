@@ -9,29 +9,26 @@
 
     <!-- 文案 -->
     <h1 class="error-code">500</h1>
-    <h2 class="error-title">Internal Server Error</h2>
-    <p class="error-desc">
-      Something went wrong on our side. Please try again later or contact support if the issue
-      persists. Our engineering team has been notified.
-    </p>
+    <h2 class="error-title">服务器内部错误</h2>
+    <p class="error-desc">服务器暂时无法完成请求，请稍后重试；如问题持续出现，请联系技术支持。</p>
 
     <!-- 操作 -->
     <div class="error-actions center">
       <button class="btn-primary" (click)="reload()">
         <mat-icon>refresh</mat-icon>
-        Refresh Page
+        刷新页面
       </button>
       <button class="btn-outline" (click)="goHome()">
         <mat-icon>support_agent</mat-icon>
-        Contact Support
+        返回首页
       </button>
     </div>
 
     <!-- 状态信息 -->
     <div class="n500-status">
-      <span>Status: <b class="critical">Critical</b></span>
-      <span>Incident ID: <code class="incident-id">ERR-X92-RBAC</code></span>
-      <a class="status-link">System Status Page</a>
+      <span>状态：<b class="critical">严重</b></span>
+      <span>事件编号：<code class="incident-id">ERR-X92-RBAC</code></span>
+      <a class="status-link">系统状态</a>
     </div>
   </div>
 </div>

@@ -2,13 +2,13 @@
   <!-- 页面头部 -->
   <div class="page-header">
     <div>
-      <h1>Assign Permissions</h1>
-      <p>Configure functional access rights per role level with granular permission codes.</p>
+      <h1>权限分配</h1>
+      <p>按角色配置精细化功能访问权限。</p>
     </div>
     @if (canCreateRole()) {
       <button class="btn-primary" (click)="onCreateRole()" [disabled]="busy()">
         <mat-icon>add</mat-icon>
-        <span>Add New Role</span>
+        <span>新增角色</span>
       </button>
     }
   </div>
@@ -27,10 +27,10 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Role Name</th>
-              <th>Users Assigned</th>
-              <th>Status</th>
-              <th class="th-actions">Actions</th>
+              <th>角色名称</th>
+              <th>已分配用户</th>
+              <th>状态</th>
+              <th class="th-actions">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -42,18 +42,18 @@
                     <span class="role-name">{{ row.roleName }}</span>
                   </div>
                 </td>
-                <td class="cell-secondary">{{ row.usersAssigned }} users</td>
+                <td class="cell-secondary">{{ row.usersAssigned }} 名用户</td>
                 <td>
                   <span class="status-pill" [class.inactive]="!row.active">
                     <span class="dot"></span>
-                    {{ row.active ? 'Active' : 'Inactive' }}
+                    {{ row.active ? '启用' : '停用' }}
                   </span>
                 </td>
                 <td class="th-actions">
                   @if (row.roleCode !== 'super_admin') {
                     <button class="edit-link" (click)="onEditPermissions(row)" [disabled]="busy()">
                       <mat-icon>tune</mat-icon>
-                      Edit Permissions
+                      编辑权限
                     </button>
                   }
                 </td>

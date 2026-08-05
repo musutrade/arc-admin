@@ -1,20 +1,20 @@
 <form class="editor-dialog" [formGroup]="form" (ngSubmit)="submit()">
   <div class="dialog-title-row">
     <mat-icon>{{ data.user ? 'edit' : 'person_add' }}</mat-icon>
-    <h2>{{ data.user ? 'Edit User' : 'Add User' }}</h2>
+    <h2>{{ data.user ? '编辑用户' : '新增用户' }}</h2>
   </div>
 
   <div class="form-grid">
     <div class="form-field">
-      <label for="user-username">Username</label>
+      <label for="user-username">用户名</label>
       <input id="user-username" formControlName="username" autocomplete="off" />
       @if (form.controls.username.touched && form.controls.username.invalid) {
-        <small>Use 3-64 letters, numbers, underscores, or hyphens.</small>
+        <small>请输入 3-64 位字母、数字、下划线或连字符。</small>
       }
     </div>
 
     <div class="form-field">
-      <label for="user-password">{{ data.user ? 'New password (optional)' : 'Password' }}</label>
+      <label for="user-password">{{ data.user ? '新密码（选填）' : '密码' }}</label>
       <input
         id="user-password"
         type="password"
@@ -22,34 +22,34 @@
         autocomplete="new-password"
       />
       @if (form.controls.password.touched && form.controls.password.invalid) {
-        <small>Password must contain at least 8 characters.</small>
+        <small>密码至少需要 8 个字符。</small>
       }
     </div>
 
     <div class="form-field">
-      <label for="user-display-name">Display name</label>
+      <label for="user-display-name">显示名称</label>
       <input id="user-display-name" formControlName="displayName" />
     </div>
 
     <div class="form-field">
-      <label for="user-email">Email</label>
+      <label for="user-email">邮箱</label>
       <input id="user-email" type="email" formControlName="email" autocomplete="email" />
       @if (form.controls.email.touched && form.controls.email.invalid) {
-        <small>Enter a valid email address.</small>
+        <small>请输入有效的邮箱地址。</small>
       }
     </div>
 
     <div class="form-field">
-      <label for="user-status">Status</label>
+      <label for="user-status">状态</label>
       <select id="user-status" formControlName="status">
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-        <option value="suspended">Suspended</option>
+        <option value="active">启用</option>
+        <option value="inactive">停用</option>
+        <option value="suspended">已暂停</option>
       </select>
     </div>
 
     <div class="form-field">
-      <label for="user-roles">Roles</label>
+      <label for="user-roles">角色</label>
       <select id="user-roles" formControlName="roleIds" multiple>
         @for (role of data.roles; track role.id) {
           <option [value]="role.id">{{ role.name }}</option>
@@ -59,7 +59,7 @@
   </div>
 
   <div class="dialog-actions">
-    <button type="button" class="btn-outline" mat-dialog-close>Cancel</button>
-    <button type="submit" class="btn-primary">Save User</button>
+    <button type="button" class="btn-outline" mat-dialog-close>取消</button>
+    <button type="submit" class="btn-primary">保存用户</button>
   </div>
 </form>

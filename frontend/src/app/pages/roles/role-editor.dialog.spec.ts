@@ -30,14 +30,14 @@ describe('RoleEditorDialog', () => {
 
     const selection = fixture.nativeElement.querySelector('.icon-select-value');
     expect(selection.textContent).toContain('badge');
-    expect(selection.textContent).toContain('Role badge');
+    expect(selection.textContent).toContain('角色徽章');
   });
 
   it('preserves an existing icon outside the curated choices', async () => {
     await createDialog({ icon: 'custom_icon' } as Role);
 
     expect(dialog.form.controls.icon.value).toBe('custom_icon');
-    expect(dialog.iconLabel('custom_icon')).toBe('Current icon');
+    expect(dialog.iconLabel('custom_icon')).toBe('当前图标');
   });
 
   it('submits the selected icon value', async () => {
