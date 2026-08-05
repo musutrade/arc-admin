@@ -70,7 +70,7 @@ inject_env = "TEST_DATABASE_URL"
 startup_timeout_secs = 30
 container_port = 5432
 environment = { POSTGRES_USER = "app_test", POSTGRES_PASSWORD = "app_test", POSTGRES_DB = "app_test" }
-healthcheck = ["pg_isready", "-U", "app_test", "-d", "app_test"]
+healthcheck = ["pg_isready", "-h", "127.0.0.1", "-U", "app_test", "-d", "app_test"]
 connection = "postgres://app_test:app_test@127.0.0.1:{host_port}/app_test"
 
 [parsers.rust]

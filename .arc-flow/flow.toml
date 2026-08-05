@@ -138,7 +138,7 @@ startup_timeout_secs = 30
 timeout_env = "ARC_FLOW_DATABASE_TIMEOUT_SECS"
 container_port = 5432
 environment = { POSTGRES_USER = "arc_admin_test", POSTGRES_PASSWORD = "arc_admin_test", POSTGRES_DB = "arc_admin_test" }
-healthcheck = ["pg_isready", "-U", "arc_admin_test", "-d", "arc_admin_test"]
+healthcheck = ["pg_isready", "-h", "127.0.0.1", "-U", "arc_admin_test", "-d", "arc_admin_test"]
 connection = "postgres://arc_admin_test:arc_admin_test@127.0.0.1:{host_port}/arc_admin_test"
 
 [parsers.rust]

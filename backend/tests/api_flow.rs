@@ -6,6 +6,7 @@ use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -104,6 +105,46 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let token = login["accessToken"].as_str().expect("access token");
+
+    let (status, permission_groups) = send(
+        &app,
+        Method::GET,
+        "/api/v1/permissions/groups",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let groups = permission_groups.as_array().expect("permission groups");
+    let group_codes = groups
+        .iter()
+        .filter_map(|group| group["code"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(group_codes, vec!["dashboard", "identity"]);
+    let permission_codes = groups
+        .iter()
+        .flat_map(|group| {
+            group["permissions"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|permission| permission["code"].as_str())
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        permission_codes,
+        BTreeSet::from([
+            "dashboard:analytics:read",
+            "permission:directory:read",
+            "role:directory:read",
+            "role:permissions:write",
+            "role:write",
+            "user:admin:deactivate",
+            "user:admin:reset_password",
+            "user:directory:read",
+            "user:write",
+        ])
+    );
 
     let (status, roles) = send(&app, Method::GET, "/api/v1/roles", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
