@@ -160,6 +160,7 @@ unmatched = "fail"
 patterns = [
   "README.md",
   "AGENTS.md",
+  "start.sh",
   "docs/**",
   "codex-audit-pipeline/README.md",
   "codex-audit-pipeline/docs/**",

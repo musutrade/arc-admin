@@ -33,6 +33,10 @@ docker pull postgres:16-alpine
 git config core.hooksPath codex-audit-pipeline/hooks
 cargo flow doctor
 
+# 前后端一键启动（Ctrl+C 会同时停止两个服务）
+./start.sh
+
+# 也可以分别启动
 # 前端（新终端）
 cd frontend && npm start                  # http://localhost:4200
 
