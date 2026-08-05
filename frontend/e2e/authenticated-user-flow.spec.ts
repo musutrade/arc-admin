@@ -4,6 +4,7 @@ import type {
   ApiUser,
   ChangePasswordRequest,
   CreateUserRequest,
+  UpdateUserRequest,
 } from '../src/app/core/api.models';
 
 const administrator: ApiUser = {
@@ -13,7 +14,7 @@ const administrator: ApiUser = {
   email: 'admin@example.test',
   status: 'active',
   roles: ['超级管理员'],
-  lastLoginAt: null,
+  lastLoginAt: '2026-08-01T00:00:00Z',
   createdAt: '2026-08-01T00:00:00Z',
 };
 
@@ -62,6 +63,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   let users: ApiUser[] = [administrator];
   let createdRequest: Record<string, unknown> | null = null;
   let passwordChangeRequest: ChangePasswordRequest | null = null;
+  let statusUpdateRequest: UpdateUserRequest | null = null;
 
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
@@ -111,6 +113,14 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       };
       users = [...users, created];
       await route.fulfill({ status: 201, json: created });
+    } else if (/^\/api\/v1\/users\/\d+$/.test(path) && request.method() === 'PUT') {
+      const userId = Number(path.split('/').at(-1));
+      const payload = request.postDataJSON() as UpdateUserRequest;
+      statusUpdateRequest = payload;
+      users = users.map((user) =>
+        user.id === userId ? { ...user, status: payload.status ?? user.status } : user,
+      );
+      await route.fulfill({ json: users.find((user) => user.id === userId) });
     } else if (path === '/api/v1/users') {
       await route.fulfill({
         json: { items: users, total: users.length, page: 1, pageSize: 100 },
@@ -144,20 +154,23 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       element.getAnimations({ subtree: true }).map((animation) => animation.finished),
     );
   });
-  await changePasswordDialog.getByLabel('当前密码', { exact: true }).fill('safe-password');
-  await changePasswordDialog.getByLabel('新密码', { exact: true }).fill('updated-safe-password');
-  await changePasswordDialog.getByLabel('确认新密码', { exact: true }).fill('different-password');
-  await changePasswordDialog.getByLabel('确认新密码', { exact: true }).blur();
+  const currentPassword = changePasswordDialog.locator('#current-password');
+  const newPassword = changePasswordDialog.locator('#new-password');
+  const confirmPassword = changePasswordDialog.locator('#confirm-password');
+  await currentPassword.fill('safe-password');
+  await newPassword.fill('updated-safe-password');
+  await confirmPassword.fill('different-password');
+  await confirmPassword.blur();
   await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeVisible();
-  await changePasswordDialog
-    .getByLabel('确认新密码', { exact: true })
-    .fill('updated-safe-password');
+  await confirmPassword.fill('updated-safe-password');
+  const savePassword = changePasswordDialog.getByRole('button', { name: '保存修改' });
+  await expect(savePassword).toBeEnabled();
 
   if (process.env['VISUAL_REVIEW']) {
     await page.screenshot({ path: testInfo.outputPath('change-password-dialog.png') });
   }
 
-  await changePasswordDialog.getByRole('button', { name: '保存修改' }).click();
+  await savePassword.click();
   await expect(changePasswordDialog).toBeHidden();
   expect(passwordChangeRequest).toEqual({
     currentPassword: 'safe-password',
@@ -173,6 +186,8 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await page.getByRole('button', { name: '用户管理' }).click();
   await page.getByRole('link', { name: '用户列表' }).click();
   await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
+  const administratorRow = page.getByRole('row').filter({ hasText: '管理员' });
+  await expect(administratorRow).toContainText('2026-08-01 08:00');
   await page.getByRole('button', { name: '新增用户' }).click();
 
   const dialog = page.getByRole('dialog');
@@ -242,6 +257,28 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     await closeSnackBar.click();
     await expect(snackBar).toBeHidden();
   }
+
+  const createdUserRow = page.getByRole('row').filter({ hasText: '新用户' });
+  await createdUserRow.getByRole('button', { name: '停用用户 新用户' }).click();
+  const deactivateDialog = page.getByRole('dialog');
+  await expect(deactivateDialog.getByRole('heading', { name: '停用用户' })).toBeVisible();
+  await deactivateDialog.evaluate(async (element) => {
+    await Promise.allSettled(
+      element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+    );
+  });
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('deactivate-user-dialog.png') });
+  }
+  await deactivateDialog.getByRole('button', { name: '停用用户' }).click();
+  await expect(createdUserRow.getByText('停用', { exact: true })).toBeVisible();
+  expect(statusUpdateRequest).toEqual({ status: 'inactive' });
+  await expect(createdUserRow.getByRole('button', { name: '启用用户 新用户' })).toBeVisible();
+
+  const statusSnackBar = page.locator('mat-snack-bar-container');
+  await expect(statusSnackBar).toContainText('已停用 新用户');
+  await statusSnackBar.getByRole('button', { name: '关闭' }).click();
+  await expect(statusSnackBar).toBeHidden();
 
   const rootToken = (name: string) =>
     page.evaluate((tokenName) => {

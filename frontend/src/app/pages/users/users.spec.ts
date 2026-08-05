@@ -48,6 +48,11 @@ describe('UsersPage', () => {
     expect(page.loading()).toBe(false);
   });
 
+  it('formats UTC login times in China Standard Time', async () => {
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('2026-08-01 08:00');
+  });
+
   it('derives unique role options from users', () => {
     const roles = page.roleOptions();
     expect(roles[0]).toBe('all');

@@ -130,7 +130,13 @@
                     {{ statusMeta[u.status].label }}
                   </span>
                 </td>
-                <td class="cell-tertiary">{{ u.lastLogin }}</td>
+                <td class="cell-tertiary">
+                  @if (u.lastLogin) {
+                    {{ u.lastLogin | date: 'yyyy-MM-dd HH:mm' : '+0800' }}
+                  } @else {
+                    从未登录
+                  }
+                </td>
                 <td class="td-actions">
                   @if (canWrite()) {
                     <button class="row-btn" (click)="onEdit(u)" title="编辑" [disabled]="busy()">
@@ -145,6 +151,22 @@
                       [disabled]="busy()"
                     >
                       <mat-icon>lock_reset</mat-icon>
+                    </button>
+                  }
+                  @if (canManageStatus()) {
+                    <button
+                      class="row-btn status-action"
+                      [class.is-activate]="u.status !== 'active'"
+                      (click)="onToggleStatus(u)"
+                      [title]="u.status === 'active' ? '停用用户' : '启用用户'"
+                      [attr.aria-label]="
+                        (u.status === 'active' ? '停用用户 ' : '启用用户 ') + u.name
+                      "
+                      [disabled]="busy()"
+                    >
+                      <mat-icon>{{
+                        u.status === 'active' ? 'person_off' : 'person_check'
+                      }}</mat-icon>
                     </button>
                   }
                   @if (canDeactivate()) {

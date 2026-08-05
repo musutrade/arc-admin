@@ -59,9 +59,19 @@ describe('DataService', () => {
         id: '7',
         username: 'sarah',
         name: 'Sarah Chen',
-        lastLogin: '从未登录',
+        lastLogin: null,
       }),
     ]);
+  });
+
+  it('updates a user status through the existing user endpoint', async () => {
+    const result = service.updateUser('7', { status: 'inactive' });
+    const request = http.expectOne('/api/v1/users/7');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual({ status: 'inactive' });
+    request.flush({ ...apiUser, status: 'inactive' });
+
+    await expect(result).resolves.toEqual(expect.objectContaining({ id: '7', status: 'inactive' }));
   });
 
   it('maps dashboard statistics into cards', async () => {

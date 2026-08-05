@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -35,6 +36,7 @@ const STATUS_META: Record<UserStatus, { cls: string; label: string }> = {
     MatProgressSpinnerModule,
     MatDialogModule,
     MatSnackBarModule,
+    DatePipe,
   ],
   templateUrl: './users.html',
   styleUrl: './users.scss',
@@ -61,6 +63,7 @@ export class UsersPage implements OnInit {
   readonly canWrite = computed(() => this.auth.hasPermission('user:write'));
   readonly canResetPassword = computed(() => this.auth.hasPermission('user:admin:reset_password'));
   readonly canDeactivate = computed(() => this.auth.hasPermission('user:admin:deactivate'));
+  readonly canManageStatus = computed(() => this.canWrite() && this.canDeactivate());
 
   /** 状态展示元数据暴露给模板 */
   readonly statusMeta = STATUS_META;
@@ -223,6 +226,26 @@ export class UsersPage implements OnInit {
     );
   }
 
+  async onToggleStatus(user: User): Promise<void> {
+    const activating = user.status !== 'active';
+    const action = activating ? '启用' : '停用';
+    const confirmed = await this.confirm(
+      `${action}用户`,
+      activating
+        ? `确定重新启用 ${user.name} 吗？启用后该账号可以正常登录。`
+        : `确定停用 ${user.name} 吗？停用后该账号将无法登录。`,
+      `${action}用户`,
+      !activating,
+    );
+    if (!confirmed) {
+      return;
+    }
+    await this.runMutation(
+      () => this.data.updateUser(user.id, { status: activating ? 'active' : 'inactive' }),
+      `已${action} ${user.name}`,
+    );
+  }
+
   async onDelete(user: User): Promise<void> {
     const confirmed = await this.confirm(
       '删除用户',
@@ -325,11 +348,16 @@ export class UsersPage implements OnInit {
     }
   }
 
-  private confirm(title: string, message: string, confirmLabel: string): Promise<boolean> {
+  private confirm(
+    title: string,
+    message: string,
+    confirmLabel: string,
+    danger = true,
+  ): Promise<boolean> {
     return firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {
-          data: { title, message, confirmLabel, danger: true },
+          data: { title, message, confirmLabel, danger },
         })
         .afterClosed(),
     ).then(Boolean);

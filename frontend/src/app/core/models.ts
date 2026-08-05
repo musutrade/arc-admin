@@ -9,7 +9,7 @@ export interface User {
   email: string;
   roles: string[];
   status: UserStatus;
-  lastLogin: string;
+  lastLogin: string | null;
   createdAt: string;
   avatarColor: string; // 首字母头像背景色
 }

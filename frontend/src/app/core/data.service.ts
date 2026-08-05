@@ -152,7 +152,7 @@ function mapUser(user: ApiUser): User {
     email: user.email ?? '',
     roles: user.roles,
     status: user.status,
-    lastLogin: user.lastLoginAt ?? '从未登录',
+    lastLogin: user.lastLoginAt,
     createdAt: user.createdAt,
     avatarColor: AVATAR_COLORS[user.id % AVATAR_COLORS.length],
   };

@@ -163,6 +163,21 @@
       background: var(--mat-sys-surface-container);
       color: var(--mat-sys-primary);
     }
+    &.status-action {
+      color: var(--mat-sys-warning);
+
+      &:hover {
+        background: var(--ui-color-warning-soft);
+      }
+
+      &.is-activate {
+        color: var(--mat-sys-success);
+
+        &:hover {
+          background: var(--ui-color-success-soft);
+        }
+      }
+    }
   }
 }
 
