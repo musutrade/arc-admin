@@ -7,10 +7,20 @@
     </div>
     <div class="header-actions">
       <div class="view-toggle">
-        <button [class.active]="view() === 'grid'" (click)="setView('grid')" title="卡片视图">
+        <button
+          [class.active]="view() === 'grid'"
+          (click)="setView('grid')"
+          title="卡片视图"
+          aria-label="卡片视图"
+        >
           <mat-icon>grid_view</mat-icon>
         </button>
-        <button [class.active]="view() === 'list'" (click)="setView('list')" title="列表视图">
+        <button
+          [class.active]="view() === 'list'"
+          (click)="setView('list')"
+          title="列表视图"
+          aria-label="列表视图"
+        >
           <mat-icon>table_rows</mat-icon>
         </button>
       </div>
@@ -77,13 +87,14 @@
   } @else {
     <!-- 列表视图 -->
     <div class="table-card">
-      <div class="table-scroll">
-        <table class="data-table">
+      <div class="table-scroll role-table-scroll">
+        <table class="data-table roles-table">
           <thead>
             <tr>
               <th>Role</th>
               <th>Category</th>
               <th>Members</th>
+              <th>Status</th>
               <th>Description</th>
               <th class="th-actions">Actions</th>
             </tr>
@@ -96,50 +107,85 @@
                     <span class="role-icon {{ 'ic-' + r.color }} sm"
                       ><mat-icon>{{ r.icon }}</mat-icon></span
                     >
-                    <span class="list-role-name">{{ r.name }}</span>
+                    <span class="list-role-identity">
+                      <span class="list-role-name">{{ r.name }}</span>
+                      <span class="list-role-code">{{ r.code }}</span>
+                    </span>
                   </div>
                 </td>
                 <td>
-                  <span class="list-category">{{ r.category }}</span>
+                  <span class="role-category {{ 'cat-' + r.color }}">{{ r.category }}</span>
                 </td>
-                <td class="cell-secondary">{{ r.members }} members</td>
-                <td class="cell-secondary list-desc">{{ r.description }}</td>
-                <td class="th-actions">
+                <td>
+                  <span class="member-count"><mat-icon>group</mat-icon>{{ r.members }}</span>
+                </td>
+                <td>
+                  <span class="status-badge" [class.st-active]="r.isActive">
+                    <span class="status-dot"></span>
+                    {{ r.isActive ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td class="cell-secondary list-desc" [title]="r.description">
+                  {{ r.description }}
+                </td>
+                <td class="td-actions">
                   @if (canWrite()) {
                     <button
                       type="button"
-                      class="link-btn"
+                      class="row-btn"
                       (click)="onEditRole(r)"
                       [disabled]="busy()"
+                      [attr.aria-label]="'Edit ' + r.name"
+                      title="Edit role"
                     >
-                      Edit
+                      <mat-icon>edit</mat-icon>
                     </button>
                   }
                   @if (canAssign() && r.code !== 'super_admin') {
                     <button
                       type="button"
-                      class="link-btn"
+                      class="row-btn"
                       (click)="onEditPermissions(r)"
                       [disabled]="busy()"
+                      [attr.aria-label]="'Edit permissions for ' + r.name"
+                      title="Edit permissions"
                     >
-                      Permissions
+                      <mat-icon>tune</mat-icon>
                     </button>
                   }
                   @if (canWrite() && r.code !== 'super_admin') {
                     <button
                       type="button"
-                      class="link-btn danger"
+                      class="row-btn danger"
                       (click)="onDeleteRole(r)"
                       [disabled]="busy()"
+                      [attr.aria-label]="'Delete ' + r.name"
+                      title="Delete role"
                     >
-                      Delete
+                      <mat-icon>delete</mat-icon>
                     </button>
                   }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6">
+                  <div class="empty-state">
+                    <mat-icon>badge</mat-icon>
+                    <p>暂无角色</p>
+                  </div>
                 </td>
               </tr>
             }
           </tbody>
         </table>
+      </div>
+      <div class="table-footer role-table-footer">
+        <span class="page-info">
+          Showing {{ roles().length > 0 ? 1 : 0 }}-{{ roles().length }} of
+          {{ roles().length }} entries
+        </span>
+        <span class="role-total"><mat-icon>badge</mat-icon>{{ roles().length }} roles</span>
       </div>
     </div>
   }

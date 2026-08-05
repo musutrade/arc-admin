@@ -167,6 +167,10 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     displayName: 'New User',
     roleIds: [2],
   });
+  const closeSnackBar = page.getByRole('button', { name: 'Close' });
+  if (await closeSnackBar.isVisible()) {
+    await closeSnackBar.click();
+  }
 
   const rootToken = (name: string) =>
     page.evaluate((tokenName) => {
@@ -192,6 +196,41 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
 
   if (process.env['VISUAL_REVIEW']) {
     await page.screenshot({ path: testInfo.outputPath('users-dark.png'), fullPage: true });
+  }
+
+  await page.getByRole('button', { name: '切换到亮色模式' }).click();
+  await expect.poll(() => rootToken('--ui-color-surface-page')).toBe('#f6f8fc');
+  if (await mobileMenu.isVisible()) {
+    await mobileMenu.click();
+  }
+  await page.getByRole('link', { name: 'Role Permissions' }).click();
+  await expect(page.getByRole('heading', { name: 'Role Management' })).toBeVisible();
+  await page.getByRole('button', { name: '列表视图' }).click();
+
+  const roleTable = page.locator('.roles-table');
+  const roleTableScroll = page.locator('.role-table-scroll');
+  await expect(roleTable).toBeVisible();
+  await expect(roleTable.getByRole('columnheader', { name: 'Status' })).toBeVisible();
+  const viewerRow = roleTable.getByRole('row').filter({ hasText: 'Viewer' });
+  await expect(viewerRow).toContainText('viewer');
+  await expect(viewerRow.getByText('Active', { exact: true })).toBeVisible();
+  await expect(viewerRow.getByRole('button', { name: 'Edit Viewer' })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
+  if (viewport!.width < 800) {
+    await expect
+      .poll(() => roleTableScroll.evaluate((element) => element.scrollWidth > element.clientWidth))
+      .toBe(true);
+  }
+
+  if (process.env['VISUAL_REVIEW']) {
+    await expect(page.getByText('New User created', { exact: true })).toBeHidden();
+    await page.screenshot({ path: testInfo.outputPath('roles-list-light.png'), fullPage: true });
   }
 });
 

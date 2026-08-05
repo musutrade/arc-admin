@@ -180,10 +180,6 @@
   flex-wrap: wrap;
 }
 
-.link-btn.danger {
-  color: var(--mat-sys-error);
-}
-
 .role-members {
   display: flex;
   align-items: center;
@@ -225,53 +221,166 @@
 }
 
 /* 列表视图 */
-.th-actions {
-  text-align: right;
-  white-space: nowrap;
+.roles-table {
+  .th-actions {
+    text-align: right;
+  }
+
+  .list-role-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .list-role-identity {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .list-role-name {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .list-role-code {
+    color: var(--ui-color-text-tertiary);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .member-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ui-color-text-secondary);
+    white-space: nowrap;
+
+    mat-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--ui-color-text-tertiary);
+      font-size: 18px;
+    }
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: var(--ui-radius-pill);
+    background: var(--ui-color-surface-muted);
+    color: var(--ui-color-text-tertiary);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ui-color-text-tertiary);
+    }
+
+    &.st-active {
+      background: var(--ui-color-success-soft);
+      color: var(--mat-sys-success);
+
+      .status-dot {
+        background: var(--mat-sys-success);
+      }
+    }
+  }
+
+  .cell-secondary {
+    color: var(--ui-color-text-secondary);
+  }
+
+  .list-desc {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .td-actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .row-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--ui-radius-md);
+    background: transparent;
+    color: var(--ui-color-text-secondary);
+    cursor: pointer;
+    transition:
+      color var(--ui-duration-fast) var(--ui-ease-standard),
+      background-color var(--ui-duration-fast) var(--ui-ease-standard);
+
+    mat-icon {
+      width: 20px;
+      height: 20px;
+      font-size: 20px;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--mat-sys-surface-container);
+      color: var(--mat-sys-primary);
+    }
+
+    &.danger:hover:not(:disabled) {
+      background: var(--ui-color-error-soft);
+      color: var(--mat-sys-error);
+    }
+
+    &:disabled {
+      opacity: 0.55;
+    }
+  }
 }
 
-.list-role-cell {
-  display: flex;
+.role-total {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-}
-
-.list-role-name {
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.list-category {
-  padding: 2px 8px;
-  border-radius: var(--ui-radius-sm);
-  font-size: 12px;
-  font-weight: 500;
-  background: var(--mat-sys-surface-container);
+  gap: 6px;
   color: var(--ui-color-text-secondary);
-  white-space: nowrap;
+  font-size: 13px;
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--ui-color-text-tertiary);
+    font-size: 18px;
+  }
 }
 
-.cell-secondary {
-  color: var(--ui-color-text-secondary);
-}
+@media (max-width: 768px) {
+  .roles-table {
+    min-width: 860px;
 
-.list-desc {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+    .th-actions,
+    .td-actions {
+      position: sticky;
+      right: 0;
+      background: var(--ui-color-surface-panel);
+      box-shadow: -1px 0 0 var(--ui-color-border);
+    }
 
-.link-btn {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--ui-color-link);
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  &:hover {
-    text-decoration: underline;
+    .th-actions {
+      background: var(--ui-color-surface-subtle);
+    }
+
+    tbody tr:hover .td-actions {
+      background: var(--ui-color-hover);
+    }
+  }
+
+  .role-table-footer {
+    padding: var(--ui-space-4);
   }
 }
