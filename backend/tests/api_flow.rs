@@ -419,6 +419,56 @@ async fn login_and_user_crud_flow() {
         .as_str()
         .expect("viewer access token");
 
+    let (status, deactivated_role) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{viewer_role_id}"),
+        Some(token),
+        Some(json!({"isActive": false})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(deactivated_role["isActive"], false);
+    assert_eq!(deactivated_role["members"], 1);
+
+    let (status, permissions_without_role) = send(
+        &app,
+        Method::GET,
+        "/api/v1/auth/me/permissions",
+        Some(viewer_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(permissions_without_role["codes"], json!([]));
+
+    let (status, reactivated_role) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{viewer_role_id}"),
+        Some(token),
+        Some(json!({"isActive": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(reactivated_role["isActive"], true);
+    assert_eq!(reactivated_role["members"], 1);
+
+    let (status, restored_permissions) = send(
+        &app,
+        Method::GET,
+        "/api/v1/auth/me/permissions",
+        Some(viewer_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(restored_permissions["codes"]
+        .as_array()
+        .expect("permission codes")
+        .iter()
+        .any(|code| code == "role:directory:read"));
+
     let (status, _) = send(
         &app,
         Method::POST,

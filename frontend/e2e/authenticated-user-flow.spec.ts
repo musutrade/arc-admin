@@ -4,6 +4,7 @@ import type {
   ApiUser,
   ChangePasswordRequest,
   CreateUserRequest,
+  UpdateRoleRequest,
   UpdateUserRequest,
 } from '../src/app/core/api.models';
 
@@ -30,7 +31,7 @@ const permissions = [
   'user:write',
 ];
 
-const roles: ApiRole[] = [
+let roles: ApiRole[] = [
   {
     id: 1,
     code: 'super_admin',
@@ -63,6 +64,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   let users: ApiUser[] = [administrator];
   let createdRequest: Record<string, unknown> | null = null;
   let passwordChangeRequest: ChangePasswordRequest | null = null;
+  let roleStatusUpdateRequest: UpdateRoleRequest | null = null;
   let statusUpdateRequest: UpdateUserRequest | null = null;
 
   await page.route('**/api/v1/**', async (route) => {
@@ -98,6 +100,14 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       });
     } else if (path === '/api/v1/roles') {
       await route.fulfill({ json: roles });
+    } else if (/^\/api\/v1\/roles\/\d+$/.test(path) && request.method() === 'PUT') {
+      const roleId = Number(path.split('/').at(-1));
+      const payload = request.postDataJSON() as UpdateRoleRequest;
+      roleStatusUpdateRequest = payload;
+      roles = roles.map((role) =>
+        role.id === roleId ? { ...role, isActive: payload.isActive ?? role.isActive } : role,
+      );
+      await route.fulfill({ json: roles.find((role) => role.id === roleId) });
     } else if (path === '/api/v1/users' && request.method() === 'POST') {
       const payload = request.postDataJSON() as CreateUserRequest;
       createdRequest = payload as unknown as Record<string, unknown>;
@@ -112,6 +122,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
         createdAt: '2026-08-04T00:00:00Z',
       };
       users = [...users, created];
+      roles = roles.map((role) => (role.id === 2 ? { ...role, members: role.members + 1 } : role));
       await route.fulfill({ status: 201, json: created });
     } else if (/^\/api\/v1\/users\/\d+$/.test(path) && request.method() === 'PUT') {
       const userId = Number(path.split('/').at(-1));
@@ -315,6 +326,43 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   }
   await page.getByRole('link', { name: '角色管理' }).click();
   await expect(page.getByRole('heading', { name: '角色管理' })).toBeVisible();
+
+  const viewerCard = page.locator('.role-card').filter({ hasText: '查看者' });
+  const superAdminCard = page.locator('.role-card').filter({ hasText: '超级管理员' });
+  await expect(viewerCard.getByText('启用', { exact: true })).toBeVisible();
+  await expect(viewerCard).toContainText('1 名成员');
+  await expect(superAdminCard.getByRole('button', { name: '停用角色 超级管理员' })).toHaveCount(0);
+
+  await viewerCard.getByRole('button', { name: '停用角色 查看者' }).click();
+  const deactivateRoleDialog = page.getByRole('dialog');
+  await expect(deactivateRoleDialog.getByRole('heading', { name: '停用角色' })).toBeVisible();
+  await expect(deactivateRoleDialog).toContainText('1 名成员');
+  await expect(deactivateRoleDialog).toContainText('成员将立即失去该角色授予的权限');
+  await expect(deactivateRoleDialog).toContainText('可能立即失去后续管理权限');
+  await deactivateRoleDialog.evaluate(async (element) => {
+    await Promise.allSettled(
+      element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+    );
+  });
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({
+      path: testInfo.outputPath('deactivate-role-dialog.png'),
+      fullPage: true,
+    });
+  }
+  await deactivateRoleDialog.getByRole('button', { name: '停用角色' }).click();
+  await expect(deactivateRoleDialog).toBeHidden();
+  await expect(viewerCard.getByText('停用', { exact: true })).toBeVisible();
+  expect(roleStatusUpdateRequest).toEqual({ isActive: false });
+
+  const roleSnackBar = page.locator('mat-snack-bar-container');
+  await expect(roleSnackBar).toContainText('已停用 查看者');
+  await roleSnackBar.getByRole('button', { name: '关闭' }).click();
+  await expect(roleSnackBar).toBeHidden();
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('roles-grid-inactive.png'), fullPage: true });
+  }
+
   await page.getByRole('button', { name: '列表视图' }).click();
 
   const roleTable = page.locator('.roles-table');
@@ -323,7 +371,21 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await expect(roleTable.getByRole('columnheader', { name: '状态' })).toBeVisible();
   const viewerRow = roleTable.getByRole('row').filter({ hasText: '查看者' });
   await expect(viewerRow).toContainText('viewer');
+  await expect(viewerRow.getByText('停用', { exact: true })).toBeVisible();
+  await viewerRow.getByRole('button', { name: '启用角色 查看者' }).click();
+  const activateRoleDialog = page.getByRole('dialog');
+  await expect(activateRoleDialog.getByRole('heading', { name: '启用角色' })).toBeVisible();
+  await expect(activateRoleDialog).toContainText('1 名成员将重新获得该角色授予的权限');
+  await activateRoleDialog.getByRole('button', { name: '启用角色' }).click();
+  await expect(activateRoleDialog).toBeHidden();
   await expect(viewerRow.getByText('启用', { exact: true })).toBeVisible();
+  expect(roleStatusUpdateRequest).toEqual({ isActive: true });
+
+  await expect(roleSnackBar).toContainText('已启用 查看者');
+  await roleSnackBar.getByRole('button', { name: '关闭' }).click();
+  await expect(roleSnackBar).toBeHidden();
+  const superAdminRow = roleTable.getByRole('row').filter({ hasText: '超级管理员' });
+  await expect(superAdminRow.getByRole('button', { name: '停用角色 超级管理员' })).toHaveCount(0);
   const editViewer = viewerRow.getByRole('button', { name: '编辑角色 查看者' });
   await expect(editViewer).toBeVisible();
   await expect

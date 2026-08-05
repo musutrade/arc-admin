@@ -59,7 +59,11 @@
     </div>
     <div class="form-field">
       <label for="role-active">状态</label>
-      <select id="role-active" formControlName="isActive">
+      <select
+        id="role-active"
+        formControlName="isActive"
+        [title]="role?.code === 'super_admin' ? '内置超级管理员角色不可停用' : '角色状态'"
+      >
         <option [ngValue]="true">启用</option>
         <option [ngValue]="false">停用</option>
       </select>

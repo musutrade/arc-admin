@@ -107,7 +107,7 @@ export class RoleEditorDialog {
     icon: [this.role?.icon ?? 'badge', [Validators.required]],
     color: [this.role?.color ?? ('neutral' as Role['color'])],
     description: [this.role?.description ?? ''],
-    isActive: [this.role?.isActive ?? true],
+    isActive: [{ value: this.role?.isActive ?? true, disabled: this.role?.code === 'super_admin' }],
   });
 
   iconLabel(icon: string): string {

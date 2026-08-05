@@ -130,6 +130,16 @@ describe('DataService', () => {
     ]);
   });
 
+  it('updates a role status through the existing role endpoint', async () => {
+    const result = service.updateRole('3', { isActive: false });
+    const request = http.expectOne('/api/v1/roles/3');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual({ isActive: false });
+    request.flush({ ...apiRole, isActive: false });
+
+    await expect(result).resolves.toEqual(expect.objectContaining({ id: '3', isActive: false }));
+  });
+
   it('sends numeric permission ids when assigning a role', async () => {
     const result = service.assignRolePermissions('3', ['7', '9']);
     const request = http.expectOne('/api/v1/roles/3/permissions');

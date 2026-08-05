@@ -69,6 +69,35 @@ export class RolesPage implements OnInit {
     await this.openRoleEditor(role);
   }
 
+  async onToggleRoleStatus(role: Role): Promise<void> {
+    const activating = !role.isActive;
+    const action = activating ? '启用' : '停用';
+    const message = activating
+      ? role.members > 0
+        ? `确定启用 ${role.name} 吗？启用后，已绑定的 ${role.members} 名成员将重新获得该角色授予的权限。`
+        : `确定启用 ${role.name} 吗？该角色当前没有成员，启用后可以重新授予权限。`
+      : `确定停用 ${role.name} 吗？该角色已分配给 ${role.members} 名成员。停用后，成员将立即失去该角色授予的权限，但绑定会保留。如果这是你当前使用的角色，你可能立即失去后续管理权限。`;
+    const confirmed: boolean | undefined = await firstValueFrom(
+      this.dialog
+        .open(ConfirmDialog, {
+          data: {
+            title: `${action}角色`,
+            message,
+            confirmLabel: `${action}角色`,
+            danger: !activating,
+          },
+        })
+        .afterClosed(),
+    );
+    if (!confirmed) {
+      return;
+    }
+    await this.runMutation(
+      () => this.data.updateRole(role.id, { isActive: activating }),
+      `已${action} ${role.name}`,
+    );
+  }
+
   async onDeleteRole(role: Role): Promise<void> {
     const confirmed: boolean | undefined = await firstValueFrom(
       this.dialog

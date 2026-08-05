@@ -40,6 +40,13 @@ describe('RoleEditorDialog', () => {
     expect(dialog.iconLabel('custom_icon')).toBe('当前图标');
   });
 
+  it('keeps the built-in super administrator status read-only', async () => {
+    await createDialog({ code: 'super_admin', isActive: true } as Role);
+
+    expect(dialog.form.controls.isActive.disabled).toBe(true);
+    expect(dialog.form.getRawValue().isActive).toBe(true);
+  });
+
   it('submits the selected icon value', async () => {
     await createDialog();
     dialog.form.patchValue({
