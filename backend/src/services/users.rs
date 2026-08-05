@@ -97,6 +97,7 @@ pub async fn create(pool: &PgPool, req: &CreateUserRequest) -> Result<UserRespon
 pub async fn update(
     pool: &PgPool,
     id: i64,
+    current_user_id: i64,
     req: &UpdateUserRequest,
 ) -> Result<UserResponse, ApiError> {
     let display_name = req
@@ -112,6 +113,9 @@ pub async fn update(
     if let Some(status) = &req.status {
         if !["active", "inactive", "suspended"].contains(&status.as_str()) {
             return Err(ApiError::validation("状态只能为启用、停用或已暂停"));
+        }
+        if status != "active" && id == current_user_id {
+            return Err(ApiError::forbidden("不能停用当前登录账号"));
         }
     }
     let password_hash = if let Some(password) = &req.password {

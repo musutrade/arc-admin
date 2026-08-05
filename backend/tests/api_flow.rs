@@ -502,6 +502,18 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::CREATED);
     let second_admin_id = second_admin["id"].as_i64().expect("second admin id");
+
+    let (status, error) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{admin_id}"),
+        Some(token),
+        Some(json!({"status": "inactive"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(error["error"]["message"], "不能停用当前登录账号");
+
     let deactivate = || UpdateUserRequest {
         display_name: None,
         email: NullablePatch::Missing,
@@ -511,8 +523,8 @@ async fn login_and_user_crud_flow() {
     let first_request = deactivate();
     let second_request = deactivate();
     let (first, second) = tokio::join!(
-        services::users::update(&pool, admin_id, &first_request),
-        services::users::update(&pool, second_admin_id, &second_request),
+        services::users::update(&pool, admin_id, i64::MAX, &first_request),
+        services::users::update(&pool, second_admin_id, i64::MAX, &second_request),
     );
     assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
 

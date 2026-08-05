@@ -246,6 +246,10 @@ export class UsersPage implements OnInit {
     );
   }
 
+  isCurrentUser(user: User): boolean {
+    return String(this.auth.currentUser()?.id ?? '') === user.id;
+  }
+
   async onDelete(user: User): Promise<void> {
     const confirmed = await this.confirm(
       '删除用户',

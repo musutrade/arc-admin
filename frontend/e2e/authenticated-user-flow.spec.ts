@@ -188,6 +188,8 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
   const administratorRow = page.getByRole('row').filter({ hasText: '管理员' });
   await expect(administratorRow).toContainText('2026-08-01 08:00');
+  await expect(administratorRow.getByRole('button', { name: '停用用户 管理员' })).toHaveCount(0);
+  await expect(administratorRow.getByRole('button', { name: '删除用户 管理员' })).toHaveCount(0);
   await page.getByRole('button', { name: '新增用户' }).click();
 
   const dialog = page.getByRole('dialog');

@@ -153,7 +153,7 @@
                       <mat-icon>lock_reset</mat-icon>
                     </button>
                   }
-                  @if (canManageStatus()) {
+                  @if (canManageStatus() && !isCurrentUser(u)) {
                     <button
                       class="row-btn status-action"
                       [class.is-activate]="u.status !== 'active'"
@@ -169,11 +169,12 @@
                       }}</mat-icon>
                     </button>
                   }
-                  @if (canDeactivate()) {
+                  @if (canDeactivate() && !isCurrentUser(u)) {
                     <button
                       class="row-btn danger"
                       (click)="onDelete(u)"
                       title="删除"
+                      [attr.aria-label]="'删除用户 ' + u.name"
                       [disabled]="busy()"
                     >
                       <mat-icon>delete</mat-icon>

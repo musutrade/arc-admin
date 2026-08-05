@@ -53,7 +53,7 @@ pub async fn update(
     {
         auth.require("user:admin:deactivate")?;
     }
-    services::users::update(&state.pool, id, &req)
+    services::users::update(&state.pool, id, auth.user_id, &req)
         .await
         .map(Json)
 }
