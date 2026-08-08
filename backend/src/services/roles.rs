@@ -3,7 +3,7 @@
 use crate::access::DataScope;
 use crate::error::{db_error, ApiError};
 use crate::models::{
-    nullable_patch, CreateRoleRequest, RolePermissions, RoleResponse, RoleRow,
+    CreateRoleRequest, NullablePatch, RolePermissions, RoleResponse, RoleRow,
     RoleWithPermissionsRow, UpdateRolePermissionsRequest, UpdateRoleRequest,
 };
 use crate::repositories;
@@ -19,6 +19,16 @@ const DATA_SCOPES: [&str; 5] = [
     "department",
     "self",
 ];
+
+fn nullable_text_update(patch: &NullablePatch<String>) -> repositories::roles::NullableTextUpdate {
+    match patch {
+        NullablePatch::Missing => repositories::roles::NullableTextUpdate::Unchanged,
+        NullablePatch::Null => repositories::roles::NullableTextUpdate::Set(None),
+        NullablePatch::Value(value) => {
+            repositories::roles::NullableTextUpdate::Set(Some(value.clone()))
+        }
+    }
+}
 
 async fn to_response(pool: &PgPool, row: RoleRow) -> Result<RoleResponse, ApiError> {
     let permission_group_ids = repositories::roles::permission_group_ids_by_role(pool, row.id)
@@ -105,19 +115,19 @@ pub async fn create(
     let data_scope = validate_data_scope(data_scope)?;
     validate_data_scope_grant(actor_data_scope, data_scope)?;
 
+    let role = repositories::roles::NewRole {
+        code: code.to_string(),
+        name: req.name.trim().to_string(),
+        category,
+        icon: req.icon.clone(),
+        color: Some(color),
+        description: req.description.clone(),
+        data_scope: data_scope.as_str().to_string(),
+    };
     let mut transaction = pool.begin().await.map_err(db_error)?;
-    let id = repositories::roles::create(
-        &mut transaction,
-        code,
-        req.name.trim(),
-        &category,
-        req.icon.clone(),
-        Some(color),
-        req.description.clone(),
-        data_scope.as_str(),
-    )
-    .await
-    .map_err(db_error)?;
+    let id = repositories::roles::create(&mut transaction, &role)
+        .await
+        .map_err(db_error)?;
     if let Some(permission_ids) = &req.permission_ids {
         if !permission_ids.is_empty() && !can_assign_permissions {
             return Err(ApiError::forbidden("缺少分配角色权限的权限"));
@@ -200,24 +210,19 @@ pub async fn update(
             ));
         }
     }
-    let (icon_is_set, icon) = nullable_patch(&req.icon);
-    let (description_is_set, description) = nullable_patch(&req.description);
-    let mut transaction = pool.begin().await.map_err(db_error)?;
-    let updated = repositories::roles::update(
-        &mut transaction,
-        id,
+    let role = repositories::roles::RoleUpdate {
         name,
         category,
-        icon_is_set,
-        icon,
-        req.color.clone(),
-        description_is_set,
-        description,
-        req.data_scope.clone(),
-        req.is_active,
-    )
-    .await
-    .map_err(db_error)?;
+        icon: nullable_text_update(&req.icon),
+        color: req.color.clone(),
+        description: nullable_text_update(&req.description),
+        data_scope: req.data_scope.clone(),
+        is_active: req.is_active,
+    };
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let updated = repositories::roles::update(&mut transaction, id, &role)
+        .await
+        .map_err(db_error)?;
     if !updated {
         return Err(ApiError::not_found("角色不存在"));
     }

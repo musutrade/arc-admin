@@ -54,6 +54,17 @@ struct RunningService {
     project_root: PathBuf,
 }
 
+struct DockerStartOptions {
+    image: String,
+    inject_env: String,
+    startup_timeout_secs: u64,
+    container_port: u16,
+    environment: BTreeMap<String, String>,
+    healthcheck: Vec<String>,
+    connection: String,
+    deadline: Instant,
+}
+
 impl RunningService {
     fn start(project: &Project, id: &str, config: ServiceConfig) -> Result<Self> {
         match config {
@@ -101,33 +112,37 @@ impl RunningService {
                 start_docker(
                     project,
                     id,
-                    image,
-                    inject_env,
-                    startup_timeout_secs,
-                    container_port,
-                    environment,
-                    healthcheck,
-                    connection,
-                    deadline,
+                    DockerStartOptions {
+                        image,
+                        inject_env,
+                        startup_timeout_secs,
+                        container_port,
+                        environment,
+                        healthcheck,
+                        connection,
+                        deadline,
+                    },
                 )
             }
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn start_docker(
     project: &Project,
     id: &str,
-    image: String,
-    inject_env: String,
-    startup_timeout_secs: u64,
-    container_port: u16,
-    environment: BTreeMap<String, String>,
-    healthcheck: Vec<String>,
-    connection: String,
-    deadline: Instant,
+    options: DockerStartOptions,
 ) -> Result<RunningService> {
+    let DockerStartOptions {
+        image,
+        inject_env,
+        startup_timeout_secs,
+        container_port,
+        environment,
+        healthcheck,
+        connection,
+        deadline,
+    } = options;
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()

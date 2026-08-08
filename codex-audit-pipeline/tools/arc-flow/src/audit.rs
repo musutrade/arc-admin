@@ -295,25 +295,20 @@ fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[String]) -> boo
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn scan_files(
     project_root: &Path,
     root_paths: &[PathBuf],
-    extensions: &[String],
     exclude_dirs: &[PathBuf],
-    patterns: &[String],
-    exclude_patterns: &[String],
-    allowlist: &[String],
-    rule_name: &str,
+    rule: &HardRule,
 ) -> Result<Vec<Violation>> {
-    if root_paths.is_empty() || patterns.is_empty() {
+    if root_paths.is_empty() || rule.patterns.is_empty() {
         return Ok(Vec::new());
     }
 
-    let regexes = compile_regexes(patterns)?;
-    let exclude_regexes = compile_regexes(exclude_patterns)?;
+    let regexes = compile_regexes(&rule.patterns)?;
+    let exclude_regexes = compile_regexes(&rule.exclude_patterns)?;
 
-    let rule_name = rule_name.to_string();
+    let rule_name = rule.name.clone();
     let mut walk_builder = WalkBuilder::new(root_paths[0].clone());
     for root_path in root_paths.iter().skip(1) {
         walk_builder.add(root_path);
@@ -331,7 +326,7 @@ fn scan_files(
                 return false;
             }
             if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if !extensions.contains(&ext.to_string()) {
+                if !rule.extensions.contains(&ext.to_string()) {
                     return false;
                 }
             } else {
@@ -347,7 +342,7 @@ fn scan_files(
             if exclude_regexes.iter().any(|re| re.is_match(path_str)) {
                 return false;
             }
-            !is_allowlisted(path, project_root, allowlist)
+            !is_allowlisted(path, project_root, &rule.allowlist)
         })
         .map(|entry| -> Result<Vec<Violation>> {
             let path = entry.path();
@@ -369,7 +364,7 @@ fn scan_files(
                                 .to_path_buf(),
                             line: line_num + 1,
                             content: line.trim().to_string(),
-                            rule_name: format!("{}:{}", rule_name, patterns[idx]),
+                            rule_name: format!("{}:{}", rule_name, rule.patterns[idx]),
                         });
                         found = true;
                         break;
@@ -782,16 +777,7 @@ pub fn run(
     for rule in &config.hard_rules {
         let root_paths =
             resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
-        let violations = scan_files(
-            project_root,
-            &root_paths,
-            &rule.extensions,
-            &exclude_dirs,
-            &rule.patterns,
-            &rule.exclude_patterns,
-            &rule.allowlist,
-            &rule.name,
-        )?;
+        let violations = scan_files(project_root, &root_paths, &exclude_dirs, rule)?;
         all_hard_violations.extend(violations);
     }
 
@@ -876,17 +862,16 @@ mod tests {
         fs::write(second.join("two.rs"), "forbidden_call();\n").expect("write second fixture");
 
         let roots = vec![first, second];
-        let violations = scan_files(
-            &test_dir.0,
-            &roots,
-            &["rs".to_string()],
-            &[],
-            &["forbidden_call".to_string()],
-            &[],
-            &[],
-            "test rule",
-        )
-        .expect("scan fixture");
+        let rule = HardRule {
+            name: "test rule".to_string(),
+            severity: "error".to_string(),
+            paths: Vec::new(),
+            extensions: vec!["rs".to_string()],
+            patterns: vec!["forbidden_call".to_string()],
+            exclude_patterns: Vec::new(),
+            allowlist: Vec::new(),
+        };
+        let violations = scan_files(&test_dir.0, &roots, &[], &rule).expect("scan fixture");
 
         assert_eq!(violations.len(), 2);
     }

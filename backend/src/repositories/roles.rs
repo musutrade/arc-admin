@@ -10,6 +10,44 @@ const ROLE_SELECT: &str = "SELECT r.id, r.code, r.name, r.category, r.icon, r.co
      WHERE ur.role_id = r.id) AS members \
     FROM roles r";
 
+pub(crate) struct NewRole {
+    pub(crate) code: String,
+    pub(crate) name: String,
+    pub(crate) category: String,
+    pub(crate) icon: Option<String>,
+    pub(crate) color: Option<String>,
+    pub(crate) description: Option<String>,
+    pub(crate) data_scope: String,
+}
+
+pub(crate) enum NullableTextUpdate {
+    Unchanged,
+    Set(Option<String>),
+}
+
+impl NullableTextUpdate {
+    fn is_set(&self) -> bool {
+        matches!(self, Self::Set(_))
+    }
+
+    fn value(&self) -> Option<&str> {
+        match self {
+            Self::Unchanged | Self::Set(None) => None,
+            Self::Set(Some(value)) => Some(value),
+        }
+    }
+}
+
+pub(crate) struct RoleUpdate {
+    pub(crate) name: Option<String>,
+    pub(crate) category: Option<String>,
+    pub(crate) icon: NullableTextUpdate,
+    pub(crate) color: Option<String>,
+    pub(crate) description: NullableTextUpdate,
+    pub(crate) data_scope: Option<String>,
+    pub(crate) is_active: Option<bool>,
+}
+
 pub async fn list_all(pool: &PgPool) -> Result<Vec<RoleWithPermissionsRow>, sqlx::Error> {
     sqlx::query_as::<_, RoleWithPermissionsRow>(
         "SELECT r.id, r.code, r.name, r.category, r.icon, r.color, r.description,
@@ -40,29 +78,22 @@ pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<RoleRow>, sqlx:
         .await
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn create(
+pub(crate) async fn create(
     connection: &mut PgConnection,
-    code: &str,
-    name: &str,
-    category: &str,
-    icon: Option<String>,
-    color: Option<String>,
-    description: Option<String>,
-    data_scope: &str,
+    role: &NewRole,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query(
         "INSERT INTO roles (code, name, category, icon, color, description, data_scope)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id",
     )
-    .bind(code)
-    .bind(name)
-    .bind(category)
-    .bind(icon)
-    .bind(color)
-    .bind(description)
-    .bind(data_scope)
+    .bind(&role.code)
+    .bind(&role.name)
+    .bind(&role.category)
+    .bind(&role.icon)
+    .bind(&role.color)
+    .bind(&role.description)
+    .bind(&role.data_scope)
     .fetch_one(&mut *connection)
     .await?;
     row.try_get::<i64, _>(0)
@@ -75,19 +106,10 @@ pub async fn id_by_code(pool: &PgPool, code: &str) -> Result<Option<i64>, sqlx::
         .await
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn update(
+pub(crate) async fn update(
     connection: &mut PgConnection,
     id: i64,
-    name: Option<String>,
-    category: Option<String>,
-    icon_is_set: bool,
-    icon: Option<String>,
-    color: Option<String>,
-    description_is_set: bool,
-    description: Option<String>,
-    data_scope: Option<String>,
-    is_active: Option<bool>,
+    role: &RoleUpdate,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query(
         "UPDATE roles
@@ -102,15 +124,15 @@ pub async fn update(
          WHERE id = $1",
     )
     .bind(id)
-    .bind(name)
-    .bind(category)
-    .bind(icon_is_set)
-    .bind(icon)
-    .bind(color)
-    .bind(description_is_set)
-    .bind(description)
-    .bind(data_scope)
-    .bind(is_active)
+    .bind(&role.name)
+    .bind(&role.category)
+    .bind(role.icon.is_set())
+    .bind(role.icon.value())
+    .bind(&role.color)
+    .bind(role.description.is_set())
+    .bind(role.description.value())
+    .bind(&role.data_scope)
+    .bind(role.is_active)
     .execute(connection)
     .await?;
     Ok(result.rows_affected() > 0)

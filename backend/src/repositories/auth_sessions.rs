@@ -14,6 +14,16 @@ pub struct SessionAuthContext {
     pub permission_codes: Vec<String>,
 }
 
+pub(crate) struct NewSession {
+    pub(crate) user_id: i64,
+    pub(crate) session_token_hash: String,
+    pub(crate) csrf_token_hash: String,
+    pub(crate) token_version: i64,
+    pub(crate) idle_timeout_secs: i64,
+    pub(crate) persistent: bool,
+    pub(crate) expires_at: DateTime<Utc>,
+}
+
 pub async fn auth_context(
     pool: &PgPool,
     session_token_hash: &str,
@@ -72,16 +82,9 @@ pub async fn auth_context(
     Ok(context)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn create(
+pub(crate) async fn create(
     connection: &mut PgConnection,
-    user_id: i64,
-    session_token_hash: &str,
-    csrf_token_hash: &str,
-    token_version: i64,
-    idle_timeout_secs: i64,
-    persistent: bool,
-    expires_at: DateTime<Utc>,
+    session: &NewSession,
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar(
         "INSERT INTO auth_sessions
@@ -90,13 +93,13 @@ pub async fn create(
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id",
     )
-    .bind(user_id)
-    .bind(session_token_hash)
-    .bind(csrf_token_hash)
-    .bind(token_version)
-    .bind(idle_timeout_secs)
-    .bind(persistent)
-    .bind(expires_at)
+    .bind(session.user_id)
+    .bind(&session.session_token_hash)
+    .bind(&session.csrf_token_hash)
+    .bind(session.token_version)
+    .bind(session.idle_timeout_secs)
+    .bind(session.persistent)
+    .bind(session.expires_at)
     .fetch_one(connection)
     .await
 }

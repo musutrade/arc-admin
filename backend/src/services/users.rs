@@ -141,19 +141,19 @@ pub async fn create(
     if let Some(role_ids) = &req.role_ids {
         validate_role_grant_scope(pool, actor_user_id, role_ids, can_grant_super_admin).await?;
     }
+    let user = repositories::users::NewUser {
+        username: username.to_string(),
+        password_hash: hash,
+        display_name: display_name.to_string(),
+        email: req.email.clone(),
+        status,
+        organization_id: actor.organization_id,
+        department_id: actor.department_id,
+    };
     let mut transaction = pool.begin().await.map_err(db_error)?;
-    let row = repositories::users::create(
-        &mut transaction,
-        username,
-        &hash,
-        display_name,
-        req.email.clone(),
-        &status,
-        actor.organization_id,
-        actor.department_id,
-    )
-    .await
-    .map_err(db_error)?;
+    let row = repositories::users::create(&mut transaction, &user)
+        .await
+        .map_err(db_error)?;
     if let Some(role_ids) = &req.role_ids {
         repositories::users::assign_roles(&mut transaction, row.id, role_ids)
             .await
@@ -167,7 +167,7 @@ pub async fn create(
         Some(row.id),
         json!({
             "username": username,
-            "status": status,
+            "status": &user.status,
             "roleIds": req.role_ids.as_deref().unwrap_or_default(),
         }),
     )

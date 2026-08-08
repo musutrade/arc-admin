@@ -33,6 +33,16 @@ pub struct UserListParams {
     pub page_size: i64,
 }
 
+pub(crate) struct NewUser {
+    pub(crate) username: String,
+    pub(crate) password_hash: String,
+    pub(crate) display_name: String,
+    pub(crate) email: Option<String>,
+    pub(crate) status: String,
+    pub(crate) organization_id: i64,
+    pub(crate) department_id: Option<i64>,
+}
+
 pub async fn find_by_username(
     pool: &PgPool,
     username: &str,
@@ -262,16 +272,9 @@ pub async fn list_role_options(
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
-pub async fn create(
+pub(crate) async fn create(
     connection: &mut PgConnection,
-    username: &str,
-    password_hash: &str,
-    display_name: &str,
-    email: Option<String>,
-    status: &str,
-    organization_id: i64,
-    department_id: Option<i64>,
+    user: &NewUser,
 ) -> Result<UserRow, sqlx::Error> {
     sqlx::query_as::<_, UserRow>(&format!(
         "INSERT INTO users (
@@ -281,13 +284,13 @@ pub async fn create(
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING {USER_COLUMNS}"
     ))
-    .bind(username)
-    .bind(password_hash)
-    .bind(display_name)
-    .bind(email)
-    .bind(status)
-    .bind(organization_id)
-    .bind(department_id)
+    .bind(&user.username)
+    .bind(&user.password_hash)
+    .bind(&user.display_name)
+    .bind(&user.email)
+    .bind(&user.status)
+    .bind(user.organization_id)
+    .bind(user.department_id)
     .fetch_one(&mut *connection)
     .await
 }

@@ -23,6 +23,17 @@ pub struct DatabasePoolConfig {
     pub statement_timeout_ms: u64,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct DatabasePoolConfigValues {
+    pub(crate) max_connections: Option<String>,
+    pub(crate) min_connections: Option<String>,
+    pub(crate) acquire_timeout_secs: Option<String>,
+    pub(crate) connect_timeout_secs: Option<String>,
+    pub(crate) idle_timeout_secs: Option<String>,
+    pub(crate) max_lifetime_secs: Option<String>,
+    pub(crate) statement_timeout_ms: Option<String>,
+}
+
 impl Default for DatabasePoolConfig {
     fn default() -> Self {
         Self {
@@ -39,62 +50,53 @@ impl Default for DatabasePoolConfig {
 
 impl DatabasePoolConfig {
     pub fn from_env() -> anyhow::Result<Self> {
-        Self::from_optional_values(
-            std::env::var("DB_MAX_CONNECTIONS").ok(),
-            std::env::var("DB_MIN_CONNECTIONS").ok(),
-            std::env::var("DB_ACQUIRE_TIMEOUT_SECS").ok(),
-            std::env::var("DB_CONNECT_TIMEOUT_SECS").ok(),
-            std::env::var("DB_IDLE_TIMEOUT_SECS").ok(),
-            std::env::var("DB_MAX_LIFETIME_SECS").ok(),
-            std::env::var("DB_STATEMENT_TIMEOUT_MS").ok(),
-        )
+        Self::from_values(DatabasePoolConfigValues {
+            max_connections: std::env::var("DB_MAX_CONNECTIONS").ok(),
+            min_connections: std::env::var("DB_MIN_CONNECTIONS").ok(),
+            acquire_timeout_secs: std::env::var("DB_ACQUIRE_TIMEOUT_SECS").ok(),
+            connect_timeout_secs: std::env::var("DB_CONNECT_TIMEOUT_SECS").ok(),
+            idle_timeout_secs: std::env::var("DB_IDLE_TIMEOUT_SECS").ok(),
+            max_lifetime_secs: std::env::var("DB_MAX_LIFETIME_SECS").ok(),
+            statement_timeout_ms: std::env::var("DB_STATEMENT_TIMEOUT_MS").ok(),
+        })
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn from_optional_values(
-        max_connections: Option<String>,
-        min_connections: Option<String>,
-        acquire_timeout_secs: Option<String>,
-        connect_timeout_secs: Option<String>,
-        idle_timeout_secs: Option<String>,
-        max_lifetime_secs: Option<String>,
-        statement_timeout_ms: Option<String>,
-    ) -> anyhow::Result<Self> {
+    pub(crate) fn from_values(values: DatabasePoolConfigValues) -> anyhow::Result<Self> {
         let defaults = Self::default();
         let config = Self {
             max_connections: positive_u32(
                 "DB_MAX_CONNECTIONS",
-                max_connections,
+                values.max_connections,
                 defaults.max_connections,
             )?,
             min_connections: nonnegative_u32(
                 "DB_MIN_CONNECTIONS",
-                min_connections,
+                values.min_connections,
                 defaults.min_connections,
             )?,
             acquire_timeout_secs: positive_u64(
                 "DB_ACQUIRE_TIMEOUT_SECS",
-                acquire_timeout_secs,
+                values.acquire_timeout_secs,
                 defaults.acquire_timeout_secs,
             )?,
             connect_timeout_secs: positive_u64(
                 "DB_CONNECT_TIMEOUT_SECS",
-                connect_timeout_secs,
+                values.connect_timeout_secs,
                 defaults.connect_timeout_secs,
             )?,
             idle_timeout_secs: positive_u64(
                 "DB_IDLE_TIMEOUT_SECS",
-                idle_timeout_secs,
+                values.idle_timeout_secs,
                 defaults.idle_timeout_secs,
             )?,
             max_lifetime_secs: positive_u64(
                 "DB_MAX_LIFETIME_SECS",
-                max_lifetime_secs,
+                values.max_lifetime_secs,
                 defaults.max_lifetime_secs,
             )?,
             statement_timeout_ms: positive_u64(
                 "DB_STATEMENT_TIMEOUT_MS",
-                statement_timeout_ms,
+                values.statement_timeout_ms,
                 defaults.statement_timeout_ms,
             )?,
         };
@@ -199,15 +201,11 @@ mod tests {
 
     #[test]
     fn pool_configuration_validates_bounds() {
-        let error = DatabasePoolConfig::from_optional_values(
-            Some("2".to_string()),
-            Some("3".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+        let error = DatabasePoolConfig::from_values(DatabasePoolConfigValues {
+            max_connections: Some("2".to_string()),
+            min_connections: Some("3".to_string()),
+            ..DatabasePoolConfigValues::default()
+        })
         .expect_err("minimum larger than maximum must fail");
         assert!(error.to_string().contains("DB_MIN_CONNECTIONS"));
     }

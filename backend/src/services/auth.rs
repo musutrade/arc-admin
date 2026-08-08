@@ -125,18 +125,18 @@ async fn create_login_session(
     repositories::auth_sessions::clear_login_failures(&mut transaction, &throttle_keys.account_ip)
         .await
         .map_err(db_error)?;
-    let session_id = repositories::auth_sessions::create(
-        &mut transaction,
-        row.id,
-        &auth::token_hash(&session_token),
-        &auth::token_hash(&csrf_token),
-        row.token_version,
+    let session = repositories::auth_sessions::NewSession {
+        user_id: row.id,
+        session_token_hash: auth::token_hash(&session_token),
+        csrf_token_hash: auth::token_hash(&csrf_token),
+        token_version: row.token_version,
         idle_timeout_secs,
         persistent,
         expires_at,
-    )
-    .await
-    .map_err(db_error)?;
+    };
+    let session_id = repositories::auth_sessions::create(&mut transaction, &session)
+        .await
+        .map_err(db_error)?;
     let revoked_sessions = repositories::auth_sessions::enforce_user_limit(
         &mut transaction,
         row.id,
@@ -440,18 +440,18 @@ pub async fn bootstrap_super_admin(
         .await
         .map_err(db_error)?
     } else {
-        repositories::users::create(
-            &mut transaction,
-            username,
-            &password_hash,
-            display_name,
+        let user = repositories::users::NewUser {
+            username: username.to_string(),
+            password_hash,
+            display_name: display_name.to_string(),
             email,
-            "active",
+            status: "active".to_string(),
             organization_id,
             department_id,
-        )
-        .await
-        .map_err(db_error)?
+        };
+        repositories::users::create(&mut transaction, &user)
+            .await
+            .map_err(db_error)?
     };
     repositories::users::assign_roles(&mut transaction, row.id, &[role_id])
         .await

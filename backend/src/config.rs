@@ -1,7 +1,7 @@
 //! Runtime configuration and production safety checks.
 
 use crate::auth::CSRF_HEADER;
-use crate::db::DatabasePoolConfig;
+use crate::db::{DatabasePoolConfig, DatabasePoolConfigValues};
 use crate::telemetry::REQUEST_ID_HEADER;
 use anyhow::{bail, Context};
 use axum::http::header::CONTENT_TYPE;
@@ -171,15 +171,15 @@ impl AppConfig {
             "production" | "prod" => AppEnvironment::Production,
             value => bail!("APP_ENV must be development, test, or production; got {value:?}"),
         };
-        let database_pool = DatabasePoolConfig::from_optional_values(
-            db_max_connections,
-            db_min_connections,
-            db_acquire_timeout_secs,
-            db_connect_timeout_secs,
-            db_idle_timeout_secs,
-            db_max_lifetime_secs,
-            db_statement_timeout_ms,
-        )?;
+        let database_pool = DatabasePoolConfig::from_values(DatabasePoolConfigValues {
+            max_connections: db_max_connections,
+            min_connections: db_min_connections,
+            acquire_timeout_secs: db_acquire_timeout_secs,
+            connect_timeout_secs: db_connect_timeout_secs,
+            idle_timeout_secs: db_idle_timeout_secs,
+            max_lifetime_secs: db_max_lifetime_secs,
+            statement_timeout_ms: db_statement_timeout_ms,
+        })?;
         let auto_migrate = parse_bool(
             "AUTO_MIGRATE",
             auto_migrate,

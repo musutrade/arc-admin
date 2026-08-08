@@ -1,5 +1,8 @@
 //! OpenAPI contract generated from Rust DTOs and operation declarations.
-#![allow(dead_code)]
+#![expect(
+    dead_code,
+    reason = "Utoipa operation declarations are consumed by the OpenApi derive macro"
+)]
 
 use crate::error::ErrorEnvelope;
 use crate::models::{
