@@ -217,7 +217,12 @@ function buildEnvironment(example, options, jwtSecret) {
     return JSON.stringify(databaseUrl.toString());
   });
 
-  return replaceEnvValue(withDatabase, "JWT_SECRET", () => jwtSecret);
+  const withServiceName = replaceEnvValue(
+    withDatabase,
+    "SERVICE_NAME",
+    () => `${options.slug}-backend`,
+  );
+  return replaceEnvValue(withServiceName, "JWT_SECRET", () => jwtSecret);
 }
 
 function buildRuntimeConfig(options) {

@@ -37,7 +37,7 @@ function createFixture() {
   );
   writeFileSync(
     join(root, "backend/.env.example"),
-    'DATABASE_URL="postgres://arc_admin:change-me@localhost:5432/arc_admin"\nJWT_SECRET=change-me\n',
+    'DATABASE_URL="postgres://arc_admin:change-me@localhost:5432/arc_admin"\nJWT_SECRET=change-me\nSERVICE_NAME=arc-admin-backend\n',
   );
   writeFileSync(join(root, ".gitignore"), ".env\n");
   git(root, ["init", "-q"]);
@@ -88,6 +88,7 @@ test("initializes a clean template without tracking the local environment", () =
   const environment = readFileSync(join(root, "backend/.env"), "utf8");
   assert.match(environment, /\/stock_analysis"/);
   assert.match(environment, new RegExp(`JWT_SECRET=${"a".repeat(64)}`));
+  assert.match(environment, /SERVICE_NAME=stock-analysis-backend/);
   const metadata = JSON.parse(
     readFileSync(join(root, ".arc-project.json"), "utf8"),
   );

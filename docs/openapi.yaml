@@ -473,33 +473,54 @@ components:
       required: true
       schema: { type: integer, format: int64 }
       description: 角色 id
+  headers:
+    RequestId:
+      description: 请求关联编号，可用于查询服务端日志
+      schema:
+        type: string
+        maxLength: 64
   responses:
     Unauthorized:
       description: 未认证或 token 失效
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiError'
     Forbidden:
       description: 无权限
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiError'
     NotFound:
       description: 资源不存在
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiError'
     Conflict:
       description: 唯一约束冲突（如 username/code 已存在）
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiError'
     ValidationError:
       description: 请求参数校验失败
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
@@ -517,13 +538,17 @@ components:
       properties:
         error:
           type: object
-          required: [code, message]
+          required: [code, message, traceId]
           properties:
             code:
               type: string
               description: 稳定的错误码，如 VALIDATION_ERROR / NOT_FOUND / UNAUTHORIZED / CONFLICT
             message:
               type: string
+            traceId:
+              type: string
+              maxLength: 64
+              description: 请求关联编号，与响应头 X-Request-ID 一致，可用于查询服务端日志
             details:
               type: array
               items: { type: string }

@@ -52,6 +52,7 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<AuthUser, A
     if !active || token_version != data.claims.ver {
         return Err(ApiError::unauthorized());
     }
+    crate::telemetry::record_authenticated_user(user_id);
     Ok(AuthUser {
         user_id,
         permission_codes: permission_codes.into_iter().collect(),

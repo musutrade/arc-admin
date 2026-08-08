@@ -91,11 +91,21 @@ mod log_parser {
     use std::io::{BufRead, BufReader};
 
     fn extract_trace_id(json: &Value) -> Option<String> {
-        json.get("trace_id")
-            .or_else(|| json.get("fields").and_then(|f| f.get("trace_id")))
-            .or_else(|| json.get("data").and_then(|d| d.get("trace_id")))
+        trace_id_field(json)
+            .or_else(|| json.get("fields").and_then(trace_id_field))
+            .or_else(|| json.get("data").and_then(trace_id_field))
+            .or_else(|| json.get("span").and_then(trace_id_field))
+            .or_else(|| {
+                json.get("spans")
+                    .and_then(Value::as_array)
+                    .and_then(|spans| spans.iter().rev().find_map(trace_id_field))
+            })
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
+    }
+
+    fn trace_id_field(json: &Value) -> Option<&Value> {
+        json.get("trace_id").or_else(|| json.get("request_id"))
     }
 
     fn level_of(json: &Value) -> String {
@@ -189,9 +199,16 @@ mod log_parser {
             output.push(compact);
         }
 
-        // 只保留最相关的上下文（避免超出 LLM 上下文窗口）
+        // 以第一条 ERROR 为中心保留上下文，避免长请求把根因截掉。
         if output.len() > 30 {
-            output.truncate(30);
+            let error_index = output
+                .iter()
+                .position(|entry| entry["level"] == "ERROR")
+                .unwrap_or(output.len() - 1);
+            let mut start = error_index.saturating_sub(20);
+            let end = (start + 30).min(output.len());
+            start = end.saturating_sub(30);
+            output = output[start..end].to_vec();
         }
 
         let json_output = serde_json::to_string_pretty(&output)?;
@@ -998,5 +1015,60 @@ mod tests {
 
         assert_eq!(parsed.len(), 2);
         assert!(parsed.iter().all(|entry| entry["trace_id"] == "failed"));
+    }
+
+    #[test]
+    fn log_parser_reads_trace_id_from_the_current_span() {
+        let test_dir = TestDir::new("parse-span-logs");
+        let input = test_dir.0.join("input.jsonl");
+        let output = test_dir.0.join("output.json");
+        fs::write(
+            &input,
+            concat!(
+                "{\"level\":\"INFO\",\"span\":{\"trace_id\":\"span-trace\"},\"fields\":{\"message\":\"start\"}}\n",
+                "{\"level\":\"ERROR\",\"span\":{\"trace_id\":\"span-trace\"},\"fields\":{\"error\":\"root cause\"}}\n"
+            ),
+        )
+        .expect("write log fixture");
+
+        log_parser::extract_error_context(&input.to_string_lossy(), &output.to_string_lossy())
+            .expect("parse logs");
+        let parsed: Vec<serde_json::Value> =
+            serde_json::from_slice(&fs::read(output).expect("read output")).expect("output JSON");
+
+        assert_eq!(parsed.len(), 2);
+        assert!(parsed.iter().all(|entry| entry["trace_id"] == "span-trace"));
+    }
+
+    #[test]
+    fn log_parser_keeps_the_error_in_a_long_trace() {
+        let test_dir = TestDir::new("parse-long-logs");
+        let input = test_dir.0.join("input.jsonl");
+        let output = test_dir.0.join("output.json");
+        let mut logs = String::new();
+        for index in 0..35 {
+            logs.push_str(&format!(
+                "{{\"level\":\"INFO\",\"trace_id\":\"long-trace\",\"fields\":{{\"message\":\"before {index}\"}}}}\n"
+            ));
+        }
+        logs.push_str(
+            "{\"level\":\"ERROR\",\"trace_id\":\"long-trace\",\"fields\":{\"error\":\"retained root cause\"}}\n",
+        );
+        for index in 0..10 {
+            logs.push_str(&format!(
+                "{{\"level\":\"INFO\",\"trace_id\":\"long-trace\",\"fields\":{{\"message\":\"after {index}\"}}}}\n"
+            ));
+        }
+        fs::write(&input, logs).expect("write log fixture");
+
+        log_parser::extract_error_context(&input.to_string_lossy(), &output.to_string_lossy())
+            .expect("parse logs");
+        let parsed: Vec<serde_json::Value> =
+            serde_json::from_slice(&fs::read(output).expect("read output")).expect("output JSON");
+
+        assert_eq!(parsed.len(), 30);
+        assert!(parsed
+            .iter()
+            .any(|entry| entry["error"] == "retained root cause"));
     }
 }

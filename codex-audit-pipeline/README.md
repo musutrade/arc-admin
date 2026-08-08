@@ -368,7 +368,7 @@ arc-flow parse-logs \
   --output /tmp/error-context.txt
 ```
 
-解析器优先选择第一条 `level = ERROR` 所在的 `trace_id`，再收集相同 trace 的结构化记录；没有 trace 时退化为原始日志最后 30 行。
+解析器优先选择第一条 `level = ERROR` 所在的 `trace_id`，支持从事件字段、`data`、当前 `span` 和 `spans` 中提取，再收集相同 trace 的结构化记录；没有 trace 时退化为原始日志最后 30 行。
 
 ## Git Hook
 

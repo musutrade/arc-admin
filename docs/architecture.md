@@ -45,14 +45,17 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 
 ## 配置与安全
 
-| 变量                   | 说明                                    |
-| ---------------------- | --------------------------------------- |
-| `DATABASE_URL`         | 必填 PostgreSQL 连接串                  |
-| `PORT`                 | 监听端口，默认 8080，范围 1-65535       |
-| `APP_ENV`              | `development`、`test` 或 `production`   |
-| `JWT_SECRET`           | 生产环境必填且至少 32 字符              |
-| `TOKEN_TTL_SECS`       | 正整数，默认 86400                      |
-| `CORS_ALLOWED_ORIGINS` | 逗号分隔 origin；生产环境必填且禁止 `*` |
+| 变量                   | 说明                                       |
+| ---------------------- | ------------------------------------------ |
+| `DATABASE_URL`         | 必填 PostgreSQL 连接串                     |
+| `PORT`                 | 监听端口，默认 8080，范围 1-65535          |
+| `APP_ENV`              | `development`、`test` 或 `production`      |
+| `JWT_SECRET`           | 生产环境必填且至少 32 字符                 |
+| `TOKEN_TTL_SECS`       | 正整数，默认 86400                         |
+| `CORS_ALLOWED_ORIGINS` | 逗号分隔 origin；生产环境必填且禁止 `*`    |
+| `LOG_FORMAT`           | `pretty` 或 `json`；生产环境默认 `json`    |
+| `RUST_LOG`             | Rust 日志过滤规则                          |
+| `SERVICE_NAME`         | 日志中的服务标识，默认 `arc-admin-backend` |
 
 管理员账号不再由固定密码迁移创建。`bootstrap_admin` 使用进程环境传入的至少 16 字符密码，并在事务中创建或激活账号及绑定 `super_admin`。
 

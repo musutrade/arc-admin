@@ -139,3 +139,15 @@ extensions = ["tmpl"]
 patterns = ['actix_web', 'actix-web', 'HttpResponse']
 allowlist = []
 exclude_patterns = []
+
+[[hard_rules]]
+name = "日志不得记录完整请求头或显式敏感字段"
+severity = "blocker"
+paths = ["backend/src"]
+extensions = ["rs"]
+patterns = [
+  'include_headers\s*\(\s*true\s*\)',
+  '(?is)tracing::(?:trace|debug|info|warn|error)!\s*\([^)]*\b(?:authorization|cookie|password|token|database_url)\s*=',
+]
+allowlist = []
+exclude_patterns = []

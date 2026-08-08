@@ -7,7 +7,7 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use std::sync::Arc;
-use tower_http::trace::TraceLayer;
+use tower_http::cors::CorsLayer;
 
 pub mod auth;
 pub mod config;
@@ -18,6 +18,7 @@ pub mod models;
 pub mod permissions;
 pub mod repositories;
 pub mod services;
+pub mod telemetry;
 
 pub use error::ApiError;
 
@@ -151,7 +152,7 @@ async fn readyz(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
     )
 }
 
-pub fn build_router(state: AppState) -> Router {
+fn base_router(state: AppState) -> Router {
     Router::new()
         .route(HEALTHZ_PATH, get(healthz))
         .route(READYZ_PATH, get(readyz))
@@ -193,6 +194,24 @@ pub fn build_router(state: AppState) -> Router {
         .route(PERMISSION_GROUPS_PATH, get(handlers::permissions::groups))
         .route(DASHBOARD_STATS_PATH, get(handlers::dashboard::stats))
         .route(AUDIT_LOGS_PATH, get(handlers::audit_logs::list))
-        .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+pub fn build_router(state: AppState) -> Router {
+    telemetry::default_http_observability(base_router(state))
+}
+
+pub fn build_router_with_metadata(
+    state: AppState,
+    metadata: telemetry::TelemetryMetadata,
+) -> Router {
+    telemetry::with_http_observability(base_router(state), metadata)
+}
+
+pub fn build_router_with_metadata_and_cors(
+    state: AppState,
+    metadata: telemetry::TelemetryMetadata,
+    cors: CorsLayer,
+) -> Router {
+    telemetry::with_http_observability(base_router(state).layer(cors), metadata)
 }

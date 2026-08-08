@@ -1,4 +1,4 @@
-//! 统一 API 错误：thiserror 定义 + axum IntoResponse 映射为 { error: { code, message } }
+//! 统一 API 错误：thiserror 定义 + axum IntoResponse 映射为安全错误契约。
 
 use axum::{
     http::StatusCode,
@@ -67,18 +67,50 @@ impl IntoResponse for ApiError {
             Self::Validation(_) => "VALIDATION_ERROR",
             Self::Internal(_) => "INTERNAL_ERROR",
         };
+        let trace_id =
+            crate::telemetry::current_trace_id().unwrap_or_else(|| "unavailable".to_string());
         let message = match &self {
             Self::Internal(error) => {
-                tracing::error!(error = %error, "internal API error");
+                tracing::error!(
+                    event = "api.error",
+                    trace_id = %trace_id,
+                    error_code = code,
+                    error = %format!("{error:#}"),
+                    "internal API error"
+                );
                 "服务器内部错误".to_string()
             }
             other => other.to_string(),
         };
-        let body = ErrorEnvelope {
-            error: ErrorBody { code, message },
-        };
-        (status, Json(body)).into_response()
+        error_response(status, code, message, trace_id)
     }
+}
+
+pub(crate) fn internal_error_response() -> Response {
+    let trace_id =
+        crate::telemetry::current_trace_id().unwrap_or_else(|| "unavailable".to_string());
+    error_response(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "INTERNAL_ERROR",
+        "服务器内部错误".to_string(),
+        trace_id,
+    )
+}
+
+fn error_response(
+    status: StatusCode,
+    code: &'static str,
+    message: String,
+    trace_id: String,
+) -> Response {
+    let body = ErrorEnvelope {
+        error: ErrorBody {
+            code,
+            message,
+            trace_id,
+        },
+    };
+    (status, Json(body)).into_response()
 }
 
 #[derive(Serialize)]
@@ -87,9 +119,11 @@ struct ErrorEnvelope {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ErrorBody {
     code: &'static str,
     message: String,
+    trace_id: String,
 }
 
 /// sqlx 错误 → ApiError（唯一约束 → 409，外键 → 422，其余 → 500）
@@ -123,6 +157,7 @@ mod tests {
             .to_bytes();
         let body = String::from_utf8(body.to_vec()).expect("UTF-8 error response");
         assert!(body.contains("服务器内部错误"));
+        assert!(body.contains("\"traceId\":\"unavailable\""));
         assert!(!body.contains("database password leaked"));
     }
 }

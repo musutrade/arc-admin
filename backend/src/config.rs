@@ -1,5 +1,6 @@
 //! Runtime configuration and production safety checks.
 
+use crate::telemetry::REQUEST_ID_HEADER;
 use anyhow::{bail, Context};
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method};
@@ -14,36 +15,88 @@ pub enum AppEnvironment {
     Production,
 }
 
+impl AppEnvironment {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Development => "development",
+            Self::Test => "test",
+            Self::Production => "production",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogFormat {
+    Pretty,
+    Json,
+}
+
+impl LogFormat {
+    pub fn bootstrap_from_env() -> Self {
+        match std::env::var("LOG_FORMAT").as_deref() {
+            Ok("json") => Self::Json,
+            Ok("pretty") => Self::Pretty,
+            _ if matches!(
+                std::env::var("APP_ENV").as_deref(),
+                Ok("production" | "prod")
+            ) =>
+            {
+                Self::Json
+            }
+            _ => Self::Pretty,
+        }
+    }
+}
+
 pub struct AppConfig {
     pub database_url: String,
     pub port: u16,
     pub jwt_secret: String,
     pub token_ttl_secs: i64,
     pub environment: AppEnvironment,
+    pub log_format: LogFormat,
+    pub service_name: String,
     allowed_origins: Vec<HeaderValue>,
     pub uses_development_jwt: bool,
 }
 
+#[derive(Default)]
+struct ConfigValues {
+    database_url: Option<String>,
+    port: Option<String>,
+    jwt_secret: Option<String>,
+    token_ttl_secs: Option<String>,
+    app_env: Option<String>,
+    cors_allowed_origins: Option<String>,
+    log_format: Option<String>,
+    service_name: Option<String>,
+}
+
 impl AppConfig {
     pub fn from_env() -> anyhow::Result<Self> {
-        Self::from_values(
-            std::env::var("DATABASE_URL").ok(),
-            std::env::var("PORT").ok(),
-            std::env::var("JWT_SECRET").ok(),
-            std::env::var("TOKEN_TTL_SECS").ok(),
-            std::env::var("APP_ENV").ok(),
-            std::env::var("CORS_ALLOWED_ORIGINS").ok(),
-        )
+        Self::from_values(ConfigValues {
+            database_url: std::env::var("DATABASE_URL").ok(),
+            port: std::env::var("PORT").ok(),
+            jwt_secret: std::env::var("JWT_SECRET").ok(),
+            token_ttl_secs: std::env::var("TOKEN_TTL_SECS").ok(),
+            app_env: std::env::var("APP_ENV").ok(),
+            cors_allowed_origins: std::env::var("CORS_ALLOWED_ORIGINS").ok(),
+            log_format: std::env::var("LOG_FORMAT").ok(),
+            service_name: std::env::var("SERVICE_NAME").ok(),
+        })
     }
 
-    fn from_values(
-        database_url: Option<String>,
-        port: Option<String>,
-        jwt_secret: Option<String>,
-        token_ttl_secs: Option<String>,
-        app_env: Option<String>,
-        cors_allowed_origins: Option<String>,
-    ) -> anyhow::Result<Self> {
+    fn from_values(values: ConfigValues) -> anyhow::Result<Self> {
+        let ConfigValues {
+            database_url,
+            port,
+            jwt_secret,
+            token_ttl_secs,
+            app_env,
+            cors_allowed_origins,
+            log_format,
+            service_name,
+        } = values;
         let database_url = database_url.context(
             "DATABASE_URL is required; configure it in backend/.env or the process environment",
         )?;
@@ -82,6 +135,22 @@ impl AppConfig {
         if environment == AppEnvironment::Production && allowed_origins.is_empty() {
             bail!("production requires CORS_ALLOWED_ORIGINS with at least one explicit origin");
         }
+        let log_format = match log_format.as_deref() {
+            Some("pretty") => LogFormat::Pretty,
+            Some("json") => LogFormat::Json,
+            Some(value) => bail!("LOG_FORMAT must be pretty or json; got {value:?}"),
+            None if environment == AppEnvironment::Production => LogFormat::Json,
+            None => LogFormat::Pretty,
+        };
+        let service_name = service_name.unwrap_or_else(|| "arc-admin-backend".to_string());
+        if service_name.is_empty()
+            || service_name.len() > 64
+            || !service_name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        {
+            bail!("SERVICE_NAME must be 1-64 ASCII letters, digits, '.', '_' or '-'");
+        }
 
         Ok(Self {
             database_url,
@@ -89,6 +158,8 @@ impl AppConfig {
             jwt_secret,
             token_ttl_secs,
             environment,
+            log_format,
+            service_name,
             allowed_origins,
             uses_development_jwt,
         })
@@ -108,7 +179,8 @@ impl AppConfig {
                 Method::DELETE,
                 Method::OPTIONS,
             ])
-            .allow_headers([AUTHORIZATION, CONTENT_TYPE])
+            .allow_headers([AUTHORIZATION, CONTENT_TYPE, REQUEST_ID_HEADER])
+            .expose_headers([REQUEST_ID_HEADER])
     }
 }
 
@@ -138,14 +210,13 @@ mod tests {
         jwt_secret: Option<&str>,
         origins: Option<&str>,
     ) -> anyhow::Result<AppConfig> {
-        AppConfig::from_values(
-            Some("postgres://localhost/test".to_string()),
-            None,
-            jwt_secret.map(str::to_string),
-            None,
-            Some(environment.to_string()),
-            origins.map(str::to_string),
-        )
+        AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            jwt_secret: jwt_secret.map(str::to_string),
+            app_env: Some(environment.to_string()),
+            cors_allowed_origins: origins.map(str::to_string),
+            ..ConfigValues::default()
+        })
     }
 
     #[test]
@@ -153,6 +224,7 @@ mod tests {
         let config = config("development", None, None).expect("development config");
 
         assert_eq!(config.environment, AppEnvironment::Development);
+        assert_eq!(config.log_format, LogFormat::Pretty);
         assert!(config.uses_development_jwt);
     }
 
@@ -180,5 +252,17 @@ mod tests {
         .expect("missing origins must fail");
 
         assert!(error.to_string().contains("CORS_ALLOWED_ORIGINS"));
+    }
+
+    #[test]
+    fn production_uses_json_logs_by_default() {
+        let config = config(
+            "production",
+            Some("this-secret-is-at-least-thirty-two-characters"),
+            Some("https://admin.example.com"),
+        )
+        .expect("production config");
+
+        assert_eq!(config.log_format, LogFormat::Json);
     }
 }

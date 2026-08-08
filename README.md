@@ -117,6 +117,7 @@ cargo flow verify --all
 - [架构说明](docs/architecture.md)：前后端分层和依赖边界；
 - [业务模块扩展指南](docs/business-extension.md)：新业务域的目录、权限、路由和后端接入清单；
 - [业务权限模板](docs/business-permissions.md)：SQL、Rust、Angular 三端权限声明和最小授权策略；
+- [日志与故障定位](docs/observability.md)：JSON Lines、问题编号、敏感字段和查询方式；
 - [项目公约](AGENTS.md)：Codex、Reviewer、Tester 和 Git 安全约束；
 - [arc-flow 操作手册](codex-audit-pipeline/README.md)：安装、命令、预设、CI、报告和故障排查；
 - [schema v2 配置参考](codex-audit-pipeline/docs/configuration.md)：`flow.toml` 与 `audit.toml` 的字段级说明。
