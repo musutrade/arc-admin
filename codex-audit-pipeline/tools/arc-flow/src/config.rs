@@ -41,8 +41,14 @@ pub struct ProjectConfig {
 pub struct PathsConfig {
     pub reports: String,
     pub audit_config: String,
+    #[serde(default = "default_secrets_config_path")]
+    pub secrets_config: String,
     #[serde(default)]
     pub aliases: BTreeMap<String, PathAlias>,
+}
+
+fn default_secrets_config_path() -> String {
+    ".arc-flow/secrets.toml".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,12 +261,13 @@ impl FlowConfig {
         validate_id("project.hook_profile", &self.project.hook_profile)?;
         validate_repo_path("paths.reports", &self.paths.reports)?;
         validate_repo_path("paths.audit_config", &self.paths.audit_config)?;
+        validate_repo_path("paths.secrets_config", &self.paths.secrets_config)?;
 
         for (alias, entry) in &self.paths.aliases {
             validate_id("path alias", alias)?;
             if matches!(
                 alias.as_str(),
-                "root" | "reports" | "audit_config" | "host_port"
+                "root" | "reports" | "audit_config" | "secrets_config" | "host_port"
             ) {
                 bail!("path alias {alias:?} is reserved");
             }
@@ -321,7 +328,8 @@ impl FlowConfig {
     }
 
     pub fn allowed_placeholder(&self, name: &str) -> bool {
-        matches!(name, "root" | "reports" | "audit_config") || self.paths.aliases.contains_key(name)
+        matches!(name, "root" | "reports" | "audit_config" | "secrets_config")
+            || self.paths.aliases.contains_key(name)
     }
 
     fn apply_environment(&mut self) -> Result<()> {
@@ -329,6 +337,7 @@ impl FlowConfig {
         override_string("ARC_FLOW_REPORTS", &mut self.paths.reports);
         override_string("AUDITOR_CONFIG", &mut self.paths.audit_config);
         override_string("ARC_FLOW_AUDIT_CONFIG", &mut self.paths.audit_config);
+        override_string("ARC_FLOW_SECRETS_CONFIG", &mut self.paths.secrets_config);
 
         for entry in self.paths.aliases.values_mut() {
             if let Some(name) = &entry.env {
@@ -1086,6 +1095,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
         paths: PathsConfig {
             reports: legacy.paths.reports,
             audit_config: legacy.paths.audit_config,
+            secrets_config: ".arc-flow/secrets.toml".into(),
             aliases,
         },
         policy: PolicyConfig { required_steps },
@@ -1110,6 +1120,18 @@ mod tests {
     #[test]
     fn repository_configuration_is_valid() {
         repository_config().validate().expect("validate config");
+    }
+
+    #[test]
+    fn existing_v2_config_defaults_the_secret_rule_path() {
+        let source = include_str!("../../../../.arc-flow/flow.toml")
+            .lines()
+            .filter(|line| !line.starts_with("secrets_config = "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let config = FlowConfig::from_source(&source).expect("compatible v2 config");
+
+        assert_eq!(config.paths.secrets_config, ".arc-flow/secrets.toml");
     }
 
     #[test]
@@ -1214,6 +1236,7 @@ timeout_secs = 60
         let migrated = migrate_v1(source, "example").expect("migrate");
         assert_eq!(migrated.version, 2);
         assert_eq!(migrated.project.name, "example");
+        assert_eq!(migrated.paths.secrets_config, ".arc-flow/secrets.toml");
         assert!(migrated.policy.required_steps.contains(&"app.check".into()));
     }
 }

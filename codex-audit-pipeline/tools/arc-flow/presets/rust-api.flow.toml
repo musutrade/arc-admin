@@ -8,6 +8,7 @@ hook_profile = "hook"
 [paths]
 reports = ".arc-flow/reports"
 audit_config = ".arc-flow/audit.toml"
+secrets_config = ".arc-flow/secrets.toml"
 
 [paths.aliases.app]
 path = "."

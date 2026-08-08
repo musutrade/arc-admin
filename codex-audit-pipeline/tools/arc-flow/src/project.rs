@@ -12,6 +12,7 @@ pub struct Project {
     pub config: FlowConfig,
     pub reports: PathBuf,
     pub audit_config: PathBuf,
+    pub secrets_config: PathBuf,
     aliases: BTreeMap<String, PathBuf>,
 }
 
@@ -41,6 +42,12 @@ impl Project {
             "audit configuration",
             true,
         )?;
+        let secrets_config = resolve_repo_path(
+            &root,
+            Path::new(&config.paths.secrets_config),
+            "secret scan configuration",
+            true,
+        )?;
         let aliases = config
             .paths
             .aliases
@@ -62,6 +69,7 @@ impl Project {
             config,
             reports,
             audit_config,
+            secrets_config,
             aliases,
         };
         project.validate()?;
@@ -73,6 +81,12 @@ impl Project {
             bail!(
                 "required audit configuration is missing: {}",
                 self.audit_config.display()
+            );
+        }
+        if !self.secrets_config.is_file() {
+            bail!(
+                "required secret scan configuration is missing: {}",
+                self.secrets_config.display()
             );
         }
         Ok(())
@@ -99,6 +113,7 @@ impl Project {
             "root" => Some(&self.root),
             "reports" => Some(&self.reports),
             "audit_config" => Some(&self.audit_config),
+            "secrets_config" => Some(&self.secrets_config),
             _ => self.aliases.get(alias).map(PathBuf::as_path),
         }
     }
@@ -110,7 +125,7 @@ impl Project {
                 resolved = resolved.replace(&format!("{{{name}}}"), &path.to_string_lossy());
             }
         }
-        for name in ["audit_config", "reports", "root"] {
+        for name in ["audit_config", "secrets_config", "reports", "root"] {
             if let Some(path) = self.path(name) {
                 resolved = resolved.replace(&format!("{{{name}}}"), &path.to_string_lossy());
             }

@@ -118,6 +118,7 @@ hook_profile = "hook"
 [paths]
 reports = ".arc-flow/reports"
 audit_config = ".arc-flow/audit.toml"
+secrets_config = ".arc-flow/secrets.toml"
 
 [paths.aliases.api]
 path = "services/api"
@@ -127,12 +128,13 @@ env = "ARC_FLOW_API_DIR"
 path = "apps/web"
 ```
 
-| 字段                | 说明                            |
-| ------------------- | ------------------------------- |
-| `reports`           | JSON、Markdown 和步骤日志目录   |
-| `audit_config`      | auditor 规则文件                |
-| `aliases.<id>.path` | 仓库内目录或文件路径            |
-| `aliases.<id>.env`  | 可选；覆盖 alias 路径的环境变量 |
+| 字段                | 说明                               |
+| ------------------- | ---------------------------------- |
+| `reports`           | JSON、Markdown 和步骤日志目录      |
+| `audit_config`      | auditor 规则文件                   |
+| `secrets_config`    | Secret Scan 规则及占位符策略文件   |
+| `aliases.<id>.path` | 仓库内目录或文件路径               |
+| `aliases.<id>.env`  | 可选；覆盖 alias 路径的环境变量    |
 
 `root`、`reports`、`audit_config`、`host_port` 是保留 alias 名称。
 
@@ -140,8 +142,9 @@ path = "apps/web"
 
 | 环境变量                                    | 覆盖字段             |
 | ------------------------------------------- | -------------------- |
-| `REPORT_DIR` 或 `ARC_FLOW_REPORTS`          | `paths.reports`      |
-| `AUDITOR_CONFIG` 或 `ARC_FLOW_AUDIT_CONFIG` | `paths.audit_config` |
+| `REPORT_DIR` 或 `ARC_FLOW_REPORTS`          | `paths.reports`        |
+| `AUDITOR_CONFIG` 或 `ARC_FLOW_AUDIT_CONFIG` | `paths.audit_config`   |
+| `ARC_FLOW_SECRETS_CONFIG`                   | `paths.secrets_config` |
 | `ARC_FLOW_CONFIG`                           | 配置文件路径         |
 
 ## 6. `[policy]`
@@ -373,7 +376,36 @@ remove_env = ["DATABASE_URL"]
 
 步骤选择条件是：component 已被 scope 选中，并且步骤包含当前 profile。配置顺序就是执行顺序；任一步失败后，报告判为失败，但仍继续执行不依赖该故障 service 的后续步骤。同一 service 启动失败会被缓存，依赖它的步骤快速失败，不会反复等待启动超时。
 
-## 12. 审计规则文件
+## 12. Secret Scan 规则文件
+
+`[paths].secrets_config` 指向独立、受版本控制的 TOML 文件。预设会生成一套通用高置信规则，项目可在不重新编译 `arc-flow` 的情况下增加供应商或业务密钥规则。配置版本、规则 ID、正则、捕获组和最小长度都会在扫描前校验；配置缺失、空规则或无效捕获组会直接让门禁失败。
+
+```toml
+version = 1
+
+[placeholders]
+minimum_unique_characters = 4
+markers = ["change-me", "replace-me", "placeholder"]
+exact = ["password", "secret"]
+
+[[rules]]
+id = "named-signing-secret"
+kind = "value"
+pattern = '''(?i)signing_secret\s*=\s*([A-Za-z0-9_-]{12,})'''
+capture = 1
+minimum_length = 12
+```
+
+规则类型：
+
+- `direct`：正则命中即报告，适合有固定前缀或结构的 Token、JWT、私钥头。
+- `value`：只对指定捕获组执行长度、占位符和字符多样性判断，适合命名密钥及厂商 Webhook Token。
+- `postgres-url`：分别捕获用户名、密码、主机和数据库；可只豁免本机、测试库、用户名密码相同的临时数据库 URL。
+- `webhook-url`：解析捕获到的 URL，检查配置的敏感查询参数或高信息路径末段。
+
+扫描报告只包含命中文件名，不会复制密钥内容。占位符策略只作用于捕获值；`direct` 应仅配置误报概率足够低的模式。
+
+## 13. 审计规则文件
 
 `[paths].audit_config` 指向独立 TOML 文件。空规则文件可写为：
 
@@ -385,7 +417,7 @@ arch_rules = []
 exclude = ["target", "node_modules", "dist", ".git"]
 ```
 
-### 12.1 Hard rule
+### 13.1 Hard rule
 
 ```toml
 [[hard_rules]]
@@ -400,7 +432,7 @@ exclude_patterns = []
 
 `paths` 可以引用审计文件 `[paths]` 中的 alias。`allowlist` 按路径前缀放行；包含正则元字符的 allowlist 项按正则处理。`exclude_patterns` 用正则排除文件路径。
 
-### 12.2 Architecture rule
+### 13.2 Architecture rule
 
 ```toml
 [[arch_rules]]
@@ -421,7 +453,7 @@ exclude_patterns = []
 
 auditor 是确定性的整文件正则扫描器，不是语言 parser。正则默认启用 multi-line 模式，因此 `^`/`$` 仍按代码行匹配，`\s` 可以跨行；需要让 `.` 跨行时应在规则中显式使用 `(?s)`。报告定位到匹配起始行，Rust/前端源码会忽略该位置之前的 `//`，SQL 文件会额外忽略 `--` 行注释。扫描器不跟踪跨行 `/* ... */` 块注释；需要语法树级判断时，应使用项目语言自己的 lint 工具，并把该工具配置成一个 step。
 
-## 13. 最小完整示例
+## 14. 最小完整示例
 
 ```toml
 version = 2
@@ -434,6 +466,7 @@ hook_profile = "hook"
 [paths]
 reports = ".arc-flow/reports"
 audit_config = ".arc-flow/audit.toml"
+secrets_config = ".arc-flow/secrets.toml"
 
 [paths.aliases.app]
 path = "."

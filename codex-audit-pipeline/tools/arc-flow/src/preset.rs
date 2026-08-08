@@ -12,6 +12,7 @@ struct Preset {
 }
 
 const AUDIT_TEMPLATE: &str = include_str!("../presets/empty.audit.toml");
+const SECRETS_TEMPLATE: &str = include_str!("../presets/default.secrets.toml");
 const GITIGNORE_TEMPLATE: &str = "reports/\n";
 const PRESETS: &[Preset] = &[
     Preset {
@@ -54,8 +55,10 @@ pub fn init(target: &Path, name: &str, force: bool) -> Result<()> {
         .with_context(|| format!("resolve project directory {}", target.display()))?;
     let flow_path = resolve_inside(&root, PathBuf::from(DEFAULT_CONFIG_PATH))?;
     let audit_path = resolve_inside(&root, PathBuf::from(".arc-flow/audit.toml"))?;
+    let secrets_path = resolve_inside(&root, PathBuf::from(".arc-flow/secrets.toml"))?;
     ensure_writable(&flow_path, force)?;
     ensure_writable(&audit_path, force)?;
+    ensure_writable(&secrets_path, force)?;
 
     let mut config = FlowConfig::from_source(preset.flow)?;
     config.project.name = project_id(&root);
@@ -63,6 +66,7 @@ pub fn init(target: &Path, name: &str, force: bool) -> Result<()> {
     let directory = flow_path.parent().context("flow config has no parent")?;
     fs::create_dir_all(directory)?;
     atomic_write(&audit_path, AUDIT_TEMPLATE.as_bytes())?;
+    atomic_write(&secrets_path, SECRETS_TEMPLATE.as_bytes())?;
     atomic_write(&flow_path, toml::to_string_pretty(&config)?.as_bytes())?;
     let gitignore = resolve_inside(&root, PathBuf::from(".arc-flow/.gitignore"))?;
     if !gitignore.exists() {
@@ -103,6 +107,10 @@ pub fn migrate(
     }
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
+    }
+    let secrets_path = resolve_inside(&root, PathBuf::from(".arc-flow/secrets.toml"))?;
+    if !secrets_path.exists() {
+        atomic_write(&secrets_path, SECRETS_TEMPLATE.as_bytes())?;
     }
     atomic_write(&output, toml::to_string_pretty(&config)?.as_bytes())?;
     println!("Migrated {} -> {}", input.display(), output.display());
@@ -225,6 +233,24 @@ mod tests {
     #[test]
     fn project_names_become_portable_ids() {
         assert_eq!(project_id(Path::new("/tmp/My New_API")), "my-new-api");
+    }
+
+    #[test]
+    fn init_writes_required_security_configs() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("arc-flow-init-test-{unique}"));
+        fs::create_dir_all(&root).expect("create init fixture");
+
+        init(&root, "generic", false).expect("initialize preset");
+        let project = crate::project::Project::discover(Some(root.clone()), None)
+            .expect("discover initialized project");
+
+        assert!(project.audit_config.is_file());
+        assert!(project.secrets_config.is_file());
+        fs::remove_dir_all(root).ok();
     }
 
     #[cfg(unix)]

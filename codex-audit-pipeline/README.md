@@ -97,10 +97,11 @@ arc-flow --project-root /path/to/new-project verify --all
 1. 选择最接近技术栈的预设；
 2. 修改 `.arc-flow/flow.toml` 中的路径、component、scope 和步骤；
 3. 在 `.arc-flow/audit.toml` 增加项目自己的架构规则；
-4. 执行 `config check`，先解决引用和 schema 错误；
-5. 执行 `doctor`，补齐本机工具、依赖、镜像或环境变量；
-6. 在干净仓库执行 `verify --all`，确认所有 component 都能运行；
-7. 在 CI 中使用相同命令，并按需安装只负责调用 `arc-flow hook` 的薄 hook。
+4. 在 `.arc-flow/secrets.toml` 增加业务或供应商特有的凭据规则；
+5. 执行 `config check`，先解决引用和 schema 错误；
+6. 执行 `doctor`，补齐本机工具、依赖、镜像或环境变量；
+7. 在干净仓库执行 `verify --all`，确认所有 component 都能运行；
+8. 在 CI 中使用相同命令，并按需安装只负责调用 `arc-flow hook` 的薄 hook。
 
 `init` 会创建目标目录，但 `scope` 和 `verify` 需要目标目录是 Git worktree。项目已有配置时默认拒绝覆盖；只有确认目标内容可替换时才使用 `--force`。
 
@@ -113,7 +114,7 @@ arc-flow --project-root /path/to/new-project verify --all
 | `angular-only`          | Angular/npm                 | lint、format check、test、build         |
 | `angular-rust-postgres` | Angular + Rust + PostgreSQL | 双端检查、测试、构建和临时数据库        |
 
-`init` 以同目录临时文件和原子重命名写入 `.arc-flow/flow.toml`、`.arc-flow/audit.toml` 和忽略报告目录的 `.arc-flow/.gitignore`，不会留下半写文件，也不会覆盖已有配置，除非显式传入 `--force`。`config migrate` 对目标配置使用相同的原子写入策略。
+`init` 以同目录临时文件和原子重命名写入 `.arc-flow/flow.toml`、`.arc-flow/audit.toml`、`.arc-flow/secrets.toml` 和忽略报告目录的 `.arc-flow/.gitignore`，不会留下半写文件，也不会覆盖已有配置，除非显式传入 `--force`。`config migrate` 对目标配置使用相同的原子写入策略，并在缺失时生成 Secret Scan 默认规则。
 
 预设是起点，不是运行时分支。初始化完成后，所有行为都由项目内 TOML 决定：可以重命名 component、增加 `ci` profile、换成 MySQL/Redis、调整目录或替换任意步骤，无需保留预设原有名称。
 
@@ -215,6 +216,7 @@ hook_profile = "hook"
 [paths]
 reports = ".arc-flow/reports"
 audit_config = ".arc-flow/audit.toml"
+secrets_config = ".arc-flow/secrets.toml"
 
 [paths.aliases.api]
 path = "services/api"
@@ -238,7 +240,7 @@ timeout_secs = 180
 
 可用占位符包括 `{root}`、`{reports}`、`{audit_config}` 和任意 `[paths.aliases.*]`。命令使用 `program + args[]`，不经过 Shell 字符串解析。
 
-`REPORT_DIR` / `ARC_FLOW_REPORTS`、`AUDITOR_CONFIG` / `ARC_FLOW_AUDIT_CONFIG` 和步骤或服务声明的 `*_env` 字段可覆盖配置值。CLI 的 `--project-root` 决定项目根，`--config` 决定读取哪个仓库内配置文件。
+`REPORT_DIR` / `ARC_FLOW_REPORTS`、`AUDITOR_CONFIG` / `ARC_FLOW_AUDIT_CONFIG`、`ARC_FLOW_SECRETS_CONFIG` 和步骤或服务声明的 `*_env` 字段可覆盖配置值。CLI 的 `--project-root` 决定项目根，`--config` 决定读取哪个仓库内配置文件。
 
 完整字段、默认值、限制和示例见 [schema v2 配置参考](docs/configuration.md)。修改配置后先运行：
 
@@ -315,7 +317,7 @@ profile 由步骤的 `profiles = [...]` 隐式声明。`verify` 使用 `[project
 7. 审计扫描根必须存在且位于项目内，`..` 和逃出项目的符号链接会被拒绝；
 8. Doctor、Git 探测和 Docker 生命周期命令都有硬超时，超时时终止整个子进程组。
 
-secret scan 检查 Git 已追踪文件和未忽略的未跟踪文件，识别 GitHub/GitLab/npm token、AWS access key、带用户密码的 URL 和 PEM 私钥头等高置信模式。报告只记录文件名，不把凭据内容复制到终端或 JSON。
+secret scan 检查 Git 已追踪文件和未忽略的未跟踪文件。具体规则由 `[paths].secrets_config` 指向的 TOML 文件提供，默认覆盖 GitHub/GitLab/npm Token、AWS access key、JWT、命名签名密钥、PostgreSQL 凭据 URL、Webhook、企业微信/钉钉密钥、HTTP Basic Auth 和 PEM 私钥头。捕获值会经过占位符与低信息值过滤；报告只记录文件名，不把凭据内容复制到终端或 JSON。
 
 ## v1 迁移
 

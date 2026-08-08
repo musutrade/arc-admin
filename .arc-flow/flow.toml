@@ -8,6 +8,7 @@ hook_profile = "hook"
 [paths]
 reports = "codex-audit-pipeline/.codex/reports"
 audit_config = "codex-audit-pipeline/.codex/audit.toml"
+secrets_config = "codex-audit-pipeline/.codex/secrets.toml"
 
 [paths.aliases.backend]
 path = "backend"
@@ -225,6 +226,7 @@ components = ["backend", "frontend", "workflow"]
 [[scope.rules]]
 patterns = [
   "codex-audit-pipeline/.codex/audit.toml",
+  "codex-audit-pipeline/.codex/secrets.toml",
   "codex-audit-pipeline/.codex/templates/**",
 ]
 components = ["workflow"]

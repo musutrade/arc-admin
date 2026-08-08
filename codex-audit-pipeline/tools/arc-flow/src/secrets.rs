@@ -1,11 +1,403 @@
 use crate::project::Project;
 use anyhow::{bail, Context, Result};
 use regex::bytes::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
 use std::time::Duration;
+use url::Url;
 
-const SECRET_PATTERN: &str = r"github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|npm_[A-Za-z0-9]{36}|https?://[^/@\s]+:[^@\s]+@[^\s]+|-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----";
+const SECRET_CONFIG_VERSION: u32 = 1;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SecretConfig {
+    version: u32,
+    placeholders: PlaceholderConfig,
+    rules: Vec<SecretRule>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlaceholderConfig {
+    minimum_unique_characters: usize,
+    markers: Vec<String>,
+    exact: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum SecretRule {
+    Direct {
+        id: String,
+        pattern: String,
+    },
+    Value {
+        id: String,
+        pattern: String,
+        capture: usize,
+        minimum_length: usize,
+    },
+    PostgresUrl {
+        id: String,
+        pattern: String,
+        username_capture: usize,
+        password_capture: usize,
+        host_capture: usize,
+        database_capture: usize,
+        minimum_length: usize,
+        #[serde(default)]
+        allow_local_test_credentials: bool,
+    },
+    WebhookUrl {
+        id: String,
+        pattern: String,
+        capture: usize,
+        query_parameters: Vec<String>,
+        query_minimum_length: usize,
+        path_minimum_length: usize,
+    },
+}
+
+impl SecretRule {
+    fn id(&self) -> &str {
+        match self {
+            Self::Direct { id, .. }
+            | Self::Value { id, .. }
+            | Self::PostgresUrl { id, .. }
+            | Self::WebhookUrl { id, .. } => id,
+        }
+    }
+
+    fn pattern(&self) -> &str {
+        match self {
+            Self::Direct { pattern, .. }
+            | Self::Value { pattern, .. }
+            | Self::PostgresUrl { pattern, .. }
+            | Self::WebhookUrl { pattern, .. } => pattern,
+        }
+    }
+}
+
+enum CompiledRule {
+    Direct {
+        pattern: Regex,
+    },
+    Value {
+        pattern: Regex,
+        capture: usize,
+        minimum_length: usize,
+    },
+    PostgresUrl {
+        pattern: Regex,
+        username_capture: usize,
+        password_capture: usize,
+        host_capture: usize,
+        database_capture: usize,
+        minimum_length: usize,
+        allow_local_test_credentials: bool,
+    },
+    WebhookUrl {
+        pattern: Regex,
+        capture: usize,
+        query_parameters: HashSet<String>,
+        query_minimum_length: usize,
+        path_minimum_length: usize,
+    },
+}
+
+struct SecretScanner {
+    placeholders: PlaceholderConfig,
+    rules: Vec<CompiledRule>,
+}
+
+impl SecretScanner {
+    fn load(path: &Path) -> Result<Self> {
+        let source = fs::read_to_string(path)
+            .with_context(|| format!("read secret scan configuration {}", path.display()))?;
+        Self::from_source(&source)
+            .with_context(|| format!("parse secret scan configuration {}", path.display()))
+    }
+
+    fn from_source(source: &str) -> Result<Self> {
+        let config: SecretConfig =
+            toml::from_str(source).context("parse secret scan configuration")?;
+        if config.version != SECRET_CONFIG_VERSION {
+            bail!(
+                "unsupported secret scan config version {}; expected {}",
+                config.version,
+                SECRET_CONFIG_VERSION
+            );
+        }
+        if config.rules.is_empty() {
+            bail!("secret scan configuration requires at least one rule");
+        }
+        if config.placeholders.minimum_unique_characters == 0
+            || config
+                .placeholders
+                .markers
+                .iter()
+                .chain(&config.placeholders.exact)
+                .any(|value| value.trim().is_empty())
+        {
+            bail!("secret scan placeholder policy contains an invalid value");
+        }
+
+        let mut ids = HashSet::new();
+        let mut rules = Vec::with_capacity(config.rules.len());
+        for rule in config.rules {
+            let id = rule.id().to_string();
+            if id.is_empty()
+                || !id
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || ".-_".contains(character))
+                || !ids.insert(id.clone())
+            {
+                bail!("secret scan rule IDs must be non-empty, portable, and unique: {id:?}");
+            }
+            let pattern = Regex::new(rule.pattern())
+                .with_context(|| format!("secret scan rule {id:?} has an invalid regex"))?;
+            let capture_count = pattern.captures_len();
+            let compiled = match rule {
+                SecretRule::Direct { .. } => CompiledRule::Direct { pattern },
+                SecretRule::Value {
+                    capture,
+                    minimum_length,
+                    ..
+                } => {
+                    validate_capture(&id, capture, capture_count)?;
+                    validate_minimum(&id, minimum_length)?;
+                    CompiledRule::Value {
+                        pattern,
+                        capture,
+                        minimum_length,
+                    }
+                }
+                SecretRule::PostgresUrl {
+                    username_capture,
+                    password_capture,
+                    host_capture,
+                    database_capture,
+                    minimum_length,
+                    allow_local_test_credentials,
+                    ..
+                } => {
+                    let captures = [
+                        username_capture,
+                        password_capture,
+                        host_capture,
+                        database_capture,
+                    ];
+                    for capture in captures {
+                        validate_capture(&id, capture, capture_count)?;
+                    }
+                    if captures.into_iter().collect::<HashSet<_>>().len() != captures.len() {
+                        bail!("secret scan rule {id:?} requires distinct PostgreSQL captures");
+                    }
+                    validate_minimum(&id, minimum_length)?;
+                    CompiledRule::PostgresUrl {
+                        pattern,
+                        username_capture,
+                        password_capture,
+                        host_capture,
+                        database_capture,
+                        minimum_length,
+                        allow_local_test_credentials,
+                    }
+                }
+                SecretRule::WebhookUrl {
+                    capture,
+                    query_parameters,
+                    query_minimum_length,
+                    path_minimum_length,
+                    ..
+                } => {
+                    validate_capture(&id, capture, capture_count)?;
+                    validate_minimum(&id, query_minimum_length)?;
+                    validate_minimum(&id, path_minimum_length)?;
+                    if query_parameters.is_empty()
+                        || query_parameters.iter().any(|value| value.trim().is_empty())
+                    {
+                        bail!("secret scan rule {id:?} requires query parameters");
+                    }
+                    CompiledRule::WebhookUrl {
+                        pattern,
+                        capture,
+                        query_parameters: query_parameters
+                            .into_iter()
+                            .map(|value| value.to_ascii_lowercase())
+                            .collect(),
+                        query_minimum_length,
+                        path_minimum_length,
+                    }
+                }
+            };
+            rules.push(compiled);
+        }
+
+        Ok(Self {
+            placeholders: config.placeholders,
+            rules,
+        })
+    }
+
+    fn is_match(&self, bytes: &[u8]) -> bool {
+        self.rules
+            .iter()
+            .any(|rule| rule.is_match(bytes, &self.placeholders))
+    }
+}
+
+impl CompiledRule {
+    fn is_match(&self, bytes: &[u8], placeholders: &PlaceholderConfig) -> bool {
+        match self {
+            Self::Direct { pattern } => pattern.is_match(bytes),
+            Self::Value {
+                pattern,
+                capture,
+                minimum_length,
+            } => pattern.captures_iter(bytes).any(|captures| {
+                captures.get(*capture).is_some_and(|value| {
+                    looks_like_secret(value.as_bytes(), *minimum_length, placeholders)
+                })
+            }),
+            Self::PostgresUrl {
+                pattern,
+                username_capture,
+                password_capture,
+                host_capture,
+                database_capture,
+                minimum_length,
+                allow_local_test_credentials,
+            } => pattern.captures_iter(bytes).any(|captures| {
+                let values = [
+                    *username_capture,
+                    *password_capture,
+                    *host_capture,
+                    *database_capture,
+                ]
+                .map(|index| captures.get(index).map(|value| value.as_bytes()));
+                let [Some(username), Some(password), Some(host), Some(database)] = values else {
+                    return false;
+                };
+                if *allow_local_test_credentials
+                    && is_local_test_database(username, password, host, database)
+                {
+                    return false;
+                }
+                looks_like_secret(password, *minimum_length, placeholders)
+            }),
+            Self::WebhookUrl {
+                pattern,
+                capture,
+                query_parameters,
+                query_minimum_length,
+                path_minimum_length,
+            } => pattern.captures_iter(bytes).any(|captures| {
+                captures.get(*capture).is_some_and(|value| {
+                    webhook_url_contains_secret(
+                        value.as_bytes(),
+                        query_parameters,
+                        *query_minimum_length,
+                        *path_minimum_length,
+                        placeholders,
+                    )
+                })
+            }),
+        }
+    }
+}
+
+fn validate_capture(id: &str, capture: usize, capture_count: usize) -> Result<()> {
+    if capture == 0 || capture >= capture_count {
+        bail!(
+            "secret scan rule {id:?} references capture {capture}, but its regex has {} capture group(s)",
+            capture_count.saturating_sub(1)
+        );
+    }
+    Ok(())
+}
+
+fn validate_minimum(id: &str, minimum: usize) -> Result<()> {
+    if minimum == 0 {
+        bail!("secret scan rule {id:?} minimum length must be positive");
+    }
+    Ok(())
+}
+
+fn is_local_test_database(username: &[u8], password: &[u8], host: &[u8], database: &[u8]) -> bool {
+    let host = String::from_utf8_lossy(host).to_ascii_lowercase();
+    let database = String::from_utf8_lossy(database).to_ascii_lowercase();
+    matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]")
+        && (database.ends_with("_test") || database.ends_with("-test"))
+        && username == password
+}
+
+fn webhook_url_contains_secret(
+    value: &[u8],
+    query_parameters: &HashSet<String>,
+    query_minimum_length: usize,
+    path_minimum_length: usize,
+    placeholders: &PlaceholderConfig,
+) -> bool {
+    let Ok(value) = std::str::from_utf8(value) else {
+        return false;
+    };
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+    if url.query_pairs().any(|(name, value)| {
+        query_parameters.contains(name.to_ascii_lowercase().as_str())
+            && looks_like_secret(value.as_bytes(), query_minimum_length, placeholders)
+    }) {
+        return true;
+    }
+    url.path_segments()
+        .and_then(|mut segments| segments.rfind(|segment| !segment.is_empty()))
+        .is_some_and(|segment| {
+            looks_like_secret(segment.as_bytes(), path_minimum_length, placeholders)
+        })
+}
+
+fn looks_like_secret(
+    value: &[u8],
+    minimum_length: usize,
+    placeholders: &PlaceholderConfig,
+) -> bool {
+    let value = String::from_utf8_lossy(value);
+    let value = value.trim_matches(|character: char| {
+        character.is_ascii_whitespace() || matches!(character, '"' | '\'')
+    });
+    if value.len() < minimum_length
+        || (value.starts_with(char::from(36)) && value.as_bytes().get(1) == Some(&b'{'))
+        || value.starts_with("{{")
+        || value.starts_with('<')
+    {
+        return false;
+    }
+
+    let lowercase = value.to_ascii_lowercase();
+    if placeholders
+        .markers
+        .iter()
+        .any(|marker| lowercase.contains(&marker.to_ascii_lowercase()))
+        || placeholders
+            .exact
+            .iter()
+            .any(|placeholder| lowercase == placeholder.to_ascii_lowercase())
+    {
+        return false;
+    }
+
+    let significant = value
+        .bytes()
+        .filter(|byte| byte.is_ascii_alphanumeric())
+        .collect::<Vec<_>>();
+    let unique = significant.iter().copied().collect::<HashSet<_>>();
+    significant.len() >= minimum_length.saturating_sub(2)
+        && unique.len() >= placeholders.minimum_unique_characters
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum SecretMode {
@@ -18,6 +410,28 @@ struct SecretReport<'a> {
     timestamp: String,
     mode: &'a str,
     findings: &'a [String],
+}
+
+fn scanner_for_mode(project: &Project, mode: SecretMode) -> Result<SecretScanner> {
+    match mode {
+        SecretMode::WorkingTree => SecretScanner::load(&project.secrets_config),
+        SecretMode::Staged => {
+            let relative = project
+                .secrets_config
+                .strip_prefix(&project.root)
+                .context("secret scan configuration must stay inside the project")?;
+            let relative = relative
+                .to_str()
+                .context("secret scan configuration path must be UTF-8")?;
+            let bytes = staged_file_bytes(project, relative)?.ok_or_else(|| {
+                anyhow::anyhow!("staged secret scan configuration is missing: {relative}")
+            })?;
+            let source = std::str::from_utf8(&bytes)
+                .context("staged secret scan configuration must be UTF-8")?;
+            SecretScanner::from_source(source)
+                .with_context(|| format!("parse staged secret scan configuration {relative}"))
+        }
+    }
 }
 
 pub fn scan(project: &Project, mode: SecretMode) -> Result<Vec<String>> {
@@ -43,7 +457,7 @@ pub fn scan(project: &Project, mode: SecretMode) -> Result<Vec<String>> {
             ],
         )?,
     };
-    let pattern = Regex::new(SECRET_PATTERN).context("compile secret pattern")?;
+    let patterns = scanner_for_mode(project, mode)?;
     let mut findings = Vec::new();
 
     for file in files {
@@ -53,18 +467,12 @@ pub fn scan(project: &Project, mode: SecretMode) -> Result<Vec<String>> {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(error) => return Err(error).with_context(|| format!("read {file}")),
             },
-            SecretMode::Staged => {
-                let args = vec!["show".to_string(), format!(":{file}")];
-                let output =
-                    crate::process::capture("git", &args, &project.root, Duration::from_secs(30))
-                        .with_context(|| format!("read staged file {file}"))?;
-                if !output.status.success() {
-                    continue;
-                }
-                output.stdout
-            }
+            SecretMode::Staged => match staged_file_bytes(project, &file)? {
+                Some(bytes) => bytes,
+                None => continue,
+            },
         };
-        if pattern.is_match(&bytes) {
+        if patterns.is_match(&bytes) {
             findings.push(file);
         }
     }
@@ -83,6 +491,13 @@ pub fn scan(project: &Project, mode: SecretMode) -> Result<Vec<String>> {
         })?,
     )?;
     Ok(findings)
+}
+
+fn staged_file_bytes(project: &Project, file: &str) -> Result<Option<Vec<u8>>> {
+    let args = vec!["show".to_string(), format!(":{file}")];
+    let output = crate::process::capture("git", &args, &project.root, Duration::from_secs(30))
+        .with_context(|| format!("read staged file {file}"))?;
+    Ok(output.status.success().then_some(output.stdout))
 }
 
 fn git_files(project: &Project, args: &[&str]) -> Result<Vec<String>> {
@@ -106,14 +521,168 @@ fn git_files(project: &Project, args: &[&str]) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
+
+    fn scanner() -> SecretScanner {
+        SecretScanner::from_source(include_str!("../../../.codex/secrets.toml"))
+            .expect("project secret scan config")
+    }
 
     #[test]
-    fn detects_high_confidence_tokens_without_matching_placeholders() {
-        let pattern = Regex::new(SECRET_PATTERN).expect("secret regex");
+    fn default_preset_secret_config_is_valid() {
+        SecretScanner::from_source(include_str!("../presets/default.secrets.toml"))
+            .expect("default preset secret scan config");
+    }
+
+    #[test]
+    fn invalid_secret_config_fails_closed() {
+        let invalid_capture = r#"
+version = 1
+
+[placeholders]
+minimum_unique_characters = 4
+markers = ["change-me"]
+exact = ["password"]
+
+[[rules]]
+id = "broken"
+kind = "value"
+pattern = "no-capture"
+capture = 1
+minimum_length = 8
+"#;
+        let empty_rules = r#"
+version = 1
+rules = []
+
+[placeholders]
+minimum_unique_characters = 4
+markers = ["change-me"]
+exact = ["password"]
+"#;
+
+        assert!(SecretScanner::from_source(invalid_capture).is_err());
+        assert!(SecretScanner::from_source(empty_rules).is_err());
+    }
+
+    #[test]
+    fn staged_scan_uses_the_staged_secret_config() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("arc-flow-staged-secrets-{unique}"));
+        fs::create_dir_all(&root).expect("create staged scan fixture");
+        crate::preset::init(&root, "generic", false).expect("initialize staged scan fixture");
+        assert!(Command::new("git")
+            .args(["-C", root.to_str().expect("UTF-8 path"), "init", "--quiet"])
+            .status()
+            .expect("initialize Git fixture")
+            .success());
+        assert!(Command::new("git")
+            .args([
+                "-C",
+                root.to_str().expect("UTF-8 path"),
+                "add",
+                "--",
+                ".arc-flow/secrets.toml",
+            ])
+            .status()
+            .expect("stage secret config")
+            .success());
+        let project = Project::discover(Some(root.clone()), None).expect("discover Git fixture");
+        fs::write(
+            &project.secrets_config,
+            "version = 1\nrules = []\n[placeholders]\nminimum_unique_characters = 4\nmarkers = []\nexact = []\n",
+        )
+        .expect("replace working-tree secret config");
+
+        assert!(scanner_for_mode(&project, SecretMode::Staged).is_ok());
+        assert!(scanner_for_mode(&project, SecretMode::WorkingTree).is_err());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn detects_direct_tokens_without_matching_placeholders() {
+        let patterns = scanner();
         let github_token = ["token=gh", "p_abcdefghijklmnopqrstuvwxyz123456"].concat();
         let access_key = ["AK", "IAIOSFODNN7EXAMPLE"].concat();
-        assert!(pattern.is_match(github_token.as_bytes()));
-        assert!(pattern.is_match(access_key.as_bytes()));
-        assert!(!pattern.is_match(b"JWT_SECRET=change-me-in-production"));
+        let jwt = [
+            "eyJhbGciOiJIUzI1NiIs",
+            "InR5cCI6IkpXVCJ9",
+            ".eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+            ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+        ]
+        .concat();
+
+        assert!(patterns.is_match(github_token.as_bytes()));
+        assert!(patterns.is_match(access_key.as_bytes()));
+        assert!(patterns.is_match(jwt.as_bytes()));
+        assert!(!patterns.is_match(b"JWT_SECRET=change-me-in-production"));
+    }
+
+    #[test]
+    fn detects_named_jwt_and_enterprise_messaging_secrets() {
+        let patterns = scanner();
+        let jwt_secret = ["JWT_", "SECRET=correct-horse-battery-staple"].concat();
+        let wecom_key = ["WECOM_WEBHOOK_", "KEY=8fbf86b6-4f96-4b69-a97c-6ec55f845db1"].concat();
+        let dingtalk_secret = [
+            "\"DINGTALK_APP_",
+            "SECRET\": \"SECc65f4f1654f544f9ba2a71eb4d498\"",
+        ]
+        .concat();
+
+        assert!(patterns.is_match(jwt_secret.as_bytes()));
+        assert!(patterns.is_match(wecom_key.as_bytes()));
+        assert!(patterns.is_match(dingtalk_secret.as_bytes()));
+        assert!(!patterns.is_match(["JWT_SECRET=", "$", "{JWT_SECRET}"].concat().as_bytes()));
+        assert!(!patterns.is_match(b"WECOM_WEBHOOK_KEY=replace-me"));
+    }
+
+    #[test]
+    fn detects_postgres_credentials_and_secret_bearing_webhooks() {
+        let patterns = scanner();
+        let database_url = [
+            "DATABASE_URL=postgresql://app:",
+            "m4pL9vQ2sR7x@db.internal/arc_admin",
+        ]
+        .concat();
+        let wecom_url = [
+            "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=",
+            "8fbf86b6-4f96-4b69-a97c-6ec55f845db1",
+        ]
+        .concat();
+        let dingtalk_url = [
+            "WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=",
+            "4a8f57c90e51458a825b82d78948bffd",
+        ]
+        .concat();
+        let generic_webhook = [
+            "ALERT_WEBHOOK_URL=https://hooks.internal.example/notify/",
+            "c51d43d18e6046e0b4ae192c187a44c7",
+        ]
+        .concat();
+
+        assert!(patterns.is_match(database_url.as_bytes()));
+        assert!(patterns.is_match(wecom_url.as_bytes()));
+        assert!(patterns.is_match(dingtalk_url.as_bytes()));
+        assert!(patterns.is_match(generic_webhook.as_bytes()));
+        assert!(!patterns
+            .is_match(b"DATABASE_URL=postgresql://postgres:postgres@localhost/arc_admin_test"));
+        let remote_test_database = [
+            "DATABASE_URL=postgresql://arc_admin_test:",
+            "arc_admin_test@db.internal/arc_admin_test",
+        ]
+        .concat();
+        assert!(patterns.is_match(remote_test_database.as_bytes()));
+        assert!(!patterns.is_match(
+            [
+                "WEBHOOK_URL=https://example.com/hooks/",
+                "$",
+                "{WEBHOOK_TOKEN}"
+            ]
+            .concat()
+            .as_bytes()
+        ));
     }
 }
