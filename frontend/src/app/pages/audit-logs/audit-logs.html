@@ -11,7 +11,7 @@
       <mat-icon>search</mat-icon>
       <input
         type="search"
-        placeholder="按操作者、操作或对象搜索..."
+        placeholder="按操作者、操作、对象或追踪号搜索..."
         [value]="keyword()"
         (change)="search($any($event.target).value)"
         aria-label="搜索审计日志"
@@ -53,6 +53,7 @@
               <th>操作者</th>
               <th>操作</th>
               <th>对象</th>
+              <th>追踪号</th>
               <th>变更详情</th>
             </tr>
           </thead>
@@ -65,6 +66,26 @@
                   <span class="action-badge">{{ actionLabel(log.action) }}</span>
                 </td>
                 <td>{{ targetLabel(log) }}</td>
+                <td>
+                  @if (log.traceId) {
+                    <div class="trace-cell">
+                      <code [title]="log.traceId">{{ log.traceId }}</code>
+                      <button
+                        type="button"
+                        class="copy-trace"
+                        (click)="copyTraceId(log.traceId)"
+                        [attr.aria-label]="'复制追踪号 ' + log.traceId"
+                        [title]="copiedTraceId() === log.traceId ? '已复制' : '复制追踪号'"
+                      >
+                        <mat-icon>{{
+                          copiedTraceId() === log.traceId ? 'check' : 'content_copy'
+                        }}</mat-icon>
+                      </button>
+                    </div>
+                  } @else {
+                    <span class="trace-empty">系统任务</span>
+                  }
+                </td>
                 <td>
                   <code class="details" [title]="detailText(log.details)">{{
                     detailText(log.details)

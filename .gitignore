@@ -6,6 +6,7 @@ target/
 
 # 运行时产物
 codex-audit-pipeline/.codex/reports/
+/observability/logs/*.jsonl
 
 # 本地设计参考（不纳入版本控制）
 /QQ20260803-155453.png

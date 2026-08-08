@@ -81,6 +81,7 @@ export interface ApiAuditLog {
   targetType: string;
   targetId: number | null;
   details: Record<string, unknown>;
+  traceId: string | null;
   createdAt: string;
 }
 

@@ -126,6 +126,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
               targetType: 'user',
               targetId: 2,
               details: { roleIds: [2] },
+              traceId: 'audit-trace-e2e',
               createdAt: '2026-08-08T00:00:00Z',
             },
           ],
@@ -245,6 +246,10 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible();
   await expect(page.getByRole('table').getByText('变更用户角色', { exact: true })).toBeVisible();
   await expect(page.getByText('用户 #2', { exact: true })).toBeVisible();
+  await expect(page.getByText('audit-trace-e2e', { exact: true })).toBeVisible();
+  const copyTraceId = page.getByRole('button', { name: '复制追踪号 audit-trace-e2e' });
+  await copyTraceId.click();
+  await expect(copyTraceId).toHaveAttribute('title', '已复制');
   if (process.env['VISUAL_REVIEW']) {
     await page.screenshot({ path: testInfo.outputPath('audit-logs.png'), fullPage: true });
   }

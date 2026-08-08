@@ -429,7 +429,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - name: keyword
           in: query
-          description: 按操作者、操作或对象类型模糊匹配
+          description: 按操作者、操作或对象类型模糊匹配，也可精确匹配追踪号
           schema: { type: string }
         - name: action
           in: query
@@ -831,7 +831,7 @@ components:
           format: int64
     AuditLog:
       type: object
-      required: [id, actorUserId, actorUsername, action, targetType, targetId, details, createdAt]
+      required: [id, actorUserId, actorUsername, action, targetType, targetId, details, traceId, createdAt]
       properties:
         id:
           type: integer
@@ -854,6 +854,10 @@ components:
         details:
           type: object
           additionalProperties: true
+        traceId:
+          type: string
+          nullable: true
+          description: 产生该审计记录的请求追踪号；系统任务可能为空
         createdAt:
           type: string
           format: date-time

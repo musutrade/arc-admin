@@ -185,11 +185,11 @@ function requiredFile(root, relativePath) {
   return path;
 }
 
-function replaceEnvValue(contents, key, replacement) {
+function replaceEnvValue(contents, key, replacement, fileLabel = "环境文件") {
   const pattern = new RegExp(`^${key}=(.*)$`, "m");
   const match = contents.match(pattern);
   if (!match) {
-    fail(`backend/.env.example 缺少 ${key}`);
+    fail(`${fileLabel} 缺少 ${key}`);
   }
   return contents.replace(pattern, `${key}=${replacement(match[1].trim())}`);
 }
@@ -223,6 +223,21 @@ function buildEnvironment(example, options, jwtSecret) {
     () => `${options.slug}-backend`,
   );
   return replaceEnvValue(withServiceName, "JWT_SECRET", () => jwtSecret);
+}
+
+function buildObservabilityEnvironment(example, options, grafanaPassword) {
+  const withProjectName = replaceEnvValue(
+    example,
+    "COMPOSE_PROJECT_NAME",
+    () => `${options.slug}-observability`,
+    "observability/.env.example",
+  );
+  return replaceEnvValue(
+    withProjectName,
+    "GRAFANA_ADMIN_PASSWORD",
+    () => grafanaPassword,
+    "observability/.env.example",
+  );
 }
 
 function buildRuntimeConfig(options) {
@@ -301,6 +316,7 @@ export function initializeProject(
   {
     doctorMode = "auto",
     secretFactory = () => randomBytes(32).toString("hex"),
+    grafanaSecretFactory = () => randomBytes(24).toString("base64url"),
   } = {},
 ) {
   assertSafeRepository(root);
@@ -309,9 +325,17 @@ export function initializeProject(
   const readmePath = requiredFile(root, "README.md");
   const configPath = requiredFile(root, "frontend/public/config.js");
   const environmentExamplePath = requiredFile(root, "backend/.env.example");
+  const observabilityExamplePath = requiredFile(
+    root,
+    "observability/.env.example",
+  );
   const environmentPath = join(root, "backend/.env");
+  const observabilityPath = join(root, "observability/.env");
   if (existsSync(environmentPath)) {
     fail("backend/.env 已存在，拒绝覆盖本地配置");
+  }
+  if (existsSync(observabilityPath)) {
+    fail("observability/.env 已存在，拒绝覆盖本地配置");
   }
 
   const frameworkVersion = readFileSync(frameworkVersionPath, "utf8").trim();
@@ -325,6 +349,11 @@ export function initializeProject(
     options,
     jwtSecret,
   );
+  const observabilityEnvironment = buildObservabilityEnvironment(
+    readFileSync(observabilityExamplePath, "utf8"),
+    options,
+    grafanaSecretFactory(),
+  );
   const runtimeConfig = buildRuntimeConfig(options);
   const readme = buildReadme(
     readFileSync(readmePath, "utf8"),
@@ -334,6 +363,11 @@ export function initializeProject(
   const metadata = buildProjectMetadata(options, frameworkVersion);
 
   writeFileSync(environmentPath, environment, {
+    encoding: "utf8",
+    mode: 0o600,
+    flag: "wx",
+  });
+  writeFileSync(observabilityPath, observabilityEnvironment, {
     encoding: "utf8",
     mode: 0o600,
     flag: "wx",

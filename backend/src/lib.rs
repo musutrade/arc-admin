@@ -119,6 +119,7 @@ pub const API_SCHEMA_REQUIRED_FIELDS: &[(&str, &[&str])] = &[
             "targetType",
             "targetId",
             "details",
+            "traceId",
             "createdAt",
         ],
     ),

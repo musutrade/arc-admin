@@ -17,6 +17,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 │   ├── src/main.rs            # 配置、连接池、迁移与监听入口
 │   ├── migrations/            # SQLX 迁移（不可变，只增不改）
 │   └── .env.example
+├── observability/             # Loki + Alloy + Grafana 集中日志栈
 ├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
 ├── scripts/                   # 业务项目初始化命令及测试
 ├── FRAMEWORK_VERSION          # 模板版本标识
@@ -43,7 +44,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
   --permission-prefix stock
 ```
 
-命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成唯一的本地开发 JWT 密钥和 `backend/.env`，更新运行时产品配置与 README，并写入 `.arc-project.json`。本地 `.env` 受 `.gitignore` 保护，不会进入版本库。
+命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成唯一的本地开发 JWT 密钥、`backend/.env` 和带随机 Grafana 管理密码的 `observability/.env`，更新运行时产品配置与 README，并写入 `.arc-project.json`。本地 `.env` 受 `.gitignore` 保护，不会进入版本库。
 
 查看所有参数：
 
@@ -82,6 +83,13 @@ cd backend && cargo run                    # http://localhost:8080/api/v1/health
 
 ```bash
 cargo flow doctor
+```
+
+集中日志栈按需启动，完整说明见[日志与故障定位](docs/observability.md)：
+
+```bash
+cp observability/.env.example observability/.env
+docker compose --env-file observability/.env -f observability/compose.yaml up -d
 ```
 
 ## Codex 工作流

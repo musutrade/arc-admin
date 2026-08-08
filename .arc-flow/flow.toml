@@ -36,6 +36,7 @@ required_steps = [
   "workflow.project-init-tests",
   "workflow.template-quality",
   "workflow.template-quality-tests",
+  "workflow.observability-config",
   "workflow.format",
   "workflow.clippy",
   "workflow.tests",
@@ -162,9 +163,11 @@ unmatched = "fail"
 [[scope.rules]]
 patterns = [
   "README.md",
+  ".gitignore",
   "AGENTS.md",
   "start.sh",
   "scripts/**",
+  "observability/**",
   "FRAMEWORK_VERSION",
   ".arc-project.json",
   "docs/**",
@@ -354,6 +357,17 @@ program = "node"
 args = ["--test", "{root}/scripts/check-templates.test.mjs"]
 cwd = "{root}"
 log = "template_quality_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.observability-config"
+label = "observability configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-observability.mjs"]
+cwd = "{root}"
+log = "observability_config.log"
 timeout_secs = 60
 
 [[steps]]

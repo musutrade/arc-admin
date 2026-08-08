@@ -43,10 +43,56 @@
   th:nth-child(4) {
     width: 110px;
   }
+  th:nth-child(5) {
+    width: 230px;
+  }
 
   tbody tr:hover {
     background: var(--ui-color-hover);
   }
+}
+
+.trace-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+
+  code {
+    overflow: hidden;
+    color: var(--ui-color-text-secondary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.copy-trace {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--ui-color-hover);
+    color: var(--ui-color-text-primary);
+  }
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+}
+
+.trace-empty {
+  color: var(--ui-color-text-secondary);
 }
 
 .time {
@@ -117,6 +163,6 @@
   }
 
   .audit-table {
-    min-width: 900px;
+    min-width: 1120px;
   }
 }

@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { Clipboard } from '@angular/cdk/clipboard';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -37,6 +38,7 @@ const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, label]) => ({ 
 })
 export class AuditLogs implements OnInit {
   private readonly auditLogApi = inject(AuditLogApiService);
+  private readonly clipboard = inject(Clipboard);
 
   readonly logs = signal<ApiAuditLog[]>([]);
   readonly loading = signal(true);
@@ -46,6 +48,7 @@ export class AuditLogs implements OnInit {
   readonly page = signal(1);
   readonly pageSize = 20;
   readonly total = signal(0);
+  readonly copiedTraceId = signal<string | null>(null);
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
   readonly actionOptions = ACTION_OPTIONS;
 
@@ -86,6 +89,18 @@ export class AuditLogs implements OnInit {
 
   detailText(details: Record<string, unknown>): string {
     return Object.keys(details).length === 0 ? '无附加信息' : JSON.stringify(details);
+  }
+
+  copyTraceId(traceId: string): void {
+    if (!this.clipboard.copy(traceId)) {
+      return;
+    }
+    this.copiedTraceId.set(traceId);
+    window.setTimeout(() => {
+      if (this.copiedTraceId() === traceId) {
+        this.copiedTraceId.set(null);
+      }
+    }, 2000);
   }
 
   private async load(): Promise<void> {

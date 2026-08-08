@@ -97,6 +97,7 @@ pub struct AuditLogRow {
     pub target_type: String,
     pub target_id: Option<i64>,
     pub details: Value,
+    pub trace_id: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -186,6 +187,7 @@ pub struct AuditLogResponse {
     pub target_type: String,
     pub target_id: Option<i64>,
     pub details: Value,
+    pub trace_id: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -198,6 +200,7 @@ pub fn audit_log_response(row: AuditLogRow) -> AuditLogResponse {
         target_type: row.target_type,
         target_id: row.target_id,
         details: row.details,
+        trace_id: row.trace_id,
         created_at: row.created_at,
     }
 }
