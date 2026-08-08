@@ -99,6 +99,10 @@ export class RolesPage implements OnInit {
   }
 
   async onDeleteRole(role: Role): Promise<void> {
+    if (role.members > 0) {
+      this.snackBar.open('该角色仍有成员，请先迁移用户后再删除', '关闭', { duration: 5000 });
+      return;
+    }
     const confirmed: boolean | undefined = await firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {
@@ -193,6 +197,7 @@ export class RolesPage implements OnInit {
     this.busy.set(true);
     try {
       await action();
+      await this.auth.refreshSession();
       this.snackBar.open(success, '关闭', { duration: 3000 });
       await this.loadRoles();
     } catch (error) {

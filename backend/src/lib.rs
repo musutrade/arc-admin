@@ -35,6 +35,7 @@ const ROLE_PATH: &str = "/api/v1/roles/{id}";
 const ROLE_PERMISSIONS_PATH: &str = "/api/v1/roles/{id}/permissions";
 const PERMISSION_GROUPS_PATH: &str = "/api/v1/permissions/groups";
 const DASHBOARD_STATS_PATH: &str = "/api/v1/dashboard/stats";
+const AUDIT_LOGS_PATH: &str = "/api/v1/audit-logs";
 
 /// Public HTTP operations documented in `docs/openapi.yaml`.
 pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
@@ -52,6 +53,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (ROLE_PERMISSIONS_PATH, &["get", "put"]),
     (PERMISSION_GROUPS_PATH, &["get"]),
     (DASHBOARD_STATS_PATH, &["get"]),
+    (AUDIT_LOGS_PATH, &["get"]),
 ];
 
 /// Required response fields that must remain aligned with `docs/openapi.yaml`.
@@ -105,6 +107,20 @@ pub const API_SCHEMA_REQUIRED_FIELDS: &[(&str, &[&str])] = &[
             "suspendedUsers",
         ],
     ),
+    (
+        "AuditLog",
+        &[
+            "id",
+            "actorUserId",
+            "actorUsername",
+            "action",
+            "targetType",
+            "targetId",
+            "details",
+            "createdAt",
+        ],
+    ),
+    ("PageAuditLog", &["items", "total", "page", "pageSize"]),
 ];
 
 #[derive(Clone)]
@@ -175,6 +191,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(PERMISSION_GROUPS_PATH, get(handlers::permissions::groups))
         .route(DASHBOARD_STATS_PATH, get(handlers::dashboard::stats))
+        .route(AUDIT_LOGS_PATH, get(handlers::audit_logs::list))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

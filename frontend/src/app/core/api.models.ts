@@ -73,6 +73,17 @@ export interface DashboardStats {
   suspendedUsers: number;
 }
 
+export interface ApiAuditLog {
+  id: number;
+  actorUserId: number | null;
+  actorUsername: string | null;
+  action: string;
+  targetType: string;
+  targetId: number | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface CreateUserRequest {
   username: string;
   password: string;

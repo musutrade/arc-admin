@@ -7,6 +7,9 @@ import { Role, User, UserStatus } from '../../core/models';
 export interface UserEditorData {
   user?: User;
   roles: Role[];
+  canResetPassword: boolean;
+  canManageStatus: boolean;
+  canManageRoles: boolean;
 }
 
 export interface UserEditorResult {

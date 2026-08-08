@@ -14,7 +14,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { DataService } from '../../core/data.service';
-import { StatCard, User, UserStatus } from '../../core/models';
+import { Role, StatCard, User, UserStatus } from '../../core/models';
 import { AuthService } from '../../core/auth.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { ConfirmDialog } from '../../core/confirm.dialog';
@@ -64,6 +64,8 @@ export class UsersPage implements OnInit {
   readonly canResetPassword = computed(() => this.auth.hasPermission('user:admin:reset_password'));
   readonly canDeactivate = computed(() => this.auth.hasPermission('user:admin:deactivate'));
   readonly canManageStatus = computed(() => this.canWrite() && this.canDeactivate());
+  readonly canManageRoles = computed(() => this.auth.hasPermission('user:roles:write'));
+  readonly canGrantSuperAdmin = computed(() => this.auth.hasPermission('user:super_admin:grant'));
 
   /** 状态展示元数据暴露给模板 */
   readonly statusMeta = STATUS_META;
@@ -282,7 +284,7 @@ export class UsersPage implements OnInit {
       return;
     }
     try {
-      const roles = await this.data.getRoles();
+      const roles = this.filterGrantableRoles(await this.data.getRoles());
       const roleIds: string[] | undefined = await firstValueFrom(
         this.dialog.open(RoleSelectionDialog, { data: roles }).afterClosed(),
       );
@@ -303,9 +305,16 @@ export class UsersPage implements OnInit {
 
   private async openEditor(user?: User): Promise<void> {
     try {
-      const roles = await this.data.getRoles();
+      const canManageRoles = this.canManageRoles();
+      const canManageStatus = this.canManageStatus();
+      const canResetPassword = this.canResetPassword();
+      const roles = canManageRoles ? this.filterGrantableRoles(await this.data.getRoles()) : [];
       const result: UserEditorResult | undefined = await firstValueFrom(
-        this.dialog.open(UserEditorDialog, { data: { user, roles } }).afterClosed(),
+        this.dialog
+          .open(UserEditorDialog, {
+            data: { user, roles, canManageRoles, canManageStatus, canResetPassword },
+          })
+          .afterClosed(),
       );
       if (!result) {
         return;
@@ -315,10 +324,12 @@ export class UsersPage implements OnInit {
           await this.data.updateUser(user.id, {
             displayName: result.displayName,
             email: result.email || null,
-            status: result.status,
-            ...(result.password ? { password: result.password } : {}),
+            ...(canManageStatus ? { status: result.status } : {}),
+            ...(canResetPassword && result.password ? { password: result.password } : {}),
           });
-          await this.data.assignUserRoles(user.id, result.roleIds);
+          if (canManageRoles) {
+            await this.data.assignUserRoles(user.id, result.roleIds);
+          }
         }, `已更新 ${result.displayName}`);
       } else {
         await this.runMutation(
@@ -328,8 +339,8 @@ export class UsersPage implements OnInit {
               password: result.password,
               displayName: result.displayName,
               email: result.email || null,
-              status: result.status,
-              roleIds: result.roleIds.map(Number),
+              ...(canManageStatus ? { status: result.status } : {}),
+              ...(canManageRoles ? { roleIds: result.roleIds.map(Number) } : {}),
             }),
           `已创建 ${result.displayName}`,
         );
@@ -343,6 +354,7 @@ export class UsersPage implements OnInit {
     this.busy.set(true);
     try {
       await action();
+      await this.auth.refreshSession();
       this.snackBar.open(success, '关闭', { duration: 3000 });
       await this.loadData();
     } catch (error) {
@@ -350,6 +362,10 @@ export class UsersPage implements OnInit {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  private filterGrantableRoles(roles: Role[]): Role[] {
+    return this.canGrantSuperAdmin() ? roles : roles.filter((role) => role.code !== 'super_admin');
   }
 
   private confirm(

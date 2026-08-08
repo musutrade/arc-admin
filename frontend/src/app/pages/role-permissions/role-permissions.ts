@@ -75,6 +75,7 @@ export class RolePermissionsPage implements OnInit {
       }
       this.busy.set(true);
       await this.data.assignRolePermissions(row.roleId, permissionIds);
+      await this.auth.refreshSession();
       this.snackBar.open(`已更新 ${row.roleName} 的权限`, '关闭', { duration: 3000 });
       await this.loadRows();
     } catch (error) {
@@ -101,6 +102,7 @@ export class RolePermissionsPage implements OnInit {
         color: result.color,
         description: result.description || null,
       });
+      await this.auth.refreshSession();
       this.snackBar.open(`已创建 ${result.name}`, '关闭', { duration: 3000 });
       await this.loadRows();
     } catch (error) {

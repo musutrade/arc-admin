@@ -10,10 +10,14 @@ import {
 import { authGuard, permissionGuard } from './app.routes';
 import { AuthService } from './core/auth.service';
 
-function makeRoute(path: string, permission?: string): ActivatedRouteSnapshot {
+function makeRoute(
+  path: string,
+  permission?: string,
+  permissions?: string[],
+): ActivatedRouteSnapshot {
   return {
     routeConfig: { path },
-    data: permission ? { permission } : {},
+    data: permission ? { permission } : permissions ? { permissions } : {},
   } as unknown as ActivatedRouteSnapshot;
 }
 
@@ -21,11 +25,13 @@ describe('route guards', () => {
   const auth = {
     ensureSession: vi.fn(() => Promise.resolve(false)),
     hasPermission: vi.fn(() => false),
+    hasAllPermissions: vi.fn(() => false),
   };
 
   beforeEach(() => {
     auth.ensureSession.mockReset().mockResolvedValue(false);
     auth.hasPermission.mockReset().mockReturnValue(false);
+    auth.hasAllPermissions.mockReset().mockReturnValue(false);
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -44,6 +50,15 @@ describe('route guards', () => {
   function runPermission(permission: string): unknown {
     return TestBed.runInInjectionContext(() =>
       permissionGuard(makeRoute('users', permission), {} as RouterStateSnapshot),
+    );
+  }
+
+  function runPermissions(permissions: string[]): unknown {
+    return TestBed.runInInjectionContext(() =>
+      permissionGuard(
+        makeRoute('role-permissions', undefined, permissions),
+        {} as RouterStateSnapshot,
+      ),
     );
   }
 
@@ -76,5 +91,16 @@ describe('route guards', () => {
     auth.ensureSession.mockResolvedValue(true);
     auth.hasPermission.mockReturnValue(true);
     await expect(runPermission('user:directory:read')).resolves.toBe(true);
+  });
+
+  it('requires every dependency for the role permission page', async () => {
+    auth.ensureSession.mockResolvedValue(true);
+    const required = ['role:permissions:write', 'role:directory:read', 'permission:directory:read'];
+    const router = TestBed.inject(Router);
+    const denied = await runPermissions(required);
+    expect(router.serializeUrl(denied as UrlTree)).toBe('/403');
+
+    auth.hasAllPermissions.mockReturnValue(true);
+    await expect(runPermissions(required)).resolves.toBe(true);
   });
 });

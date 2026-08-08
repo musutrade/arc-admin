@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL } from './api.config';
 import {
   ApiPage,
+  ApiAuditLog,
   ApiPermissionGroup,
   ApiRole,
   ApiUser,
@@ -135,6 +136,24 @@ export class DataService {
       this.http.put<void>(`${this.apiBaseUrl}/roles/${roleId}/permissions`, {
         permissionIds: permissionIds.map(Number),
       }),
+    );
+  }
+
+  getAuditLogs(
+    page: number,
+    pageSize: number,
+    keyword = '',
+    action = '',
+  ): Promise<ApiPage<ApiAuditLog>> {
+    let params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    if (keyword.trim()) {
+      params = params.set('keyword', keyword.trim());
+    }
+    if (action) {
+      params = params.set('action', action);
+    }
+    return firstValueFrom(
+      this.http.get<ApiPage<ApiAuditLog>>(`${this.apiBaseUrl}/audit-logs`, { params }),
     );
   }
 

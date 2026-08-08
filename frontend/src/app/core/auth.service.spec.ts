@@ -91,5 +91,6 @@ describe('AuthService', () => {
     expect(apiRequest.request.body).toEqual(request);
     apiRequest.flush(null, { status: 204, statusText: 'No Content' });
     await result;
+    expect(tokenStore.clear).toHaveBeenCalledOnce();
   });
 });

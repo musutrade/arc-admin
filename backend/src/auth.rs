@@ -16,6 +16,7 @@ pub struct Claims {
     pub sub: String,
     pub iat: usize,
     pub exp: usize,
+    pub ver: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -44,10 +45,11 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<AuthUser, A
         .sub
         .parse::<i64>()
         .map_err(|_| ApiError::unauthorized())?;
-    let (active, permission_codes) = repositories::permissions::auth_context(&state.pool, user_id)
-        .await
-        .map_err(crate::error::db_error)?;
-    if !active {
+    let (active, token_version, permission_codes) =
+        repositories::permissions::auth_context(&state.pool, user_id)
+            .await
+            .map_err(crate::error::db_error)?;
+    if !active || token_version != data.claims.ver {
         return Err(ApiError::unauthorized());
     }
     Ok(AuthUser {
@@ -85,6 +87,10 @@ impl<P> RequirePermission<P> {
             Err(ApiError::forbidden(format!("缺少权限：{code}")))
         }
     }
+
+    pub fn has(&self, code: &'static str) -> bool {
+        self.permission_codes.contains(code)
+    }
 }
 
 impl<P> FromRequestParts<AppState> for RequirePermission<P>
@@ -121,9 +127,11 @@ macro_rules! permission {
 
 permission!(UserRead, "user:directory:read");
 permission!(UserWrite, "user:write");
+permission!(UserRoleWrite, "user:roles:write");
 permission!(UserDeactivate, "user:admin:deactivate");
 permission!(RoleRead, "role:directory:read");
 permission!(RoleWrite, "role:write");
 permission!(RolePermissionWrite, "role:permissions:write");
 permission!(PermissionRead, "permission:directory:read");
 permission!(DashboardRead, "dashboard:analytics:read");
+permission!(AuditLogRead, "audit:logs:read");

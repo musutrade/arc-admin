@@ -28,7 +28,10 @@ const permissions = [
   'user:admin:deactivate',
   'user:admin:reset_password',
   'user:directory:read',
+  'user:roles:write',
+  'user:super_admin:grant',
   'user:write',
+  'audit:logs:read',
 ];
 
 let roles: ApiRole[] = [
@@ -96,6 +99,26 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
           totalRoles: 2,
           totalPermissions: 9,
           suspendedUsers: 0,
+        },
+      });
+    } else if (path === '/api/v1/audit-logs') {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              id: 1,
+              actorUserId: 1,
+              actorUsername: 'admin',
+              action: 'user.roles.update',
+              targetType: 'user',
+              targetId: 2,
+              details: { roleIds: [2] },
+              createdAt: '2026-08-08T00:00:00Z',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 20,
         },
       });
     } else if (path === '/api/v1/roles') {
@@ -187,10 +210,25 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     currentPassword: 'safe-password',
     newPassword: 'updated-safe-password',
   });
-  await expect(page.getByText('密码修改成功', { exact: true })).toBeVisible();
+  await expect(page.getByText('密码修改成功，请重新登录', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
   await page.getByRole('button', { name: '关闭' }).click();
+  await page.getByLabel('用户名').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill('updated-safe-password');
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page.getByRole('heading', { name: '权限目录' })).toBeVisible();
 
   const mobileMenu = page.getByRole('button', { name: '打开菜单' });
+  if (await mobileMenu.isVisible()) {
+    await mobileMenu.click();
+  }
+  await page.getByRole('link', { name: '审计日志' }).click();
+  await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible();
+  await expect(page.getByRole('table').getByText('变更用户角色', { exact: true })).toBeVisible();
+  await expect(page.getByText('用户 #2', { exact: true })).toBeVisible();
+  if (process.env['VISUAL_REVIEW']) {
+    await page.screenshot({ path: testInfo.outputPath('audit-logs.png'), fullPage: true });
+  }
   if (await mobileMenu.isVisible()) {
     await mobileMenu.click();
   }

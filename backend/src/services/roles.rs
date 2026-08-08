@@ -6,7 +6,9 @@ use crate::models::{
     RoleWithPermissionsRow, UpdateRolePermissionsRequest, UpdateRoleRequest,
 };
 use crate::repositories;
+use serde_json::json;
 use sqlx::PgPool;
+use std::collections::BTreeSet;
 
 const ROLE_COLORS: [&str; 5] = ["primary", "warning", "success", "danger", "neutral"];
 
@@ -58,7 +60,12 @@ pub async fn get(pool: &PgPool, id: i64) -> Result<RoleResponse, ApiError> {
     to_response(pool, row).await
 }
 
-pub async fn create(pool: &PgPool, req: &CreateRoleRequest) -> Result<RoleResponse, ApiError> {
+pub async fn create(
+    pool: &PgPool,
+    actor_user_id: Option<i64>,
+    req: &CreateRoleRequest,
+    can_assign_permissions: bool,
+) -> Result<RoleResponse, ApiError> {
     let code = req.code.trim();
     let valid_code = (3..=64).contains(&code.len())
         && code.chars().next().is_some_and(|c| c.is_ascii_lowercase())
@@ -97,16 +104,37 @@ pub async fn create(pool: &PgPool, req: &CreateRoleRequest) -> Result<RoleRespon
     .await
     .map_err(db_error)?;
     if let Some(permission_ids) = &req.permission_ids {
+        if !permission_ids.is_empty() && !can_assign_permissions {
+            return Err(ApiError::forbidden("缺少分配角色权限的权限"));
+        }
+        let permission_codes =
+            validate_permission_dependencies(&mut transaction, permission_ids).await?;
+        validate_permission_grant_scope(pool, actor_user_id, &permission_codes).await?;
         repositories::roles::assign_permissions(&mut transaction, id, permission_ids)
             .await
             .map_err(db_error)?;
     }
+    repositories::audit_logs::record(
+        &mut transaction,
+        actor_user_id,
+        "role.create",
+        "role",
+        Some(id),
+        json!({
+            "code": code,
+            "name": req.name.trim(),
+            "permissionIds": req.permission_ids.as_deref().unwrap_or_default(),
+        }),
+    )
+    .await
+    .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
     get(pool, id).await
 }
 
 pub async fn update(
     pool: &PgPool,
+    actor_user_id: Option<i64>,
     id: i64,
     req: &UpdateRoleRequest,
 ) -> Result<RoleResponse, ApiError> {
@@ -127,6 +155,14 @@ pub async fn update(
             return Err(ApiError::forbidden("内置超级管理员角色不可停用"));
         }
     }
+    if req.is_active == Some(true) {
+        let permission_codes = repositories::permissions::codes_by_role_ids(pool, &[id])
+            .await
+            .map_err(db_error)?
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+        validate_permission_grant_scope(pool, actor_user_id, &permission_codes).await?;
+    }
     if let Some(color) = &req.color {
         if !ROLE_COLORS.contains(&color.as_str()) {
             return Err(ApiError::validation(
@@ -136,8 +172,9 @@ pub async fn update(
     }
     let (icon_is_set, icon) = nullable_patch(&req.icon);
     let (description_is_set, description) = nullable_patch(&req.description);
+    let mut transaction = pool.begin().await.map_err(db_error)?;
     let updated = repositories::roles::update(
-        pool,
+        &mut transaction,
         id,
         name,
         category,
@@ -153,10 +190,26 @@ pub async fn update(
     if !updated {
         return Err(ApiError::not_found("角色不存在"));
     }
+    repositories::audit_logs::record(
+        &mut transaction,
+        actor_user_id,
+        "role.update",
+        "role",
+        Some(id),
+        json!({
+            "name": req.name,
+            "category": req.category,
+            "color": req.color,
+            "isActive": req.is_active,
+        }),
+    )
+    .await
+    .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
     get(pool, id).await
 }
 
-pub async fn delete(pool: &PgPool, id: i64) -> Result<(), ApiError> {
+pub async fn delete(pool: &PgPool, actor_user_id: Option<i64>, id: i64) -> Result<(), ApiError> {
     if let Some(row) = repositories::roles::find_by_id(pool, id)
         .await
         .map_err(db_error)?
@@ -164,13 +217,30 @@ pub async fn delete(pool: &PgPool, id: i64) -> Result<(), ApiError> {
         if row.code == "super_admin" {
             return Err(ApiError::forbidden("内置超级管理员角色不可删除"));
         }
+        if row.members > 0 {
+            return Err(ApiError::conflict("角色仍有成员，请先迁移用户后再删除"));
+        }
+    } else {
+        return Err(ApiError::not_found("角色不存在"));
     }
-    let deleted = repositories::roles::delete(pool, id)
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let deleted = repositories::roles::delete_if_unassigned(&mut transaction, id)
         .await
         .map_err(db_error)?;
     if !deleted {
-        return Err(ApiError::not_found("角色不存在"));
+        return Err(ApiError::conflict("角色仍有成员，请先迁移用户后再删除"));
     }
+    repositories::audit_logs::record(
+        &mut transaction,
+        actor_user_id,
+        "role.delete",
+        "role",
+        Some(id),
+        json!({}),
+    )
+    .await
+    .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
     Ok(())
 }
 
@@ -187,6 +257,7 @@ pub async fn get_permissions(pool: &PgPool, id: i64) -> Result<RolePermissions, 
 
 pub async fn assign_permissions(
     pool: &PgPool,
+    actor_user_id: Option<i64>,
     id: i64,
     req: &UpdateRolePermissionsRequest,
 ) -> Result<(), ApiError> {
@@ -198,9 +269,77 @@ pub async fn assign_permissions(
         return Err(ApiError::forbidden("内置超级管理员角色的权限不可修改"));
     }
     let mut transaction = pool.begin().await.map_err(db_error)?;
+    let permission_codes =
+        validate_permission_dependencies(&mut transaction, &req.permission_ids).await?;
+    validate_permission_grant_scope(pool, actor_user_id, &permission_codes).await?;
+    let previous_permission_ids = repositories::roles::permission_ids_by_role(pool, id)
+        .await
+        .map_err(db_error)?;
     repositories::roles::assign_permissions(&mut transaction, id, &req.permission_ids)
         .await
         .map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut transaction,
+        actor_user_id,
+        "role.permissions.update",
+        "role",
+        Some(id),
+        json!({
+            "previousPermissionIds": previous_permission_ids,
+            "permissionIds": req.permission_ids,
+        }),
+    )
+    .await
+    .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
+    Ok(())
+}
+
+async fn validate_permission_dependencies(
+    connection: &mut sqlx::PgConnection,
+    permission_ids: &[i64],
+) -> Result<BTreeSet<String>, ApiError> {
+    let unique_ids = permission_ids.iter().copied().collect::<BTreeSet<_>>();
+    if unique_ids.len() != permission_ids.len() {
+        return Err(ApiError::validation("权限列表不能包含重复项"));
+    }
+    let codes = repositories::permissions::codes_by_ids(connection, permission_ids)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    if codes.len() != unique_ids.len() {
+        return Err(ApiError::validation("权限列表中包含不存在的权限"));
+    }
+    if codes.contains("role:permissions:write")
+        && (!codes.contains("role:directory:read") || !codes.contains("permission:directory:read"))
+    {
+        return Err(ApiError::validation(
+            "分配角色权限管理能力时，必须同时授予角色读取和权限目录读取权限",
+        ));
+    }
+    Ok(codes)
+}
+
+async fn validate_permission_grant_scope(
+    pool: &PgPool,
+    actor_user_id: Option<i64>,
+    requested_permissions: &BTreeSet<String>,
+) -> Result<(), ApiError> {
+    let Some(actor_user_id) = actor_user_id else {
+        return Ok(());
+    };
+    let actor_permissions =
+        repositories::permissions::permission_codes_by_user(pool, actor_user_id)
+            .await
+            .map_err(db_error)?
+            .into_iter()
+            .collect::<BTreeSet<_>>();
+    if requested_permissions
+        .iter()
+        .any(|permission| !actor_permissions.contains(permission))
+    {
+        return Err(ApiError::forbidden("不能授予操作者自身未拥有的权限"));
+    }
     Ok(())
 }

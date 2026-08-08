@@ -31,6 +31,8 @@ tags:
     description: 权限管理
   - name: dashboard
     description: 仪表盘
+  - name: audit
+    description: 安全审计
 paths:
   /healthz:
     get:
@@ -345,12 +347,14 @@ paths:
           $ref: '#/components/responses/NotFound'
     delete:
       tags: [roles]
-      summary: 删除角色（级联删除用户角色/角色权限关联）
+      summary: 删除无成员角色
       security:
         - bearerAuth: []
       responses:
         '204':
           description: 删除成功
+        '409':
+          $ref: '#/components/responses/Conflict'
         '404':
           $ref: '#/components/responses/NotFound'
   /roles/{id}/permissions:
@@ -414,6 +418,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardStats'
+  /audit-logs:
+    get:
+      tags: [audit]
+      summary: 安全审计日志分页列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: keyword
+          in: query
+          description: 按操作者、操作或对象类型模糊匹配
+          schema: { type: string }
+        - name: action
+          in: query
+          description: 精确筛选操作编码
+          schema: { type: string }
+      responses:
+        '200':
+          description: 审计日志分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuditLog'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 components:
   securitySchemes:
     bearerAuth:
@@ -606,7 +636,7 @@ components:
         roleIds:
           type: array
           items: { type: integer, format: int64 }
-          description: 初始角色
+          description: 初始角色；需要 user:roles:write，授予超级管理员还需要 user:super_admin:grant
     UpdateUserRequest:
       type: object
       properties:
@@ -688,7 +718,7 @@ components:
         permissionIds:
           type: array
           items: { type: integer, format: int64 }
-          description: 可选，创建时直接分配权限
+          description: 可选，创建时直接分配权限；非空时需要 role:permissions:write
     UpdateRoleRequest:
       type: object
       properties:
@@ -774,3 +804,46 @@ components:
         suspendedUsers:
           type: integer
           format: int64
+    AuditLog:
+      type: object
+      required: [id, actorUserId, actorUsername, action, targetType, targetId, details, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        actorUserId:
+          type: integer
+          format: int64
+          nullable: true
+        actorUsername:
+          type: string
+          nullable: true
+        action:
+          type: string
+        targetType:
+          type: string
+        targetId:
+          type: integer
+          format: int64
+          nullable: true
+        details:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    PageAuditLog:
+      type: object
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        pageSize:
+          type: integer

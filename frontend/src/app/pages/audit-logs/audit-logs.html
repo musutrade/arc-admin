@@ -1,0 +1,101 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1>审计日志</h1>
+      <p>查看账号、角色和权限的安全变更记录。</p>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-search">
+      <mat-icon>search</mat-icon>
+      <input
+        type="search"
+        placeholder="按操作者、操作或对象搜索..."
+        [value]="keyword()"
+        (change)="search($any($event.target).value)"
+        aria-label="搜索审计日志"
+      />
+    </div>
+    <select
+      class="filter-select"
+      [value]="action()"
+      (change)="filterAction($any($event.target).value)"
+      aria-label="按操作类型筛选"
+    >
+      <option value="">全部操作</option>
+      @for (option of actionOptions; track option.value) {
+        <option [value]="option.value">{{ option.label }}</option>
+      }
+    </select>
+    <span class="filter-count">共 {{ total() }} 条</span>
+  </div>
+
+  <div class="table-card">
+    @if (error()) {
+      <div class="empty-state">
+        <mat-icon>error</mat-icon>
+        <p>{{ error() }}</p>
+      </div>
+    } @else if (loading()) {
+      <div class="loading-wrap"><mat-progress-spinner diameter="32" mode="indeterminate" /></div>
+    } @else if (logs().length === 0) {
+      <div class="empty-state">
+        <mat-icon>history</mat-icon>
+        <p>暂无审计记录</p>
+      </div>
+    } @else {
+      <div class="table-scroll">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>操作者</th>
+              <th>操作</th>
+              <th>对象</th>
+              <th>变更详情</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (log of logs(); track log.id) {
+              <tr>
+                <td class="time">{{ log.createdAt | date: 'yyyy-MM-dd HH:mm:ss' : '+0800' }}</td>
+                <td>{{ log.actorUsername ?? '系统任务' }}</td>
+                <td>
+                  <span class="action-badge">{{ actionLabel(log.action) }}</span>
+                </td>
+                <td>{{ targetLabel(log) }}</td>
+                <td>
+                  <code class="details" [title]="detailText(log.details)">{{
+                    detailText(log.details)
+                  }}</code>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="audit-footer">
+        <span>第 {{ page() }} / {{ totalPages() }} 页</span>
+        <div class="page-actions">
+          <button
+            type="button"
+            (click)="goToPage(page() - 1)"
+            [disabled]="page() === 1"
+            aria-label="上一页"
+          >
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <button
+            type="button"
+            (click)="goToPage(page() + 1)"
+            [disabled]="page() === totalPages()"
+            aria-label="下一页"
+          >
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+</div>

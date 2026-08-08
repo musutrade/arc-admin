@@ -36,7 +36,12 @@ export class AuthService {
       return Promise.resolve(false);
     }
     if (this.userState()) {
-      return Promise.resolve(true);
+      return this.refreshPermissions()
+        .then(() => true)
+        .catch(() => {
+          this.clearSession();
+          return false;
+        });
     }
     if (!this.sessionCheck) {
       this.sessionCheck = Promise.all([
@@ -63,8 +68,22 @@ export class AuthService {
     return this.permissionState().has(code);
   }
 
+  hasAllPermissions(codes: readonly string[]): boolean {
+    return codes.every((code) => this.permissionState().has(code));
+  }
+
   async changePassword(request: ChangePasswordRequest): Promise<void> {
     await firstValueFrom(this.http.put<void>(`${this.apiBaseUrl}/auth/me/password`, request));
+    this.clearSession();
+  }
+
+  async refreshSession(): Promise<void> {
+    const [user, permissions] = await Promise.all([
+      firstValueFrom(this.http.get<ApiUser>(`${this.apiBaseUrl}/auth/me`)),
+      firstValueFrom(this.http.get<PermissionCodes>(`${this.apiBaseUrl}/auth/me/permissions`)),
+    ]);
+    this.userState.set(user);
+    this.permissionState.set(new Set(permissions.codes));
   }
 
   logout(): void {
@@ -75,11 +94,15 @@ export class AuthService {
     this.clearSession();
   }
 
-  private async loadPermissions(): Promise<void> {
+  async refreshPermissions(): Promise<void> {
     const response = await firstValueFrom(
       this.http.get<PermissionCodes>(`${this.apiBaseUrl}/auth/me/permissions`),
     );
     this.permissionState.set(new Set(response.codes));
+  }
+
+  private loadPermissions(): Promise<void> {
+    return this.refreshPermissions();
   }
 
   private clearSession(): void {

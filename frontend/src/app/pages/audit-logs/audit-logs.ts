@@ -1,0 +1,109 @@
+import { DatePipe } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { ApiAuditLog } from '../../core/api.models';
+import { apiErrorMessage } from '../../core/api-error';
+import { DataService } from '../../core/data.service';
+
+const ACTION_LABELS: Record<string, string> = {
+  'user.create': '创建用户',
+  'user.update': '更新用户',
+  'user.delete': '删除用户',
+  'user.roles.update': '变更用户角色',
+  'user.password.change': '修改本人密码',
+  'user.bootstrap_super_admin': '引导超级管理员',
+  'role.create': '创建角色',
+  'role.update': '更新角色',
+  'role.delete': '删除角色',
+  'role.permissions.update': '变更角色权限',
+};
+
+const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label }));
+
+@Component({
+  selector: 'app-audit-logs',
+  imports: [DatePipe, MatIconModule, MatProgressSpinnerModule],
+  templateUrl: './audit-logs.html',
+  styleUrl: './audit-logs.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class AuditLogs implements OnInit {
+  private readonly data = inject(DataService);
+
+  readonly logs = signal<ApiAuditLog[]>([]);
+  readonly loading = signal(true);
+  readonly error = signal<string | null>(null);
+  readonly keyword = signal('');
+  readonly action = signal('');
+  readonly page = signal(1);
+  readonly pageSize = 20;
+  readonly total = signal(0);
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
+  readonly actionOptions = ACTION_OPTIONS;
+
+  ngOnInit(): void {
+    void this.load();
+  }
+
+  search(value: string): void {
+    this.keyword.set(value);
+    this.page.set(1);
+    void this.load();
+  }
+
+  filterAction(value: string): void {
+    this.action.set(value);
+    this.page.set(1);
+    void this.load();
+  }
+
+  goToPage(page: number): void {
+    const next = Math.min(Math.max(1, page), this.totalPages());
+    if (next === this.page()) {
+      return;
+    }
+    this.page.set(next);
+    void this.load();
+  }
+
+  actionLabel(action: string): string {
+    return ACTION_LABELS[action] ?? action;
+  }
+
+  targetLabel(log: ApiAuditLog): string {
+    const type =
+      log.targetType === 'user' ? '用户' : log.targetType === 'role' ? '角色' : log.targetType;
+    return log.targetId === null ? type : `${type} #${log.targetId}`;
+  }
+
+  detailText(details: Record<string, unknown>): string {
+    return Object.keys(details).length === 0 ? '无附加信息' : JSON.stringify(details);
+  }
+
+  private async load(): Promise<void> {
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      const page = await this.data.getAuditLogs(
+        this.page(),
+        this.pageSize,
+        this.keyword(),
+        this.action(),
+      );
+      this.logs.set(page.items);
+      this.total.set(page.total);
+    } catch (error) {
+      this.error.set(apiErrorMessage(error, '审计日志加载失败，请稍后重试'));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+}

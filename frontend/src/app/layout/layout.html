@@ -72,7 +72,7 @@
           <span class="nav-label" [class.hidden]="collapsed()">权限目录</span>
         </a>
       }
-      @if (can('role:permissions:write')) {
+      @if (canAll(['role:permissions:write', 'role:directory:read', 'permission:directory:read'])) {
         <a
           routerLink="/role-permissions"
           routerLinkActive="nav-active"
@@ -83,6 +83,19 @@
         >
           <mat-icon fontSet="material-symbols-outlined">shield</mat-icon>
           <span class="nav-label" [class.hidden]="collapsed()">权限分配</span>
+        </a>
+      }
+      @if (can('audit:logs:read')) {
+        <a
+          routerLink="/audit-logs"
+          routerLinkActive="nav-active"
+          class="nav-item"
+          [class.justify-center]="collapsed()"
+          (click)="closeUserMenu(); sidebarOpen.set(false)"
+          [attr.title]="collapsed() ? '审计日志' : null"
+        >
+          <mat-icon fontSet="material-symbols-outlined">fact_check</mat-icon>
+          <span class="nav-label" [class.hidden]="collapsed()">审计日志</span>
         </a>
       }
     </nav>

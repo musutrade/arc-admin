@@ -3,6 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use sqlx::FromRow;
 
 // ===== 数据库行 =====
@@ -15,6 +16,7 @@ pub struct UserRow {
     pub display_name: String,
     pub email: Option<String>,
     pub status: String,
+    pub token_version: i64,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
@@ -84,6 +86,18 @@ pub struct DashboardStatsRow {
     pub total_roles: i64,
     pub total_permissions: i64,
     pub suspended_users: i64,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AuditLogRow {
+    pub id: i64,
+    pub actor_user_id: Option<i64>,
+    pub actor_username: Option<String>,
+    pub action: String,
+    pub target_type: String,
+    pub target_id: Option<i64>,
+    pub details: Value,
+    pub created_at: DateTime<Utc>,
 }
 
 // ===== API DTO =====
@@ -162,6 +176,32 @@ pub struct PermissionGroupResponse {
     pub permissions: Vec<PermissionResponse>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditLogResponse {
+    pub id: i64,
+    pub actor_user_id: Option<i64>,
+    pub actor_username: Option<String>,
+    pub action: String,
+    pub target_type: String,
+    pub target_id: Option<i64>,
+    pub details: Value,
+    pub created_at: DateTime<Utc>,
+}
+
+pub fn audit_log_response(row: AuditLogRow) -> AuditLogResponse {
+    AuditLogResponse {
+        id: row.id,
+        actor_user_id: row.actor_user_id,
+        actor_username: row.actor_username,
+        action: row.action,
+        target_type: row.target_type,
+        target_id: row.target_id,
+        details: row.details,
+        created_at: row.created_at,
+    }
+}
+
 // ===== 请求 / 响应 =====
 
 #[derive(Debug, Default)]
@@ -231,6 +271,24 @@ pub struct PageQuery {
 #[serde(rename_all = "camelCase")]
 pub struct PageUser {
     pub items: Vec<UserResponse>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditLogQuery {
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+    pub keyword: Option<String>,
+    pub action: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageAuditLog {
+    pub items: Vec<AuditLogResponse>,
     pub total: i64,
     pub page: i64,
     pub page_size: i64,

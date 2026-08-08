@@ -209,7 +209,7 @@
                 <mat-icon>delete</mat-icon>删除所选用户
               </button>
             }
-            @if (canWrite()) {
+            @if (canManageRoles()) {
               <button class="batch-btn primary" (click)="changeSelectedRoles()" [disabled]="busy()">
                 <mat-icon>rule</mat-icon>修改角色
               </button>

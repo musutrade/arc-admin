@@ -11,6 +11,7 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use chrono::Utc;
 use jsonwebtoken::{encode, EncodingKey, Header};
+use serde_json::json;
 use sqlx::PgPool;
 
 pub async fn login(
@@ -44,6 +45,7 @@ pub async fn login(
         sub: row.id.to_string(),
         iat: now as usize,
         exp: (now + token_ttl_secs) as usize,
+        ver: row.token_version,
     };
     let token = encode(
         &Header::default(),
@@ -102,6 +104,16 @@ pub async fn change_password(
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
+    repositories::audit_logs::record(
+        &mut transaction,
+        Some(user_id),
+        "user.password.change",
+        "user",
+        Some(user_id),
+        json!({ "revokedExistingSessions": true }),
+    )
+    .await
+    .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
     Ok(())
 }
@@ -172,6 +184,16 @@ pub async fn bootstrap_super_admin(
     repositories::users::assign_roles(&mut transaction, row.id, &[role_id])
         .await
         .map_err(db_error)?;
+    repositories::audit_logs::record(
+        &mut transaction,
+        None,
+        "user.bootstrap_super_admin",
+        "user",
+        Some(row.id),
+        json!({ "username": username, "roleId": role_id }),
+    )
+    .await
+    .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
     let roles = repositories::users::role_names_by_user(pool, row.id)
         .await

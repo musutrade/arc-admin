@@ -24,11 +24,15 @@ export const permissionGuard: CanActivateFn = (route) => {
   const router = inject(Router);
   const auth = inject(AuthService);
   const permission = route.data['permission'] as string | undefined;
+  const permissions = (route.data['permissions'] as string[] | undefined) ?? [];
   return auth.ensureSession().then((authenticated) => {
     if (!authenticated) {
       return router.createUrlTree(['/login']);
     }
-    return !permission || auth.hasPermission(permission) ? true : router.createUrlTree(['/403']);
+    const allowed = permission
+      ? auth.hasPermission(permission)
+      : auth.hasAllPermissions(permissions);
+    return allowed ? true : router.createUrlTree(['/403']);
   });
 };
 
@@ -62,9 +66,21 @@ export const routes: Routes = [
       {
         path: 'role-permissions',
         canActivate: [authGuard, permissionGuard],
-        data: { permission: 'role:permissions:write' },
+        data: {
+          permissions: [
+            'role:permissions:write',
+            'role:directory:read',
+            'permission:directory:read',
+          ],
+        },
         loadComponent: () =>
           import('./pages/role-permissions/role-permissions').then((m) => m.RolePermissionsPage),
+      },
+      {
+        path: 'audit-logs',
+        canActivate: [authGuard, permissionGuard],
+        data: { permission: 'audit:logs:read' },
+        loadComponent: () => import('./pages/audit-logs/audit-logs').then((m) => m.AuditLogs),
       },
       {
         path: '403',

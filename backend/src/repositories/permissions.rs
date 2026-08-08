@@ -3,13 +3,17 @@
 use crate::models::{DashboardStatsRow, PermissionGroupRow, PermissionRow};
 use sqlx::PgPool;
 
-pub async fn auth_context(pool: &PgPool, user_id: i64) -> Result<(bool, Vec<String>), sqlx::Error> {
-    sqlx::query_as::<_, (bool, Vec<String>)>(
+pub async fn auth_context(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<(bool, i64, Vec<String>), sqlx::Error> {
+    sqlx::query_as::<_, (bool, i64, Vec<String>)>(
         "SELECT
             EXISTS(
                 SELECT 1 FROM users
                 WHERE id = $1 AND deleted_at IS NULL AND status = 'active'
             ) AS active,
+            COALESCE(max(u.token_version), -1) AS token_version,
             COALESCE(
                 array_agg(DISTINCT p.code ORDER BY p.code)
                     FILTER (WHERE p.code IS NOT NULL),
@@ -24,6 +28,32 @@ pub async fn auth_context(pool: &PgPool, user_id: i64) -> Result<(bool, Vec<Stri
     )
     .bind(user_id)
     .fetch_one(pool)
+    .await
+}
+
+pub async fn codes_by_ids(
+    connection: &mut sqlx::PgConnection,
+    permission_ids: &[i64],
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT code FROM permissions WHERE id = ANY($1::bigint[]) ORDER BY code")
+        .bind(permission_ids)
+        .fetch_all(connection)
+        .await
+}
+
+pub async fn codes_by_role_ids(
+    pool: &PgPool,
+    role_ids: &[i64],
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT DISTINCT p.code
+         FROM permissions p
+         JOIN role_permissions rp ON rp.permission_id = p.id
+         WHERE rp.role_id = ANY($1::bigint[])
+         ORDER BY p.code",
+    )
+    .bind(role_ids)
+    .fetch_all(pool)
     .await
 }
 

@@ -190,9 +190,9 @@
                       type="button"
                       class="row-btn danger"
                       (click)="onDeleteRole(r)"
-                      [disabled]="busy()"
+                      [disabled]="busy() || r.members > 0"
                       [attr.aria-label]="'删除角色 ' + r.name"
-                      title="删除角色"
+                      [title]="r.members > 0 ? '请先迁移已分配用户' : '删除角色'"
                     >
                       <mat-icon>delete</mat-icon>
                     </button>

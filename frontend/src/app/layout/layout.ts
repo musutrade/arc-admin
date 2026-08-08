@@ -78,6 +78,10 @@ export class LayoutComponent {
     return this.auth.hasPermission(permission);
   }
 
+  canAll(permissions: readonly string[]): boolean {
+    return this.auth.hasAllPermissions(permissions);
+  }
+
   openChangePassword(): void {
     this.dialog
       .open(ChangePasswordDialog)
@@ -85,7 +89,8 @@ export class LayoutComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((changed: boolean | undefined) => {
         if (changed) {
-          this.snackBar.open('密码修改成功', '关闭', { duration: 3000 });
+          this.snackBar.open('密码修改成功，请重新登录', '关闭', { duration: 3000 });
+          void this.router.navigate(['/login']);
         }
       });
   }

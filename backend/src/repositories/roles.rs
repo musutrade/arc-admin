@@ -5,13 +5,17 @@ use sqlx::{PgConnection, PgPool, Row};
 
 const ROLE_SELECT: &str = "SELECT r.id, r.code, r.name, r.category, r.icon, r.color, \
     r.description, r.is_active, \
-    (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id) AS members \
+    (SELECT count(*) FROM user_roles ur \
+     JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL \
+     WHERE ur.role_id = r.id) AS members \
     FROM roles r";
 
 pub async fn list_all(pool: &PgPool) -> Result<Vec<RoleWithPermissionsRow>, sqlx::Error> {
     sqlx::query_as::<_, RoleWithPermissionsRow>(
         "SELECT r.id, r.code, r.name, r.category, r.icon, r.color, r.description, r.is_active,
-                (SELECT count(*) FROM user_roles ur WHERE ur.role_id = r.id) AS members,
+                (SELECT count(*) FROM user_roles ur
+                 JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL
+                 WHERE ur.role_id = r.id) AS members,
                 COALESCE(
                     (
                         SELECT array_agg(DISTINCT p.group_id ORDER BY p.group_id)
@@ -69,7 +73,7 @@ pub async fn id_by_code(pool: &PgPool, code: &str) -> Result<Option<i64>, sqlx::
 
 #[allow(clippy::too_many_arguments)]
 pub async fn update(
-    pool: &PgPool,
+    connection: &mut PgConnection,
     id: i64,
     name: Option<String>,
     category: Option<String>,
@@ -100,16 +104,27 @@ pub async fn update(
     .bind(description_is_set)
     .bind(description)
     .bind(is_active)
-    .execute(pool)
+    .execute(connection)
     .await?;
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn delete(pool: &PgPool, id: i64) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM roles WHERE id = $1")
-        .bind(id)
-        .execute(pool)
-        .await?;
+pub async fn delete_if_unassigned(
+    connection: &mut PgConnection,
+    id: i64,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        "DELETE FROM roles r
+         WHERE r.id = $1
+           AND NOT EXISTS (
+               SELECT 1 FROM user_roles ur
+               JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL
+               WHERE ur.role_id = r.id
+           )",
+    )
+    .bind(id)
+    .execute(connection)
+    .await?;
     Ok(result.rows_affected() > 0)
 }
 

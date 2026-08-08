@@ -63,7 +63,7 @@ impl AppConfig {
         }
         let token_ttl_secs = token_ttl_secs
             .as_deref()
-            .unwrap_or("86400")
+            .unwrap_or("3600")
             .parse::<i64>()
             .context("TOKEN_TTL_SECS must be a positive integer")?;
         if token_ttl_secs <= 0 {

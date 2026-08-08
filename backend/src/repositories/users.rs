@@ -4,7 +4,7 @@ use crate::models::{UserRow, UserWithRolesRow};
 use sqlx::{PgConnection, PgPool, Row};
 
 const USER_COLUMNS: &str =
-    "id, username, password_hash, display_name, email, status, last_login_at, created_at";
+    "id, username, password_hash, display_name, email, status, token_version, last_login_at, created_at";
 
 pub async fn find_by_username(
     pool: &PgPool,
@@ -114,6 +114,7 @@ pub async fn activate_bootstrap_account(
              display_name = $3,
              email = $4,
              status = 'active',
+             token_version = token_version + 1,
              updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL
          RETURNING {USER_COLUMNS}"
@@ -159,7 +160,7 @@ pub async fn update_password(
 ) -> Result<Option<UserRow>, sqlx::Error> {
     sqlx::query_as::<_, UserRow>(&format!(
         "UPDATE users
-         SET password_hash = $2, updated_at = now()
+         SET password_hash = $2, token_version = token_version + 1, updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL
          RETURNING {USER_COLUMNS}"
     ))
@@ -177,6 +178,12 @@ pub async fn soft_delete(connection: &mut PgConnection, id: i64) -> Result<bool,
     .bind(id)
     .execute(&mut *connection)
     .await?;
+    if result.rows_affected() > 0 {
+        sqlx::query("DELETE FROM user_roles WHERE user_id = $1")
+            .bind(id)
+            .execute(&mut *connection)
+            .await?;
+    }
     Ok(result.rows_affected() > 0)
 }
 
@@ -228,6 +235,13 @@ pub async fn role_names_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<Strin
     .bind(user_id)
     .fetch_all(pool)
     .await
+}
+
+pub async fn role_ids_by_user(pool: &PgPool, user_id: i64) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar("SELECT role_id FROM user_roles WHERE user_id = $1 ORDER BY role_id")
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
 }
 
 pub async fn assign_roles(

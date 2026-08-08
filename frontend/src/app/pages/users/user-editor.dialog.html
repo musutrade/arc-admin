@@ -13,18 +13,20 @@
       }
     </div>
 
-    <div class="form-field">
-      <label for="user-password">{{ data.user ? '新密码（选填）' : '密码' }}</label>
-      <input
-        id="user-password"
-        type="password"
-        formControlName="password"
-        autocomplete="new-password"
-      />
-      @if (form.controls.password.touched && form.controls.password.invalid) {
-        <small>密码至少需要 8 个字符。</small>
-      }
-    </div>
+    @if (!data.user || data.canResetPassword) {
+      <div class="form-field">
+        <label for="user-password">{{ data.user ? '新密码（选填）' : '密码' }}</label>
+        <input
+          id="user-password"
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+        />
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <small>密码至少需要 8 个字符。</small>
+        }
+      </div>
+    }
 
     <div class="form-field">
       <label for="user-display-name">显示名称</label>
@@ -39,23 +41,27 @@
       }
     </div>
 
-    <div class="form-field">
-      <label for="user-status">状态</label>
-      <select id="user-status" formControlName="status">
-        <option value="active">启用</option>
-        <option value="inactive">停用</option>
-        <option value="suspended">已暂停</option>
-      </select>
-    </div>
+    @if (data.canManageStatus) {
+      <div class="form-field">
+        <label for="user-status">状态</label>
+        <select id="user-status" formControlName="status">
+          <option value="active">启用</option>
+          <option value="inactive">停用</option>
+          <option value="suspended">已暂停</option>
+        </select>
+      </div>
+    }
 
-    <div class="form-field">
-      <label for="user-roles">角色</label>
-      <select id="user-roles" formControlName="roleIds" multiple>
-        @for (role of data.roles; track role.id) {
-          <option [value]="role.id">{{ role.name }}</option>
-        }
-      </select>
-    </div>
+    @if (data.canManageRoles) {
+      <div class="form-field">
+        <label for="user-roles">角色</label>
+        <select id="user-roles" formControlName="roleIds" multiple>
+          @for (role of data.roles; track role.id) {
+            <option [value]="role.id">{{ role.name }}</option>
+          }
+        </select>
+      </div>
+    }
   </div>
 
   <div class="dialog-actions">

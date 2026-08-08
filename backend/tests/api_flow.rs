@@ -174,6 +174,9 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
 
+    let (status, _) = send(&app, Method::GET, "/api/v1/auth/me", Some(token), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
     let (status, _) = send(
         &app,
         Method::POST,
@@ -187,7 +190,7 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
-    let (status, _) = send(
+    let (status, refreshed_login) = send(
         &app,
         Method::POST,
         "/api/v1/auth/login",
@@ -199,6 +202,9 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+    let token = refreshed_login["accessToken"]
+        .as_str()
+        .expect("refreshed access token");
 
     let (status, permission_groups) = send(
         &app,
@@ -212,11 +218,12 @@ async fn login_and_user_crud_flow() {
     let groups = permission_groups.as_array().expect("permission groups");
     assert_eq!(groups[0]["name"], "仪表盘模块");
     assert_eq!(groups[1]["name"], "身份与访问模块");
+    assert_eq!(groups[2]["name"], "审计与合规模块");
     let group_codes = groups
         .iter()
         .filter_map(|group| group["code"].as_str())
         .collect::<Vec<_>>();
-    assert_eq!(group_codes, vec!["dashboard", "identity"]);
+    assert_eq!(group_codes, vec!["dashboard", "identity", "audit"]);
     let view_permissions = groups
         .iter()
         .flat_map(|group| group["permissions"].as_array().into_iter().flatten())
@@ -237,6 +244,7 @@ async fn login_and_user_crud_flow() {
         permission_codes,
         BTreeSet::from([
             "dashboard:analytics:read",
+            "audit:logs:read",
             "permission:directory:read",
             "role:directory:read",
             "role:permissions:write",
@@ -244,9 +252,26 @@ async fn login_and_user_crud_flow() {
             "user:admin:deactivate",
             "user:admin:reset_password",
             "user:directory:read",
+            "user:roles:write",
+            "user:super_admin:grant",
             "user:write",
         ])
     );
+    let permission_id = |code: &str| {
+        groups
+            .iter()
+            .flat_map(|group| group["permissions"].as_array().into_iter().flatten())
+            .find(|permission| permission["code"] == code)
+            .and_then(|permission| permission["id"].as_i64())
+            .unwrap_or_else(|| panic!("missing permission {code}"))
+    };
+    let user_read_id = permission_id("user:directory:read");
+    let user_write_id = permission_id("user:write");
+    let user_roles_write_id = permission_id("user:roles:write");
+    let role_read_id = permission_id("role:directory:read");
+    let role_write_id = permission_id("role:write");
+    let role_permission_write_id = permission_id("role:permissions:write");
+    let permission_read_id = permission_id("permission:directory:read");
 
     let (status, roles) = send(&app, Method::GET, "/api/v1/roles", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -266,6 +291,245 @@ async fn login_and_user_crud_flow() {
         .find(|role| role["code"] == "super_admin")
         .and_then(|role| role["id"].as_i64())
         .expect("super admin role id");
+    let support_role_id = roles
+        .as_array()
+        .expect("roles array")
+        .iter()
+        .find(|role| role["code"] == "support_tier2")
+        .and_then(|role| role["id"].as_i64())
+        .expect("support role id");
+
+    let (status, allocator_role) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(token),
+        Some(json!({
+            "code": "role_allocator",
+            "name": "角色分配员",
+            "permissionIds": [user_read_id, user_write_id, user_roles_write_id, role_read_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let allocator_role_id = allocator_role["id"].as_i64().expect("allocator role id");
+    let (status, allocator) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "role_allocator",
+            "password": "integration-pass",
+            "displayName": "Role Allocator",
+            "roleIds": [allocator_role_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let allocator_id = allocator["id"].as_i64().expect("allocator user id");
+    let (status, allocator_login) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({"username": "role_allocator", "password": "integration-pass"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let allocator_token = allocator_login["accessToken"]
+        .as_str()
+        .expect("allocator token");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{allocator_id}/roles"),
+        Some(allocator_token),
+        Some(json!({"roleIds": [super_admin_role_id]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, support) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "support_actor",
+            "password": "integration-pass",
+            "displayName": "Support Actor",
+            "roleIds": [support_role_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let support_id = support["id"].as_i64().expect("support user id");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{support_id}/roles"),
+        Some(token),
+        Some(json!({"roleIds": [support_role_id]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, support_login) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({"username": "support_actor", "password": "integration-pass"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let support_token = support_login["accessToken"]
+        .as_str()
+        .expect("support token");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{support_id}/roles"),
+        Some(support_token),
+        Some(json!({"roleIds": [super_admin_role_id]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, suspended_target) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "suspended_target",
+            "password": "integration-pass",
+            "displayName": "Suspended Target",
+            "status": "suspended"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let suspended_target_id = suspended_target["id"]
+        .as_i64()
+        .expect("suspended target id");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{suspended_target_id}"),
+        Some(support_token),
+        Some(json!({"status": "active"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, role_writer_role) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(token),
+        Some(json!({
+            "code": "role_writer",
+            "name": "角色编辑员",
+            "permissionIds": [role_read_id, role_write_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let role_writer_role_id = role_writer_role["id"]
+        .as_i64()
+        .expect("role writer role id");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{allocator_id}/roles"),
+        Some(allocator_token),
+        Some(json!({"roleIds": [role_writer_role_id]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "role_writer",
+            "password": "integration-pass",
+            "displayName": "Role Writer",
+            "roleIds": [role_writer_role_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, role_writer_login) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({"username": "role_writer", "password": "integration-pass"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let role_writer_token = role_writer_login["accessToken"]
+        .as_str()
+        .expect("role writer token");
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(role_writer_token),
+        Some(json!({
+            "code": "privileged_role",
+            "name": "Privileged Role",
+            "permissionIds": [user_write_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, permission_manager_role) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(token),
+        Some(json!({
+            "code": "permission_manager",
+            "name": "权限分配员",
+            "permissionIds": [role_read_id, role_permission_write_id, permission_read_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let permission_manager_role_id = permission_manager_role["id"]
+        .as_i64()
+        .expect("permission manager role id");
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "permission_manager",
+            "password": "integration-pass",
+            "displayName": "Permission Manager",
+            "roleIds": [permission_manager_role_id]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, permission_manager_login) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({"username": "permission_manager", "password": "integration-pass"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let permission_manager_token = permission_manager_login["accessToken"]
+        .as_str()
+        .expect("permission manager token");
 
     let admin_id = login["user"]["id"].as_i64().expect("administrator id");
     let (status, _) = send(
@@ -365,6 +629,16 @@ async fn login_and_user_crud_flow() {
     let user_id = created["id"].as_i64().expect("created user id");
     assert_eq!(created["roles"], json!(["查看者"]));
 
+    let (status, _) = send(
+        &app,
+        Method::DELETE,
+        &format!("/api/v1/roles/{viewer_role_id}"),
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
     let (status, updated) = send(
         &app,
         Method::PUT,
@@ -391,6 +665,36 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::CREATED);
     let clearable_role_id = clearable_role["id"].as_i64().expect("clearable role id");
+    let (status, error) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{clearable_role_id}/permissions"),
+        Some(token),
+        Some(json!({"permissionIds": [role_permission_write_id]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        error["error"]["message"],
+        "分配角色权限管理能力时，必须同时授予角色读取和权限目录读取权限"
+    );
+    let (status, error) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{clearable_role_id}/permissions"),
+        Some(permission_manager_token),
+        Some(json!({
+            "permissionIds": [
+                role_read_id,
+                role_permission_write_id,
+                permission_read_id,
+                user_write_id
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(error["error"]["message"], "不能授予操作者自身未拥有的权限");
     let (status, clearable_role) = send(
         &app,
         Method::PUT,
@@ -537,6 +841,17 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
+    let (status, roles_after_user_delete) =
+        send(&app, Method::GET, "/api/v1/roles", Some(token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let viewer_after_delete = roles_after_user_delete
+        .as_array()
+        .expect("roles array")
+        .iter()
+        .find(|role| role["code"] == "viewer")
+        .expect("viewer role");
+    assert_eq!(viewer_after_delete["members"], 0);
+
     let (status, second_admin) = send(
         &app,
         Method::POST,
@@ -564,6 +879,22 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(error["error"]["message"], "不能停用当前登录账号");
 
+    let (status, audit_logs) = send(
+        &app,
+        Method::GET,
+        "/api/v1/audit-logs?page=1&pageSize=100&action=user.roles.update",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(audit_logs["total"].as_i64().unwrap_or_default() > 0);
+    assert!(audit_logs["items"]
+        .as_array()
+        .expect("audit log items")
+        .iter()
+        .all(|entry| entry["action"] == "user.roles.update"));
+
     let deactivate = || UpdateUserRequest {
         display_name: None,
         email: NullablePatch::Missing,
@@ -573,8 +904,8 @@ async fn login_and_user_crud_flow() {
     let first_request = deactivate();
     let second_request = deactivate();
     let (first, second) = tokio::join!(
-        services::users::update(&pool, admin_id, i64::MAX, &first_request),
-        services::users::update(&pool, second_admin_id, i64::MAX, &second_request),
+        services::users::update(&pool, admin_id, None, &first_request, false),
+        services::users::update(&pool, second_admin_id, None, &second_request, false),
     );
     assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
 
