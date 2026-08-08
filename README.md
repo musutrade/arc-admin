@@ -1,6 +1,8 @@
+<!-- ARC_PROJECT_HEADER_START -->
 # arc-admin
 
 RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后端。
+<!-- ARC_PROJECT_HEADER_END -->
 
 ## 目录结构
 
@@ -15,6 +17,8 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 │   ├── migrations/            # SQLX 迁移（不可变，只增不改）
 │   └── .env.example
 ├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
+├── scripts/                   # 业务项目初始化命令及测试
+├── FRAMEWORK_VERSION          # 模板版本标识
 ├── .arc-flow/                 # 可复用工作流 schema v2 配置
 ├── codex-audit-pipeline/      # Codex 工作流工具（自包含）
 │   ├── .codex/                # 审计规则 / 模板 / 报告产物
@@ -23,12 +27,35 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 └── .github/                   # CI 与 Dependabot 配置
 ```
 
+<!-- ARC_TEMPLATE_USAGE_START -->
+## 从模板创建业务项目
+
+从 GitHub Template 创建独立仓库后，在新仓库根目录执行一次初始化：
+
+```bash
+./scripts/init-project.sh \
+  --slug stock-analysis \
+  --title 股票分析系统 \
+  --short-name 投研平台 \
+  --database stock_analysis \
+  --permission-prefix stock
+```
+
+命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成唯一的本地开发 JWT 密钥和 `backend/.env`，更新运行时产品配置与 README，并写入 `.arc-project.json`。本地 `.env` 受 `.gitignore` 保护，不会进入版本库。
+
+查看所有参数：
+
+```bash
+./scripts/init-project.sh --help
+```
+<!-- ARC_TEMPLATE_USAGE_END -->
+
 ## 快速开始
 
 ```bash
 # 一次性准备
 cd frontend && npm ci && cd ..
-cp backend/.env.example backend/.env       # 修改 DATABASE_URL
+[[ -f backend/.env ]] || cp backend/.env.example backend/.env
 docker pull postgres:16-alpine
 git config core.hooksPath codex-audit-pipeline/hooks
 cargo flow doctor

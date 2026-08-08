@@ -33,6 +33,7 @@ required_steps = [
   "frontend.e2e",
   "frontend.build",
   "workflow.hook-syntax",
+  "workflow.project-init-tests",
   "workflow.format",
   "workflow.clippy",
   "workflow.tests",
@@ -161,6 +162,9 @@ patterns = [
   "README.md",
   "AGENTS.md",
   "start.sh",
+  "scripts/**",
+  "FRAMEWORK_VERSION",
+  ".arc-project.json",
   "docs/**",
   "codex-audit-pipeline/README.md",
   "codex-audit-pipeline/docs/**",
@@ -316,6 +320,17 @@ args = ["-n", "{root}/codex-audit-pipeline/hooks/pre-commit"]
 cwd = "{root}"
 log = "git_hook_syntax.log"
 timeout_secs = 180
+
+[[steps]]
+id = "workflow.project-init-tests"
+label = "project initializer tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/init-project.test.mjs"]
+cwd = "{root}"
+log = "project_init_tests.log"
+timeout_secs = 60
 
 [[steps]]
 id = "workflow.format"

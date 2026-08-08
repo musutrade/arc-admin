@@ -6,13 +6,13 @@
 
 ```bash
 cd frontend && npm ci && cd ..
-cp backend/.env.example backend/.env
+[[ -f backend/.env ]] || cp backend/.env.example backend/.env
 docker pull postgres:16-alpine
 git config core.hooksPath codex-audit-pipeline/hooks
 cargo flow doctor
 ```
 
-运行后端前，修改不入库的 `backend/.env` 中的 `DATABASE_URL`。`APP_ENV=production` 时必须设置至少 32 字符的 `JWT_SECRET` 和明确的 `CORS_ALLOWED_ORIGINS`。
+从模板创建的业务项目应先运行 `scripts/init-project.sh`，它会生成唯一的本地开发 JWT 密钥和 `backend/.env`。直接开发框架源仓库时，上述命令仅在文件不存在时复制示例配置。运行后端前确认 `DATABASE_URL` 指向本地开发库；`APP_ENV=production` 时必须设置至少 32 字符的 `JWT_SECRET` 和明确的 `CORS_ALLOWED_ORIGINS`。
 
 数据库迁移不会留下可登录的默认账号。首次部署先显式初始化管理员，密码至少 16 字符：
 
@@ -36,9 +36,8 @@ cd backend && cargo run
 ```
 
 前端默认地址是 `http://localhost:4200`，开发代理会把 `/api/v1` 转发到
-`http://127.0.0.1:8080`。部署时可在静态资源 `config.js` 中设置
-`window.__ARC_ADMIN_CONFIG__.apiBaseUrl`，无需重新构建前端。后端端口以 `backend/.env`
-的 `PORT` 为准。
+`http://127.0.0.1:8080`。部署时可在静态资源 `config.js` 中设置产品名称、项目标识、
+API 基址和主题存储键，无需重新构建前端。后端端口以 `backend/.env` 的 `PORT` 为准。
 
 - `GET /api/v1/healthz` 是进程存活检查，不访问数据库；
 - `GET /api/v1/readyz` 是就绪检查，数据库不可用时返回 HTTP 503。
