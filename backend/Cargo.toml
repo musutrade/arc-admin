@@ -27,4 +27,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 [dev-dependencies]
 http-body-util = "0.1"
-serde-saphyr = { version = "0.0.29", default-features = false, features = ["deserialize"] }
+serde-saphyr = { version = "1.0.0", default-features = false, features = ["deserialize"] }
