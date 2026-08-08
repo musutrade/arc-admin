@@ -2,7 +2,7 @@ use crate::project::resolve_repo_path;
 use anyhow::{bail, Context, Result};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -238,7 +238,10 @@ fn compile_regexes(patterns: &[String]) -> Result<Vec<Regex>> {
     patterns
         .iter()
         .map(|pattern| {
-            Regex::new(pattern).with_context(|| format!("invalid audit regex {pattern:?}"))
+            RegexBuilder::new(pattern)
+                .multi_line(true)
+                .build()
+                .with_context(|| format!("invalid audit regex {pattern:?}"))
         })
         .collect()
 }
@@ -275,10 +278,39 @@ fn resolve_excludes(project_root: &Path, entries: &[String]) -> Result<Vec<PathB
         .collect()
 }
 
-/// 判断 match 是否落在行注释（// 或 ///）之内。
-/// 说明：多行块注释 /* */ 不做处理（README 已注明为已知限制）。
-fn is_inside_line_comment(line: &str, match_start: usize) -> bool {
+fn source_line_starts(content: &str) -> Vec<usize> {
+    std::iter::once(0)
+        .chain(
+            content
+                .match_indices('\n')
+                .map(|(newline_offset, _)| newline_offset + 1),
+        )
+        .collect()
+}
+
+fn source_line_at<'a>(
+    content: &'a str,
+    line_starts: &[usize],
+    match_start: usize,
+) -> (usize, &'a str, usize) {
+    let line_index = line_starts
+        .partition_point(|line_start| *line_start <= match_start)
+        .saturating_sub(1);
+    let line_start = line_starts[line_index];
+    let line_end = content[line_start..]
+        .find('\n')
+        .map(|offset| line_start + offset)
+        .unwrap_or(content.len());
+    (
+        line_index + 1,
+        &content[line_start..line_end],
+        match_start.saturating_sub(line_start),
+    )
+}
+
+fn is_inside_line_comment(line: &str, match_start: usize, extension: Option<&str>) -> bool {
     line.find("//").is_some_and(|pos| pos < match_start)
+        || (extension == Some("sql") && line.find("--").is_some_and(|pos| pos < match_start))
 }
 
 fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[String]) -> bool {
@@ -349,31 +381,31 @@ fn scan_files(
             let content = fs::read_to_string(path)
                 .with_context(|| format!("read audit source {}", path.display()))?;
             let mut violations = Vec::new();
+            let mut reported_lines = HashSet::new();
+            let line_starts = source_line_starts(&content);
+            let extension = path.extension().and_then(|value| value.to_str());
 
-            for (line_num, line) in content.lines().enumerate() {
-                for (idx, re) in regexes.iter().enumerate() {
-                    let mut found = false;
-                    for m in re.find_iter(line) {
-                        if is_inside_line_comment(line, m.start()) {
-                            continue;
-                        }
-                        violations.push(Violation {
-                            file: path
-                                .strip_prefix(project_root)
-                                .unwrap_or(path)
-                                .to_path_buf(),
-                            line: line_num + 1,
-                            content: line.trim().to_string(),
-                            rule_name: format!("{}:{}", rule_name, rule.patterns[idx]),
-                        });
-                        found = true;
-                        break;
+            for (idx, re) in regexes.iter().enumerate() {
+                for matched in re.find_iter(&content) {
+                    let (line_number, line, offset_in_line) =
+                        source_line_at(&content, &line_starts, matched.start());
+                    if is_inside_line_comment(line, offset_in_line, extension)
+                        || !reported_lines.insert(line_number)
+                    {
+                        continue;
                     }
-                    if found {
-                        break;
-                    }
+                    violations.push(Violation {
+                        file: path
+                            .strip_prefix(project_root)
+                            .unwrap_or(path)
+                            .to_path_buf(),
+                        line: line_number,
+                        content: line.trim().to_string(),
+                        rule_name: format!("{}:{}", rule_name, rule.patterns[idx]),
+                    });
                 }
             }
+            violations.sort_by_key(|violation| violation.line);
             Ok(violations)
         })
         .collect::<Result<Vec<_>>>()?;
@@ -445,34 +477,32 @@ fn scan_arch_rules(
                 let content = fs::read_to_string(path)
                     .with_context(|| format!("read audit source {}", path.display()))?;
                 let mut violations = Vec::new();
+                let mut reported_lines = HashSet::new();
+                let line_starts = source_line_starts(&content);
+                let extension = path.extension().and_then(|value| value.to_str());
 
-                for (line_num, line) in content.lines().enumerate() {
-                    for re in &regexes {
-                        let mut found = false;
-                        for m in re.find_iter(line) {
-                            if is_inside_line_comment(line, m.start()) {
-                                continue;
-                            }
-                            if allowed_regexes.iter().any(|allowed| allowed.is_match(line)) {
-                                continue;
-                            }
-                            violations.push(ArchViolation {
-                                file: path
-                                    .strip_prefix(project_root)
-                                    .unwrap_or(path)
-                                    .to_path_buf(),
-                                line: line_num + 1,
-                                content: line.trim().to_string(),
-                                rule_name: rule_name.clone(),
-                            });
-                            found = true;
-                            break;
+                for re in &regexes {
+                    for matched in re.find_iter(&content) {
+                        let (line_number, line, offset_in_line) =
+                            source_line_at(&content, &line_starts, matched.start());
+                        if is_inside_line_comment(line, offset_in_line, extension)
+                            || allowed_regexes.iter().any(|allowed| allowed.is_match(line))
+                            || !reported_lines.insert(line_number)
+                        {
+                            continue;
                         }
-                        if found {
-                            break;
-                        }
+                        violations.push(ArchViolation {
+                            file: path
+                                .strip_prefix(project_root)
+                                .unwrap_or(path)
+                                .to_path_buf(),
+                            line: line_number,
+                            content: line.trim().to_string(),
+                            rule_name: rule_name.clone(),
+                        });
                     }
                 }
+                violations.sort_by_key(|violation| violation.line);
                 Ok(violations)
             })
             .collect::<Result<Vec<_>>>()?;
@@ -853,6 +883,19 @@ mod tests {
         }
     }
 
+    fn configured_audit() -> Config {
+        toml::from_str(include_str!("../../../.codex/audit.toml"))
+            .expect("project audit config must parse")
+    }
+
+    fn configured_hard_rule(name: &str) -> HardRule {
+        configured_audit()
+            .hard_rules
+            .into_iter()
+            .find(|rule| rule.name == name)
+            .expect("configured hard rule must exist")
+    }
+
     #[test]
     fn hard_rule_scans_every_configured_root() {
         let test_dir = TestDir::new("hard-roots");
@@ -872,6 +915,114 @@ mod tests {
             allowlist: Vec::new(),
         };
         let violations = scan_files(&test_dir.0, &roots, &[], &rule).expect("scan fixture");
+
+        assert_eq!(violations.len(), 2);
+    }
+
+    #[test]
+    fn hard_rule_detects_multiline_sensitive_logging() {
+        let test_dir = TestDir::new("multiline-sensitive-log");
+        let source = test_dir.child("src");
+        fs::write(
+            source.join("leak.rs"),
+            concat!(
+                "fn leak(password: &str, access_token: &str) {\n",
+                "    tracing::error!(\n",
+                "        password = password,\n",
+                "        \"login failed\"\n",
+                "    );\n",
+                "    warn!(\n",
+                "        ?access_token,\n",
+                "        \"request failed\"\n",
+                "    );\n",
+                "    // tracing::error!(password = password);\n",
+                "}\n",
+            ),
+        )
+        .expect("write sensitive log fixture");
+        let rule = configured_hard_rule("日志不得记录完整请求头或显式敏感字段");
+
+        let violations =
+            scan_files(&test_dir.0, &[source], &[], &rule).expect("scan sensitive log fixture");
+
+        assert_eq!(violations.len(), 2);
+        assert_eq!(
+            violations
+                .iter()
+                .map(|violation| violation.line)
+                .collect::<Vec<_>>(),
+            vec![2, 6]
+        );
+    }
+
+    #[test]
+    fn hard_rule_detects_multiline_and_dynamic_sql_surfaces() {
+        let test_dir = TestDir::new("multiline-sql");
+        let source = test_dir.child("src");
+        fs::write(
+            source.join("write.rs"),
+            concat!(
+                "const SQL: &str = r#\"\n",
+                "UPDATE\n",
+                "    users\n",
+                "SET disabled = true\n",
+                "\"#;\n",
+            ),
+        )
+        .expect("write multiline SQL fixture");
+        fs::write(
+            source.join("raw.rs"),
+            "sqlx::\n    raw_sql(\"SELECT 1\");\n// raw_sql(\"SELECT 2\");\n",
+        )
+        .expect("write raw SQL fixture");
+        fs::write(
+            source.join("builder.rs"),
+            "QueryBuilder::<Postgres>\n    ::new(\"SELECT 1\");\n",
+        )
+        .expect("write query builder fixture");
+        fs::write(
+            source.join("write.sql"),
+            "-- DELETE FROM ignored\nDELETE\nFROM sessions;\n",
+        )
+        .expect("write external SQL fixture");
+        let rule = configured_hard_rule("SQL 写操作仅允许出现在 Repository/迁移/测试层");
+
+        let violations = scan_files(&test_dir.0, &[source], &[], &rule).expect("scan SQL fixtures");
+
+        assert_eq!(violations.len(), 4);
+        assert!(violations
+            .iter()
+            .any(|violation| violation.file.ends_with("write.sql") && violation.line == 2));
+    }
+
+    #[test]
+    fn architecture_rule_detects_multiline_raw_sql_and_query_builder() {
+        let test_dir = TestDir::new("multiline-service-sql");
+        let services = test_dir.child("services");
+        fs::write(
+            services.join("raw.rs"),
+            "sqlx\n    ::\n    raw_sql(\"SELECT 1\");\n",
+        )
+        .expect("write service raw SQL fixture");
+        fs::write(
+            services.join("builder.rs"),
+            "QueryBuilder::<Postgres>\n    ::new(\"SELECT 1\");\n",
+        )
+        .expect("write service query builder fixture");
+        let mut service_rule = configured_audit()
+            .arch_rules
+            .into_iter()
+            .find(|rule| rule.name == "Service 层不应包含 SQL 查询")
+            .expect("service SQL rule must exist");
+        service_rule.paths = vec!["services".to_string()];
+        let config = Config {
+            paths: PathsConfig::default(),
+            hard_rules: Vec::new(),
+            arch_rules: vec![service_rule],
+        };
+
+        let violations =
+            scan_arch_rules(&test_dir.0, &config, &[]).expect("scan service SQL fixtures");
 
         assert_eq!(violations.len(), 2);
     }

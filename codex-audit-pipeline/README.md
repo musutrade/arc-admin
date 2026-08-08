@@ -467,7 +467,7 @@ Docker provider 使用 `--pull=never`，不会在验证中隐式访问网络。�
 
 `codex-audit-pipeline/.codex/audit.toml` 约束 arc-admin 的 SQL 写入层、Handler/Service、Angular Component/Service 和代码模板。`arch_rules.allowed_patterns` 可声明逐行例外，不存在写死的 model trait 放行逻辑。新项目由预设生成空规则文件，再按自身架构增加规则。
 
-auditor 以文件和代码行为单位执行正则检查：支持扩展名过滤、路径排除、路径 allowlist、逐行 allowed pattern，并忽略命中位置之前的 `//` 行注释。它不解析抽象语法树，也不跟踪跨行块注释；需要语义级规则时，应把 Clippy、ESLint 或其他语言 lint 工具配置为 step。
+auditor 以整文件为单位执行正则检查并把命中映射回起始代码行：支持跨行规则、扩展名过滤、路径排除、路径 allowlist 和起始行 allowed pattern，并忽略命中位置之前的 `//` 行注释及 SQL `--` 行注释。正则默认启用 multi-line 模式，但它不解析抽象语法树，也不跟踪跨行块注释；需要语义级规则时，应把 Clippy、ESLint 或其他语言 lint 工具配置为 step。
 
 ## 开发 arc-flow 本身
 

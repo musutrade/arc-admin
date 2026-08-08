@@ -17,14 +17,16 @@ exclude = ["target", "node_modules", "dist", ".git", "tools"]
 name = "SQL 写操作仅允许出现在 Repository/迁移/测试层"
 severity = "blocker"
 paths = ["backend"]
-extensions = ["rs"]
+extensions = ["rs", "sql"]
 patterns = [
   '(?i)INSERT\s+INTO',
-  '(?i)UPDATE\s+\w+\s+SET',
+  '(?i)UPDATE\s+(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_.]*)\s+SET',
   '(?i)DELETE\s+FROM',
   '(?i)DROP\s+TABLE',
   '(?i)ALTER\s+TABLE',
   '(?i)TRUNCATE',
+  '(?:sqlx\s*::\s*)?raw_sql\s*\(',
+  '(?:sqlx\s*::\s*)?QueryBuilder(?:\s*::<[^>]+>)?\s*::\s*new\s*\(',
   '\.execute\s*\(',
   '\.exec\s*\(',
 ]
@@ -45,7 +47,10 @@ name = "Service 层不应包含 SQL 查询"
 layer = "service"
 paths = ["backend/src/services"]
 extensions = ["rs"]
-forbidden_patterns = ['sqlx::(query|query_as|query_scalar)!?\s*\(']
+forbidden_patterns = [
+  'sqlx\s*::\s*(?:query|query_as|query_scalar|query_file|query_file_as|raw_sql)!?\s*\(',
+  '(?:sqlx\s*::\s*)?QueryBuilder(?:\s*::<[^>]+>)?\s*::\s*new\s*\(',
+]
 allowed_patterns = []
 suggestion = "请将 SQL 逻辑移至 Repository 层"
 allowlist = []
@@ -56,7 +61,10 @@ name = "Handler 层不应包含 SQL 查询"
 layer = "handler"
 paths = ["backend/src/handlers"]
 extensions = ["rs"]
-forbidden_patterns = ['sqlx::(query|query_as|query_scalar)!?\s*\(']
+forbidden_patterns = [
+  'sqlx\s*::\s*(?:query|query_as|query_scalar|query_file|query_file_as|raw_sql)!?\s*\(',
+  '(?:sqlx\s*::\s*)?QueryBuilder(?:\s*::<[^>]+>)?\s*::\s*new\s*\(',
+]
 allowed_patterns = []
 suggestion = "请将 SQL 逻辑移至 Repository 层"
 allowlist = []
@@ -147,7 +155,8 @@ paths = ["backend/src"]
 extensions = ["rs"]
 patterns = [
   'include_headers\s*\(\s*true\s*\)',
-  '(?is)tracing::(?:trace|debug|info|warn|error)!\s*\([^)]*\b(?:authorization|cookie|password|token|database_url)\s*=',
+  '(?is)(?:tracing\s*::\s*)?(?:trace|debug|info|warn|error)!\s*\([^;]*?\b(?:authorization|cookie|password|(?:access_|refresh_)?token|database_url)\s*=',
+  '(?is)(?:tracing\s*::\s*)?(?:trace|debug|info|warn|error)!\s*\([^;]*?[?%]\s*(?:authorization|cookie|password|(?:access_|refresh_)?token|database_url)\b',
 ]
 allowlist = []
 exclude_patterns = []

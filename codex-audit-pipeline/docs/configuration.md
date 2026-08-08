@@ -392,7 +392,7 @@ exclude = ["target", "node_modules", "dist", ".git"]
 name = "SQL writes stay in repositories"
 severity = "blocker"
 paths = ["api"]
-extensions = ["rs"]
+extensions = ["rs", "sql"]
 patterns = ['(?i)INSERT\\s+INTO', '\\.execute\\s*\\(']
 allowlist = ["services/api/src/repositories", "services/api/migrations", "services/api/tests"]
 exclude_patterns = []
@@ -415,11 +415,11 @@ allowlist = []
 exclude_patterns = []
 ```
 
-`allowed_patterns` 是逐行允许规则，适合明确的 trait impl 或框架样板；不要用过宽正则隐藏真实违规。`exclude_patterns` 与 hard rule 一样匹配文件路径。任意审计违规都会阻止后续外部步骤。
+`allowed_patterns` 匹配违规起始行，适合明确的 trait impl 或框架样板；不要用过宽正则隐藏真实违规。`exclude_patterns` 与 hard rule 一样匹配文件路径。任意审计违规都会阻止后续外部步骤。
 
 每个规则的 `paths` 必须解析到项目根内已经存在的目录。路径中的 `..`、逃出项目的绝对路径或符号链接都会被拒绝；目录遍历或文件读取失败也会让审计失败，避免扫描缺失时误报通过。审计报告统一记录仓库相对路径。
 
-auditor 是确定性的逐行正则扫描器，不是语言 parser。它会忽略匹配位置之前已经出现 `//` 的行注释，但不跟踪跨行 `/* ... */` 块注释。需要语法树级判断时，应使用项目语言自己的 lint 工具，并把该工具配置成一个 step。
+auditor 是确定性的整文件正则扫描器，不是语言 parser。正则默认启用 multi-line 模式，因此 `^`/`$` 仍按代码行匹配，`\s` 可以跨行；需要让 `.` 跨行时应在规则中显式使用 `(?s)`。报告定位到匹配起始行，Rust/前端源码会忽略该位置之前的 `//`，SQL 文件会额外忽略 `--` 行注释。扫描器不跟踪跨行 `/* ... */` 块注释；需要语法树级判断时，应使用项目语言自己的 lint 工具，并把该工具配置成一个 step。
 
 ## 13. 最小完整示例
 
