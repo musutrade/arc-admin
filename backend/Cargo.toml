@@ -2,6 +2,7 @@
 name = "arc-admin-backend"
 version = "0.1.0"
 edition = "2021"
+publish = false
 default-run = "arc-admin-backend"
 
 [dependencies]
