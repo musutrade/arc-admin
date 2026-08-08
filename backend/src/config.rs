@@ -5,6 +5,7 @@ use crate::telemetry::REQUEST_ID_HEADER;
 use anyhow::{bail, Context};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::{HeaderValue, Method};
+use ipnet::IpNet;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,8 +57,11 @@ pub struct AppConfig {
     pub persistent_session_idle_timeout_secs: i64,
     pub max_sessions_per_user: i64,
     pub login_max_failures: i32,
+    pub login_ip_max_failures: i32,
+    pub login_account_ip_max_failures: i32,
     pub login_failure_window_secs: i64,
     pub login_lockout_secs: i64,
+    pub trusted_proxy_cidrs: Vec<IpNet>,
     pub environment: AppEnvironment,
     pub log_format: LogFormat,
     pub service_name: String,
@@ -74,8 +78,11 @@ struct ConfigValues {
     persistent_session_idle_timeout_secs: Option<String>,
     max_sessions_per_user: Option<String>,
     login_max_failures: Option<String>,
+    login_ip_max_failures: Option<String>,
+    login_account_ip_max_failures: Option<String>,
     login_failure_window_secs: Option<String>,
     login_lockout_secs: Option<String>,
+    trusted_proxy_cidrs: Option<String>,
     app_env: Option<String>,
     cors_allowed_origins: Option<String>,
     log_format: Option<String>,
@@ -96,8 +103,11 @@ impl AppConfig {
             .ok(),
             max_sessions_per_user: std::env::var("MAX_SESSIONS_PER_USER").ok(),
             login_max_failures: std::env::var("LOGIN_MAX_FAILURES").ok(),
+            login_ip_max_failures: std::env::var("LOGIN_IP_MAX_FAILURES").ok(),
+            login_account_ip_max_failures: std::env::var("LOGIN_ACCOUNT_IP_MAX_FAILURES").ok(),
             login_failure_window_secs: std::env::var("LOGIN_FAILURE_WINDOW_SECS").ok(),
             login_lockout_secs: std::env::var("LOGIN_LOCKOUT_SECS").ok(),
+            trusted_proxy_cidrs: std::env::var("TRUSTED_PROXY_CIDRS").ok(),
             app_env: std::env::var("APP_ENV").ok(),
             cors_allowed_origins: std::env::var("CORS_ALLOWED_ORIGINS").ok(),
             log_format: std::env::var("LOG_FORMAT").ok(),
@@ -115,8 +125,11 @@ impl AppConfig {
             persistent_session_idle_timeout_secs,
             max_sessions_per_user,
             login_max_failures,
+            login_ip_max_failures,
+            login_account_ip_max_failures,
             login_failure_window_secs,
             login_lockout_secs,
+            trusted_proxy_cidrs,
             app_env,
             cors_allowed_origins,
             log_format,
@@ -158,9 +171,17 @@ impl AppConfig {
         let max_sessions_per_user =
             positive_i64("MAX_SESSIONS_PER_USER", max_sessions_per_user, 10)?;
         let login_max_failures = positive_i32("LOGIN_MAX_FAILURES", login_max_failures, 5)?;
+        let login_ip_max_failures =
+            positive_i32("LOGIN_IP_MAX_FAILURES", login_ip_max_failures, 50)?;
+        let login_account_ip_max_failures = positive_i32(
+            "LOGIN_ACCOUNT_IP_MAX_FAILURES",
+            login_account_ip_max_failures,
+            5,
+        )?;
         let login_failure_window_secs =
             positive_i64("LOGIN_FAILURE_WINDOW_SECS", login_failure_window_secs, 900)?;
         let login_lockout_secs = positive_i64("LOGIN_LOCKOUT_SECS", login_lockout_secs, 900)?;
+        let trusted_proxy_cidrs = parse_trusted_proxy_cidrs(trusted_proxy_cidrs)?;
         if session_idle_timeout_secs > session_ttl_secs {
             bail!("SESSION_IDLE_TIMEOUT_SECS cannot exceed SESSION_TTL_SECS");
         }
@@ -198,8 +219,11 @@ impl AppConfig {
             persistent_session_idle_timeout_secs,
             max_sessions_per_user,
             login_max_failures,
+            login_ip_max_failures,
+            login_account_ip_max_failures,
             login_failure_window_secs,
             login_lockout_secs,
+            trusted_proxy_cidrs,
             environment,
             log_format,
             service_name,
@@ -270,6 +294,19 @@ fn parse_origins(value: Option<String>) -> anyhow::Result<Vec<HeaderValue>> {
         .collect()
 }
 
+fn parse_trusted_proxy_cidrs(value: Option<String>) -> anyhow::Result<Vec<IpNet>> {
+    value
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|cidr| !cidr.is_empty())
+        .map(|cidr| {
+            cidr.parse::<IpNet>()
+                .with_context(|| format!("invalid trusted proxy CIDR {cidr:?}"))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,6 +328,8 @@ mod tests {
         assert_eq!(config.log_format, LogFormat::Pretty);
         assert_eq!(config.session_ttl_secs, 28_800);
         assert_eq!(config.login_max_failures, 5);
+        assert_eq!(config.login_ip_max_failures, 50);
+        assert!(config.trusted_proxy_cidrs.is_empty());
     }
 
     #[test]
@@ -322,5 +361,25 @@ mod tests {
         .expect("invalid session timeouts must fail");
 
         assert!(error.to_string().contains("SESSION_IDLE_TIMEOUT_SECS"));
+    }
+
+    #[test]
+    fn trusted_proxy_cidrs_are_validated() {
+        let config = AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            trusted_proxy_cidrs: Some("10.0.0.0/8, 2001:db8::/32".to_string()),
+            ..ConfigValues::default()
+        })
+        .expect("valid trusted proxy CIDRs");
+        assert_eq!(config.trusted_proxy_cidrs.len(), 2);
+
+        let error = AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            trusted_proxy_cidrs: Some("not-a-cidr".to_string()),
+            ..ConfigValues::default()
+        })
+        .err()
+        .expect("invalid trusted proxy CIDR must fail");
+        assert!(error.to_string().contains("trusted proxy CIDR"));
     }
 }

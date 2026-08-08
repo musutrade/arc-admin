@@ -58,6 +58,7 @@ describe('AuditLogs', () => {
     expect(fixture.nativeElement.textContent).toContain('admin');
     expect(fixture.nativeElement.textContent).toContain('用户 #7');
     expect(fixture.nativeElement.textContent).toContain('audit-trace-123');
+    expect(component.actionLabel('auth.session.revoked')).toBe('撤销认证会话');
   });
 
   it('copies the trace id for incident lookup', async () => {

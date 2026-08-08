@@ -158,13 +158,14 @@ pub async fn update(
         let value = value.trim().to_string();
         (!value.is_empty()).then_some(value)
     });
-
-    let mut transaction = pool.begin().await.map_err(db_error)?;
-    if req
+    let password_reset = password_hash.is_some();
+    let status_revokes_sessions = req
         .status
         .as_deref()
-        .is_some_and(|status| status != "active")
-    {
+        .is_some_and(|status| status != "active");
+
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    if status_revokes_sessions {
         protect_last_super_admin(&mut transaction, id).await?;
     }
     if let Some(hash) = password_hash {
@@ -172,9 +173,6 @@ pub async fn update(
             .await
             .map_err(db_error)?
             .ok_or_else(|| ApiError::not_found("用户不存在"))?;
-        repositories::auth_sessions::revoke_all_for_user(&mut transaction, id)
-            .await
-            .map_err(db_error)?;
     }
     let row = repositories::users::update_profile(
         &mut transaction,
@@ -187,14 +185,23 @@ pub async fn update(
     .await
     .map_err(db_error)?
     .ok_or_else(|| ApiError::not_found("用户不存在"))?;
-    if req
-        .status
-        .as_deref()
-        .is_some_and(|status| status != "active")
-    {
-        repositories::auth_sessions::revoke_all_for_user(&mut transaction, id)
-            .await
-            .map_err(db_error)?;
+    if password_reset || status_revokes_sessions {
+        let revoked_sessions =
+            repositories::auth_sessions::revoke_all_for_user(&mut transaction, id)
+                .await
+                .map_err(db_error)?;
+        auth::record_session_revocation(
+            &mut transaction,
+            actor_user_id,
+            id,
+            if password_reset {
+                "admin_password_reset"
+            } else {
+                "account_status_changed"
+            },
+            revoked_sessions,
+        )
+        .await?;
     }
     repositories::audit_logs::record(
         &mut transaction,
@@ -233,6 +240,17 @@ pub async fn delete(pool: &PgPool, id: i64, actor_user_id: Option<i64>) -> Resul
     if !deleted {
         return Err(ApiError::not_found("用户不存在"));
     }
+    let revoked_sessions = repositories::auth_sessions::revoke_all_for_user(&mut transaction, id)
+        .await
+        .map_err(db_error)?;
+    auth::record_session_revocation(
+        &mut transaction,
+        actor_user_id,
+        id,
+        "account_deleted",
+        revoked_sessions,
+    )
+    .await?;
     repositories::audit_logs::record(
         &mut transaction,
         actor_user_id,

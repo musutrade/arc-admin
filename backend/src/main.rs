@@ -84,8 +84,11 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
             persistent_session_idle_timeout_secs: config.persistent_session_idle_timeout_secs,
             max_sessions_per_user: config.max_sessions_per_user,
             login_max_failures: config.login_max_failures,
+            login_ip_max_failures: config.login_ip_max_failures,
+            login_account_ip_max_failures: config.login_account_ip_max_failures,
             login_failure_window_secs: config.login_failure_window_secs,
             login_lockout_secs: config.login_lockout_secs,
+            trusted_proxy_cidrs: config.trusted_proxy_cidrs.clone(),
             secure_cookies: config.environment == AppEnvironment::Production,
         }),
     };
@@ -94,9 +97,12 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!("listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 

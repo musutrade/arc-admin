@@ -18,6 +18,7 @@ const ACTION_LABELS: Record<string, string> = {
   'auth.login.success': '登录成功',
   'auth.login.failure': '登录失败',
   'auth.logout': '退出登录',
+  'auth.session.revoked': '撤销认证会话',
   'user.create': '创建用户',
   'user.update': '更新用户',
   'user.delete': '删除用户',

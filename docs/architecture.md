@@ -28,7 +28,9 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 
 登录成功后，浏览器只持有 256-bit 随机会话标识；标识通过 HttpOnly、`SameSite=Strict` Cookie 发送，数据库仅保存其 SHA-256 哈希。每个受保护请求都会从数据库重新读取会话、账号有效状态和权限码，因此退出、密码变更、停用账号或修改角色权限会立即撤销会话或按新权限执行。所有受保护写请求还必须通过与会话绑定的 CSRF Cookie 和 `X-CSRF-Token` 双提交校验。Handler 使用类型化权限提取器声明所需权限，前端隐藏按钮仅用于交互体验，不作为安全边界。
 
-登录失败按规范化用户名的哈希在 PostgreSQL 中计数，默认 15 分钟内失败 5 次后锁定 15 分钟，多实例共享同一限制。登录成功、失败、退出和密码变更都会写入审计日志；会话表不保存原始 Cookie、密码、CSRF Token、IP 或完整 User-Agent。每个用户默认最多保留 10 个有效会话，超出后撤销最早会话。
+登录失败按“账号”“来源 IP”“账号+来源 IP”三个哈希桶在 PostgreSQL 中计数，多实例共享同一限制。账号和组合桶默认 15 分钟内失败 5 次后锁定 15 分钟，来源 IP 桶默认 50 次，以降低公司出口 NAT 被少量误输整体锁定的风险。登录成功只清理账号与组合桶，不清理来源 IP 桶，避免攻击者用已知账号重置 IP 限制。登录成功、失败和退出都会写入安全审计；退出、密码变更、管理员重置、账号停用/删除及会话上限淘汰还会统一写入 `auth.session.revoked`，并记录撤销原因和数量。会话表及审计日志不保存原始 Cookie、密码、CSRF Token、IP 或完整 User-Agent。每个用户默认最多保留 10 个有效会话，超出后撤销最早会话。
+
+来源 IP 默认取 TCP 直连地址。只有直连地址命中 `TRUSTED_PROXY_CIDRS` 时才解析 `X-Forwarded-For`，并从右向左跳过受信代理得到最近的非受信地址；未受信客户端提供的转发头和格式错误的转发链一律不采用。部署 Nginx、Ingress 或云负载均衡时必须只配置实际代理网段，并由最外层代理覆盖而不是追加客户端传入的 `X-Forwarded-For`。
 
 认证与业务权限标记分离：`backend/src/auth.rs` 只实现认证和通用 `RequirePermission` 提取器，`backend/src/permissions.rs` 保存平台权限，新增业务权限按模块放入 `backend/src/permissions/`。数据库、Rust 与 Angular 的权限码从[业务权限模板](business-permissions.md)同步创建。
 
@@ -57,9 +59,12 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 | `PERSISTENT_SESSION_TTL_SECS`          | “记住我”会话绝对有效期，默认 30 天               |
 | `PERSISTENT_SESSION_IDLE_TIMEOUT_SECS` | “记住我”会话空闲有效期，默认 7 天                |
 | `MAX_SESSIONS_PER_USER`                | 每个用户最多有效会话数，默认 10                  |
-| `LOGIN_MAX_FAILURES`                   | 登录失败锁定阈值，默认 5                         |
+| `LOGIN_MAX_FAILURES`                   | 单账号登录失败锁定阈值，默认 5                   |
+| `LOGIN_IP_MAX_FAILURES`                | 单来源 IP 登录失败锁定阈值，默认 50              |
+| `LOGIN_ACCOUNT_IP_MAX_FAILURES`        | 账号与来源 IP 组合失败锁定阈值，默认 5           |
 | `LOGIN_FAILURE_WINDOW_SECS`            | 登录失败统计窗口，默认 900 秒                    |
 | `LOGIN_LOCKOUT_SECS`                   | 达到阈值后的锁定时长，默认 900 秒                |
+| `TRUSTED_PROXY_CIDRS`                  | 逗号分隔的受信反向代理网段，默认空               |
 | `CORS_ALLOWED_ORIGINS`                 | 逗号分隔 origin；生产环境必填且禁止 `*`         |
 | `LOG_FORMAT`                           | `pretty` 或 `json`；生产环境默认 `json`         |
 | `RUST_LOG`                             | Rust 日志过滤规则                               |

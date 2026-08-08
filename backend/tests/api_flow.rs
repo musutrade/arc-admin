@@ -2,12 +2,14 @@ use arc_admin_backend::auth::{self, AuthSessionConfig};
 use arc_admin_backend::models::{NullablePatch, UpdateUserRequest};
 use arc_admin_backend::{build_router, db, services, AppState};
 use axum::body::Body;
+use axum::extract::connect_info::MockConnectInfo;
 use axum::http::header::{CONTENT_TYPE, COOKIE, SET_COOKIE};
 use axum::http::{Method, Request, Response, StatusCode};
 use axum::Router;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -27,8 +29,12 @@ async fn request(
     session: Option<&TestSession>,
     body: Option<Value>,
     include_csrf: bool,
+    forwarded_for: Option<&str>,
 ) -> Response<Body> {
     let mut builder = Request::builder().method(method.clone()).uri(uri);
+    if let Some(forwarded_for) = forwarded_for {
+        builder = builder.header("x-forwarded-for", forwarded_for);
+    }
     if let Some(session) = session {
         builder = builder.header(COOKIE, &session.cookie_header);
         if include_csrf && !matches!(method, Method::GET | Method::HEAD | Method::OPTIONS) {
@@ -71,7 +77,17 @@ async fn send(
     session: Option<&TestSession>,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
-    response_json(request(app, method, uri, session, body, true).await).await
+    response_json(request(app, method, uri, session, body, true, None).await).await
+}
+
+async fn send_from_ip(
+    app: &Router,
+    method: Method,
+    uri: &str,
+    body: Option<Value>,
+    forwarded_for: &str,
+) -> (StatusCode, Value) {
+    response_json(request(app, method, uri, None, body, true, Some(forwarded_for)).await).await
 }
 
 async fn login(
@@ -91,6 +107,7 @@ async fn login(
             "remember": remember,
         })),
         false,
+        None,
     )
     .await;
     let cookies = response
@@ -155,11 +172,19 @@ async fn login_and_user_crud_flow() {
             persistent_session_idle_timeout_secs: 3_600,
             max_sessions_per_user: 10,
             login_max_failures: 5,
+            login_ip_max_failures: 6,
+            login_account_ip_max_failures: 5,
             login_failure_window_secs: 900,
             login_lockout_secs: 900,
+            trusted_proxy_cidrs: vec!["10.0.0.0/8".parse().expect("trusted proxy CIDR")],
             secure_cookies: false,
         }),
-    });
+    })
+    .layer(MockConnectInfo(
+        "10.2.0.5:4567"
+            .parse::<SocketAddr>()
+            .expect("mock peer address"),
+    ));
 
     let (status, health) = send(&app, Method::GET, "/api/v1/healthz", None, None).await;
     assert_eq!(status, StatusCode::OK);
@@ -173,15 +198,15 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
     for attempt in 1..=5 {
-        let (status, _) = send(
+        let (status, _) = send_from_ip(
             &app,
             Method::POST,
             "/api/v1/auth/login",
-            None,
             Some(json!({
                 "username": "rate_limited_missing_user",
                 "password": "incorrect-password"
             })),
+            "198.51.100.20",
         )
         .await;
         let expected = if attempt < 5 {
@@ -190,6 +215,20 @@ async fn login_and_user_crud_flow() {
             StatusCode::TOO_MANY_REQUESTS
         };
         assert_eq!(status, expected);
+    }
+    for username in ["another_missing_user", "third_missing_user"] {
+        let (status, _) = send_from_ip(
+            &app,
+            Method::POST,
+            "/api/v1/auth/login",
+            Some(json!({
+                "username": username,
+                "password": "incorrect-password"
+            })),
+            "198.51.100.20",
+        )
+        .await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     }
 
     let (status, _) = send(
@@ -245,6 +284,7 @@ async fn login_and_user_crud_flow() {
                 "newPassword": "updated-integration-admin-password"
             })),
             false,
+            None,
         )
         .await,
     )
@@ -1042,6 +1082,25 @@ async fn login_and_user_crud_flow() {
         .expect("traced audit log items")
         .iter()
         .all(|entry| entry["traceId"] == trace_id));
+
+    let (status, revocation_logs) = send(
+        &app,
+        Method::GET,
+        "/api/v1/audit-logs?page=1&pageSize=100&action=auth.session.revoked",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let revocation_reasons = revocation_logs["items"]
+        .as_array()
+        .expect("session revocation audit items")
+        .iter()
+        .filter_map(|entry| entry["details"]["reason"].as_str())
+        .collect::<BTreeSet<_>>();
+    assert!(revocation_reasons.contains("password_change"));
+    assert!(revocation_reasons.contains("logout"));
+    assert!(revocation_reasons.contains("account_status_changed"));
 
     let deactivate = || UpdateUserRequest {
         display_name: None,

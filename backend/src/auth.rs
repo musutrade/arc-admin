@@ -6,11 +6,13 @@ use crate::AppState;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum::http::{HeaderName, Method};
+use axum::http::{HeaderMap, HeaderName, Method};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use ipnet::IpNet;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::net::{IpAddr, SocketAddr};
 use subtle::ConstantTimeEq;
 use time::Duration;
 
@@ -19,6 +21,8 @@ const SECURE_SESSION_COOKIE: &str = "__Host-arc_session";
 const CSRF_COOKIE: &str = "arc_csrf";
 const SECURE_CSRF_COOKIE: &str = "__Host-arc_csrf";
 pub const CSRF_HEADER: HeaderName = HeaderName::from_static("x-csrf-token");
+const MAX_FORWARDED_FOR_LENGTH: usize = 1_024;
+const MAX_FORWARDED_FOR_HOPS: usize = 16;
 
 #[derive(Debug, Clone)]
 pub struct AuthSessionConfig {
@@ -28,8 +32,11 @@ pub struct AuthSessionConfig {
     pub persistent_session_idle_timeout_secs: i64,
     pub max_sessions_per_user: i64,
     pub login_max_failures: i32,
+    pub login_ip_max_failures: i32,
+    pub login_account_ip_max_failures: i32,
     pub login_failure_window_secs: i64,
     pub login_lockout_secs: i64,
+    pub trusted_proxy_cidrs: Vec<IpNet>,
     pub secure_cookies: bool,
 }
 
@@ -48,6 +55,68 @@ pub fn random_token() -> String {
 
 pub fn token_hash(token: &str) -> String {
     hex(&Sha256::digest(token.as_bytes()))
+}
+
+pub fn resolve_client_ip(
+    peer_ip: IpAddr,
+    headers: &HeaderMap,
+    trusted_proxy_cidrs: &[IpNet],
+) -> IpAddr {
+    let peer_ip = canonical_ip(peer_ip);
+    if !is_trusted_proxy(peer_ip, trusted_proxy_cidrs) {
+        return peer_ip;
+    }
+
+    let Some(forwarded_for) = headers
+        .get("x-forwarded-for")
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| value.len() <= MAX_FORWARDED_FOR_LENGTH)
+    else {
+        return peer_ip;
+    };
+    let forwarded = forwarded_for
+        .split(',')
+        .map(parse_forwarded_ip)
+        .collect::<Option<Vec<_>>>();
+    let Some(forwarded) =
+        forwarded.filter(|values| !values.is_empty() && values.len() <= MAX_FORWARDED_FOR_HOPS)
+    else {
+        return peer_ip;
+    };
+
+    let mut candidate = peer_ip;
+    for forwarded_ip in forwarded.into_iter().rev() {
+        if !is_trusted_proxy(candidate, trusted_proxy_cidrs) {
+            return candidate;
+        }
+        candidate = forwarded_ip;
+    }
+    candidate
+}
+
+fn parse_forwarded_ip(value: &str) -> Option<IpAddr> {
+    let value = value.trim();
+    value
+        .parse::<IpAddr>()
+        .ok()
+        .or_else(|| value.parse::<SocketAddr>().ok().map(|socket| socket.ip()))
+        .map(canonical_ip)
+}
+
+fn canonical_ip(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(ipv6) => ipv6
+            .to_ipv4_mapped()
+            .map(IpAddr::V4)
+            .unwrap_or(IpAddr::V6(ipv6)),
+        ipv4 => ipv4,
+    }
+}
+
+fn is_trusted_proxy(ip: IpAddr, trusted_proxy_cidrs: &[IpNet]) -> bool {
+    trusted_proxy_cidrs
+        .iter()
+        .any(|network| network.contains(&ip))
 }
 
 pub fn set_session_cookies(
@@ -236,6 +305,7 @@ where
 mod tests {
     use super::*;
     use axum::http::header::SET_COOKIE;
+    use axum::http::HeaderValue;
     use axum::response::IntoResponse;
 
     #[test]
@@ -284,5 +354,47 @@ mod tests {
         assert_ne!(first, second);
         assert_ne!(first, token_hash(&first));
         assert_eq!(token_hash(&first).len(), 64);
+    }
+
+    #[test]
+    fn untrusted_peer_cannot_spoof_forwarded_address() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", HeaderValue::from_static("198.51.100.10"));
+        let trusted = vec!["10.0.0.0/8".parse().expect("trusted proxy CIDR")];
+
+        assert_eq!(
+            resolve_client_ip("203.0.113.7".parse().expect("peer IP"), &headers, &trusted),
+            "203.0.113.7".parse::<IpAddr>().expect("expected IP")
+        );
+    }
+
+    #[test]
+    fn trusted_proxy_chain_uses_nearest_untrusted_address() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_static("198.51.100.20, 10.1.0.4"),
+        );
+        let trusted = vec!["10.0.0.0/8".parse().expect("trusted proxy CIDR")];
+
+        assert_eq!(
+            resolve_client_ip("10.2.0.5".parse().expect("peer IP"), &headers, &trusted),
+            "198.51.100.20".parse::<IpAddr>().expect("expected IP")
+        );
+    }
+
+    #[test]
+    fn malformed_forwarded_chain_falls_back_to_peer() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_static("198.51.100.20, invalid"),
+        );
+        let trusted = vec!["10.0.0.0/8".parse().expect("trusted proxy CIDR")];
+
+        assert_eq!(
+            resolve_client_ip("10.2.0.5".parse().expect("peer IP"), &headers, &trusted),
+            "10.2.0.5".parse::<IpAddr>().expect("expected IP")
+        );
     }
 }

@@ -11,7 +11,8 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use chrono::{Duration, Utc};
 use serde_json::json;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
+use std::net::IpAddr;
 
 pub const MIN_PASSWORD_LENGTH: usize = 12;
 pub const MAX_PASSWORD_LENGTH: usize = 128;
@@ -27,17 +28,36 @@ pub struct LoginOutcome {
     pub ttl_secs: i64,
 }
 
+struct LoginThrottleKeys {
+    account: String,
+    source_ip: String,
+    account_ip: String,
+}
+
+impl LoginThrottleKeys {
+    fn new(username: &str, client_ip: IpAddr) -> Self {
+        let username = username.to_ascii_lowercase();
+        Self {
+            account: auth::token_hash(&format!("account:{username}")),
+            source_ip: auth::token_hash(&format!("source_ip:{client_ip}")),
+            account_ip: auth::token_hash(&format!("account_ip:{username}:{client_ip}")),
+        }
+    }
+
+    fn all(&self) -> [&str; 3] {
+        [&self.account, &self.source_ip, &self.account_ip]
+    }
+}
+
 pub async fn login(
     pool: &PgPool,
     config: &AuthSessionConfig,
     req: &LoginRequest,
+    client_ip: IpAddr,
 ) -> Result<LoginOutcome, ApiError> {
     let username = req.username.trim();
-    let identifier_hash = auth::token_hash(&username.to_ascii_lowercase());
-    if let Some(locked_until) = repositories::auth_sessions::locked_until(pool, &identifier_hash)
-        .await
-        .map_err(db_error)?
-    {
+    let throttle_keys = LoginThrottleKeys::new(username, client_ip);
+    if let Some(locked_until) = locked_until(pool, &throttle_keys).await? {
         let retry_after = (locked_until - Utc::now()).num_seconds().max(1) as u64;
         return Err(ApiError::rate_limited(retry_after));
     }
@@ -62,7 +82,7 @@ pub async fn login(
         let locked_until = record_failed_login(
             pool,
             config,
-            &identifier_hash,
+            &throttle_keys,
             row.as_ref().map(|user| user.id),
         )
         .await?;
@@ -74,14 +94,14 @@ pub async fn login(
     }
     let row = row.expect("authenticated login always has a user row");
 
-    create_login_session(pool, config, req.remember, identifier_hash, row).await
+    create_login_session(pool, config, req.remember, throttle_keys, row).await
 }
 
 async fn create_login_session(
     pool: &PgPool,
     config: &AuthSessionConfig,
     persistent: bool,
-    identifier_hash: String,
+    throttle_keys: LoginThrottleKeys,
     row: UserRow,
 ) -> Result<LoginOutcome, ApiError> {
     let (ttl_secs, idle_timeout_secs) = if persistent {
@@ -99,7 +119,10 @@ async fn create_login_session(
     repositories::users::update_last_login(&mut transaction, row.id)
         .await
         .map_err(db_error)?;
-    repositories::auth_sessions::clear_login_failures(&mut transaction, &identifier_hash)
+    repositories::auth_sessions::clear_login_failures(&mut transaction, &throttle_keys.account)
+        .await
+        .map_err(db_error)?;
+    repositories::auth_sessions::clear_login_failures(&mut transaction, &throttle_keys.account_ip)
         .await
         .map_err(db_error)?;
     let session_id = repositories::auth_sessions::create(
@@ -121,6 +144,14 @@ async fn create_login_session(
     )
     .await
     .map_err(db_error)?;
+    record_session_revocation(
+        &mut transaction,
+        Some(row.id),
+        row.id,
+        "session_limit",
+        revoked_sessions,
+    )
+    .await?;
     repositories::auth_sessions::prune(&mut transaction)
         .await
         .map_err(db_error)?;
@@ -158,19 +189,42 @@ async fn create_login_session(
 async fn record_failed_login(
     pool: &PgPool,
     config: &AuthSessionConfig,
-    identifier_hash: &str,
+    throttle_keys: &LoginThrottleKeys,
     user_id: Option<i64>,
 ) -> Result<Option<chrono::DateTime<Utc>>, ApiError> {
     let mut transaction = pool.begin().await.map_err(db_error)?;
-    let locked_until = repositories::auth_sessions::record_login_failure(
-        &mut transaction,
-        identifier_hash,
-        config.login_max_failures,
-        config.login_failure_window_secs,
-        config.login_lockout_secs,
-    )
-    .await
-    .map_err(db_error)?;
+    let dimensions = [
+        ("account", &throttle_keys.account, config.login_max_failures),
+        (
+            "source_ip",
+            &throttle_keys.source_ip,
+            config.login_ip_max_failures,
+        ),
+        (
+            "account_ip",
+            &throttle_keys.account_ip,
+            config.login_account_ip_max_failures,
+        ),
+    ];
+    let mut locked_until = None;
+    let mut locked_dimensions = Vec::new();
+    for (dimension, key, max_failures) in dimensions {
+        let current_lock = repositories::auth_sessions::record_login_failure(
+            &mut transaction,
+            key,
+            max_failures,
+            config.login_failure_window_secs,
+            config.login_lockout_secs,
+        )
+        .await
+        .map_err(db_error)?;
+        if let Some(current_lock) = current_lock {
+            locked_dimensions.push(dimension);
+            if locked_until.is_none_or(|existing| current_lock > existing) {
+                locked_until = Some(current_lock);
+            }
+        }
+    }
     repositories::audit_logs::record(
         &mut transaction,
         None,
@@ -178,8 +232,10 @@ async fn record_failed_login(
         "user",
         user_id,
         json!({
-            "identifierFingerprint": &identifier_hash[..12],
+            "identifierFingerprint": &throttle_keys.account[..12],
+            "sourceIpFingerprint": &throttle_keys.source_ip[..12],
             "locked": locked_until.is_some(),
+            "lockedDimensions": locked_dimensions,
         }),
     )
     .await
@@ -188,11 +244,62 @@ async fn record_failed_login(
     Ok(locked_until)
 }
 
+async fn locked_until(
+    pool: &PgPool,
+    throttle_keys: &LoginThrottleKeys,
+) -> Result<Option<chrono::DateTime<Utc>>, ApiError> {
+    let mut latest = None;
+    for key in throttle_keys.all() {
+        if let Some(current) = repositories::auth_sessions::locked_until(pool, key)
+            .await
+            .map_err(db_error)?
+        {
+            if latest.is_none_or(|existing| current > existing) {
+                latest = Some(current);
+            }
+        }
+    }
+    Ok(latest)
+}
+
+pub async fn record_session_revocation(
+    connection: &mut PgConnection,
+    actor_user_id: Option<i64>,
+    target_user_id: i64,
+    reason: &str,
+    revoked_session_count: u64,
+) -> Result<(), ApiError> {
+    if revoked_session_count == 0 {
+        return Ok(());
+    }
+    repositories::audit_logs::record(
+        connection,
+        actor_user_id,
+        "auth.session.revoked",
+        "user",
+        Some(target_user_id),
+        json!({
+            "reason": reason,
+            "revokedSessionCount": revoked_session_count,
+        }),
+    )
+    .await
+    .map_err(db_error)
+}
+
 pub async fn logout(pool: &PgPool, user_id: i64, session_id: i64) -> Result<(), ApiError> {
     let mut transaction = pool.begin().await.map_err(db_error)?;
-    repositories::auth_sessions::revoke(&mut transaction, session_id, user_id)
+    let revoked = repositories::auth_sessions::revoke(&mut transaction, session_id, user_id)
         .await
         .map_err(db_error)?;
+    record_session_revocation(
+        &mut transaction,
+        Some(user_id),
+        user_id,
+        "logout",
+        u64::from(revoked),
+    )
+    .await?;
     repositories::audit_logs::record(
         &mut transaction,
         Some(user_id),
@@ -251,6 +358,14 @@ pub async fn change_password(
         repositories::auth_sessions::revoke_all_for_user(&mut transaction, user_id)
             .await
             .map_err(db_error)?;
+    record_session_revocation(
+        &mut transaction,
+        Some(user_id),
+        user_id,
+        "password_change",
+        revoked_sessions,
+    )
+    .await?;
     repositories::audit_logs::record(
         &mut transaction,
         Some(user_id),
@@ -335,9 +450,18 @@ pub async fn bootstrap_super_admin(
     repositories::users::assign_roles(&mut transaction, row.id, &[role_id])
         .await
         .map_err(db_error)?;
-    repositories::auth_sessions::revoke_all_for_user(&mut transaction, row.id)
-        .await
-        .map_err(db_error)?;
+    let revoked_sessions =
+        repositories::auth_sessions::revoke_all_for_user(&mut transaction, row.id)
+            .await
+            .map_err(db_error)?;
+    record_session_revocation(
+        &mut transaction,
+        None,
+        row.id,
+        "bootstrap_reactivation",
+        revoked_sessions,
+    )
+    .await?;
     repositories::audit_logs::record(
         &mut transaction,
         None,

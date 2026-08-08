@@ -5,19 +5,23 @@ use crate::error::ApiError;
 use crate::models::{ChangePasswordRequest, LoginRequest, PermissionCodes, UserResponse};
 use crate::services;
 use crate::AppState;
-use axum::extract::State;
+use axum::extract::{ConnectInfo, State};
 use axum::http::header::{CACHE_CONTROL, PRAGMA};
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
 use axum_extra::extract::cookie::CookieJar;
+use std::net::SocketAddr;
 
 pub async fn login(
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     jar: CookieJar,
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let outcome = services::auth::login(&state.pool, &state.auth, &req).await?;
+    let client_ip = auth::resolve_client_ip(peer.ip(), &headers, &state.auth.trusted_proxy_cidrs);
+    let outcome = services::auth::login(&state.pool, &state.auth, &req, client_ip).await?;
     let jar = auth::set_session_cookies(
         jar,
         outcome.session_token,
