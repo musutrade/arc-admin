@@ -1,8 +1,9 @@
 //! 仪表盘 Handler：统计指标
 
-use crate::auth::{DashboardRead, RequirePermission};
+use crate::auth::RequirePermission;
 use crate::error::ApiError;
 use crate::models::DashboardStats;
+use crate::permissions::DashboardRead;
 use crate::services;
 use crate::AppState;
 use axum::extract::State;

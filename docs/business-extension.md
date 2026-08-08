@@ -68,7 +68,7 @@ backend/src/repositories/stock.rs
 4. Repository 承担全部 SQL；schema 变化只新增 migration，不修改历史 migration。
 5. 在 `docs/openapi.yaml` 先更新接口契约，再补契约测试和业务测试。
 
-权限码使用项目初始化时的业务前缀，例如 `stock:quote:read`、`oa:approval:write`、`token:transfer:approve`。菜单权限、按钮权限和 API 权限按实际动作拆分，后端每个受保护接口都必须校验对应权限。
+权限码使用项目初始化时的业务前缀，例如 `stock:quote:read`、`oa:approval:write`、`token:transfer:approve`。数据库、Rust 和 Angular 应从同一套[业务权限模板](business-permissions.md)开始，菜单权限、按钮权限和 API 权限按实际动作拆分，后端每个受保护接口都必须校验对应权限。
 
 ## 跨业务域协作
 
@@ -80,7 +80,7 @@ backend/src/repositories/stock.rs
 ## 完成清单
 
 1. 新增 migration、Repository、Service、Handler 和 OpenAPI 契约。
-2. 增加业务权限 migration，并用后端提取器保护接口。
+2. 从业务权限模板创建权限 migration、Rust 标记和 Angular 常量，并用后端提取器保护接口。
 3. 新增 `features/<domain>` 页面、资源服务、模型与测试。
 4. 在共享权限表、导航和路由中注册入口。
 5. 执行 `cargo flow scope`、`cargo flow verify` 和交付前的 `cargo flow verify --all`。

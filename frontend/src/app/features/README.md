@@ -18,5 +18,6 @@ features/<domain>/
 - 业务 API Service 放在本业务域的 `data-access/`；`core/api/` 只保存模板自带的 RBAC 平台客户端。
 - 一个业务域不得直接导入另一个业务域的页面或内部服务。确需复用时，把稳定的无业务基础能力提取到 `core/`，跨域流程放在应用组合层。
 - 页面权限同时登记到 `app.navigation.ts` 和后端权限校验；前端菜单与守卫只改善体验，后端授权才是安全边界。
+- 新权限从 SQL、Rust、Angular 三端[业务权限模板](../../../../docs/business-permissions.md)同步创建。
 
 完整接入步骤见 [`docs/business-extension.md`](../../../../docs/business-extension.md)。

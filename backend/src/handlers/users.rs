@@ -1,10 +1,11 @@
 //! 用户 Handler：列表 / 详情 / 创建 / 更新 / 软删除 / 分配角色
 
-use crate::auth::{RequirePermission, UserDeactivate, UserRead, UserRoleWrite, UserWrite};
+use crate::auth::RequirePermission;
 use crate::error::ApiError;
 use crate::models::{
     AssignRolesRequest, CreateUserRequest, PageQuery, PageUser, UpdateUserRequest, UserResponse,
 };
+use crate::permissions::{UserDeactivate, UserRead, UserRoleWrite, UserWrite};
 use crate::services;
 use crate::AppState;
 use axum::extract::{Path, Query, State};

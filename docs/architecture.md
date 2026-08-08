@@ -28,6 +28,8 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 
 每个受保护请求都会从数据库重新读取账号有效状态和权限码，因此停用账号或修改角色权限后，旧 JWT 会立即失效或按新权限执行。Handler 使用类型化权限提取器声明所需权限，前端隐藏按钮仅用于交互体验，不作为安全边界。
 
+认证与业务权限标记分离：`backend/src/auth.rs` 只实现认证和通用 `RequirePermission` 提取器，`backend/src/permissions.rs` 保存平台权限，新增业务权限按模块放入 `backend/src/permissions/`。数据库、Rust 与 Angular 的权限码从[业务权限模板](business-permissions.md)同步创建。
+
 ## 前端业务边界
 
 - `core/` 保存认证、运行时配置、拦截器及 RBAC 平台资源客户端，不依赖业务代码。

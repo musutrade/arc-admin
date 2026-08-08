@@ -114,24 +114,3 @@ where
         })
     }
 }
-
-macro_rules! permission {
-    ($name:ident, $code:literal) => {
-        pub struct $name;
-
-        impl PermissionRequirement for $name {
-            const CODE: &'static str = $code;
-        }
-    };
-}
-
-permission!(UserRead, "user:directory:read");
-permission!(UserWrite, "user:write");
-permission!(UserRoleWrite, "user:roles:write");
-permission!(UserDeactivate, "user:admin:deactivate");
-permission!(RoleRead, "role:directory:read");
-permission!(RoleWrite, "role:write");
-permission!(RolePermissionWrite, "role:permissions:write");
-permission!(PermissionRead, "permission:directory:read");
-permission!(DashboardRead, "dashboard:analytics:read");
-permission!(AuditLogRead, "audit:logs:read");

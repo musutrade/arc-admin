@@ -1,11 +1,12 @@
 //! 角色 Handler：列表 / 详情 / 创建 / 更新 / 删除 / 权限分配
 
-use crate::auth::{RequirePermission, RolePermissionWrite, RoleRead, RoleWrite};
+use crate::auth::RequirePermission;
 use crate::error::ApiError;
 use crate::models::{
     CreateRoleRequest, RolePermissions, RoleResponse, UpdateRolePermissionsRequest,
     UpdateRoleRequest,
 };
+use crate::permissions::{RolePermissionWrite, RoleRead, RoleWrite};
 use crate::services;
 use crate::AppState;
 use axum::extract::{Path, State};

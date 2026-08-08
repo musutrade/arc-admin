@@ -1,8 +1,9 @@
 //! 审计日志 Handler：受审计读取权限保护的分页列表。
 
-use crate::auth::{AuditLogRead, RequirePermission};
+use crate::auth::RequirePermission;
 use crate::error::ApiError;
 use crate::models::{AuditLogQuery, PageAuditLog};
+use crate::permissions::AuditLogRead;
 use crate::services;
 use crate::AppState;
 use axum::extract::{Query, State};

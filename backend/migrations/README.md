@@ -6,6 +6,10 @@
 2. 命名：`<序号>_<描述>.sql`，序号递增，例如 `0001_init_users_roles_permissions.sql`。
 3. 写操作（INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE）允许出现在 migrations 层（审计 allowlist）。
 
+新增业务权限时，从 `codex-audit-pipeline/.codex/templates/business_permissions.sql.tmpl`
+创建下一个 migration，并同步生成 Rust 与 Angular 权限声明。完整步骤见
+`docs/business-permissions.md`。
+
 当前迁移：
 
 | 文件 | 内容 |

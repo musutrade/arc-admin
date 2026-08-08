@@ -1,12 +1,16 @@
-// 使用前替换: {{ENTITY_NAME}}（模块名用 {{entity_name}} 小写形式）
+// 使用前替换: {{ENTITY_NAME}}, {{entity_name}}, {{PERMISSION_MODULE}},
+//              {{READ_PERMISSION_TYPE}}, {{WRITE_PERMISSION_TYPE}}
 // 注意: Handler 层禁止 SQL（audit 拦截），只允许调用 services
 // 风格与 backend/src/handlers/*.rs 一致：
-//   axum + State<AppState> + AuthUser（需要登录的路由都带 _auth: AuthUser）
+//   axum + State<AppState> + RequirePermission（后端授权是最终安全边界）
 // 参考实现: backend/src/handlers/users.rs
-use crate::auth::AuthUser;
+use crate::auth::RequirePermission;
 use crate::error::ApiError;
 use crate::models::{
     {{ENTITY_NAME}}CreateRequest, {{ENTITY_NAME}}Response, PageQuery, Page{{ENTITY_NAME}},
+};
+use crate::permissions::{{PERMISSION_MODULE}}::{
+    {{READ_PERMISSION_TYPE}}, {{WRITE_PERMISSION_TYPE}},
 };
 use crate::services;
 use crate::AppState;
@@ -16,7 +20,7 @@ use axum::Json;
 
 pub async fn list(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
     Query(query): Query<PageQuery>,
 ) -> Result<Json<Page{{ENTITY_NAME}}>, ApiError> {
     services::{{entity_name}}::list(&state.pool, &query).await.map(Json)
@@ -24,7 +28,7 @@ pub async fn list(
 
 pub async fn get(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
     Path(id): Path<i64>,
 ) -> Result<Json<{{ENTITY_NAME}}Response>, ApiError> {
     services::{{entity_name}}::get(&state.pool, id).await.map(Json)
@@ -32,7 +36,7 @@ pub async fn get(
 
 pub async fn create(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<{{WRITE_PERMISSION_TYPE}}>,
     Json(req): Json<{{ENTITY_NAME}}CreateRequest>,
 ) -> Result<(StatusCode, Json<{{ENTITY_NAME}}Response>), ApiError> {
     services::{{entity_name}}::create(&state.pool, &req)
@@ -42,7 +46,7 @@ pub async fn create(
 
 pub async fn delete(
     State(state): State<AppState>,
-    _auth: AuthUser,
+    _auth: RequirePermission<{{WRITE_PERMISSION_TYPE}}>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
     services::{{entity_name}}::delete(&state.pool, id).await?;
