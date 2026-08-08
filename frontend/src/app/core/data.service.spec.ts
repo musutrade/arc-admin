@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { API_BASE_URL } from './api.config';
+import { API_BASE_URL } from './runtime-config';
 import { ApiPermissionGroup, ApiRole, ApiUser } from './api.models';
 import { DataService } from './data.service';
 

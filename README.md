@@ -95,3 +95,19 @@ cargo flow verify --all
 - 前端通过 `HttpClient`、Bearer interceptor 和 DTO 映射直接调用契约接口；开发服务器把 `/api/v1` 代理到后端；
 - 数据库 schema 与基础 RBAC 数据由 `backend/migrations/` 管理；历史演示管理员会被迁移禁用，真实管理员必须显式初始化；
 - `backend/tests/openapi_contract.rs` 会在 CI 中校验 OpenAPI 路径、HTTP 方法及关键响应必填字段没有漂移。
+
+## 运行时产品配置
+
+前端在启动时读取 `frontend/public/config.js`。修改这些公开配置后无需重新构建：
+
+```javascript
+window.__ARC_ADMIN_CONFIG__ = {
+  appName: 'RBAC 管理中心',
+  appShortName: 'RBAC',
+  appSlug: 'arc-admin',
+  apiBaseUrl: '/api/v1',
+  themeStorageKey: 'arc-admin-theme',
+};
+```
+
+配置会同步控制浏览器标题、登录页、侧栏、顶栏、API 地址和主题存储键。该文件会被浏览器直接读取，禁止写入 API 密钥、JWT 密钥、数据库凭据或其他秘密。

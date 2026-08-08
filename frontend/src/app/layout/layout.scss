@@ -99,12 +99,17 @@
 }
 
 .brand-text {
+  min-width: 0;
+  overflow: hidden;
+
   h2 {
     margin: 0;
     font-size: 14px;
     font-weight: 600;
     color: var(--mat-sys-primary);
     line-height: 20px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   p {
     margin: 0;
@@ -113,6 +118,8 @@
     text-transform: uppercase;
     color: var(--ui-color-text-tertiary);
     font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -301,9 +308,11 @@
 
 .topbar-left {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 24px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .topbar-title {
@@ -311,6 +320,8 @@
   font-weight: 700;
   color: var(--mat-sys-primary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-nav {
@@ -337,6 +348,7 @@
 
 .topbar-right {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
 }

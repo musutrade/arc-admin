@@ -9,6 +9,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ThemeService } from '../core/theme.service';
 import { AuthService } from '../core/auth.service';
 import { ChangePasswordDialog } from '../core/change-password.dialog';
+import { APP_CONFIG } from '../core/runtime-config';
 
 @Component({
   selector: 'app-layout',
@@ -38,6 +39,7 @@ export class LayoutComponent {
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   readonly auth = inject(AuthService);
+  readonly appConfig = inject(APP_CONFIG);
   readonly isDark = this.theme.isDark;
 
   constructor() {

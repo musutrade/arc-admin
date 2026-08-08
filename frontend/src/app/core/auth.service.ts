@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { API_BASE_URL } from './api.config';
+import { API_BASE_URL } from './runtime-config';
 import { ApiUser, ChangePasswordRequest, LoginResponse, PermissionCodes } from './api.models';
 import { AuthTokenStore } from './auth-token.store';
 

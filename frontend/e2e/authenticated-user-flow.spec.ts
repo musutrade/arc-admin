@@ -70,6 +70,19 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   let roleStatusUpdateRequest: UpdateRoleRequest | null = null;
   let statusUpdateRequest: UpdateUserRequest | null = null;
 
+  await page.route('**/config.js', async (route) => {
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: `window.__ARC_ADMIN_CONFIG__ = {
+        appName: '股票分析系统',
+        appShortName: '投研平台',
+        appSlug: 'stock-analysis',
+        apiBaseUrl: '/api/v1',
+        themeStorageKey: 'stock-analysis-theme'
+      };`,
+    });
+  });
+
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -168,10 +181,16 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   });
 
   await page.goto('/login');
+  await expect(page).toHaveTitle('股票分析系统');
+  await expect(page.locator('html')).toHaveAttribute('data-app-slug', 'stock-analysis');
+  await expect(page.locator('.login-header p')).toContainText('股票分析系统');
   await page.getByLabel('用户名').fill('admin');
   await page.getByLabel('密码', { exact: true }).fill('safe-password');
   await page.getByRole('button', { name: '登录' }).click();
   await expect(page.getByRole('heading', { name: '权限目录' })).toBeVisible();
+  await expect(page.locator('.sidebar-logo h2')).toHaveText('股票分析系统');
+  await expect(page.locator('.sidebar-logo p')).toHaveText('投研平台');
+  await expect(page.locator('.topbar-title')).toHaveText('股票分析系统');
 
   await page.getByRole('button', { name: '账户菜单' }).click();
   await expect(page.getByRole('menuitem', { name: '修改密码' })).toBeVisible();
@@ -351,6 +370,9 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
 
   await page.getByRole('button', { name: '切换到暗色模式' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('stock-analysis-theme')))
+    .toBe('dark');
   await expect.poll(() => rootToken('--ui-color-surface-page')).toBe('#141414');
 
   if (process.env['VISUAL_REVIEW']) {

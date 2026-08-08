@@ -9,8 +9,8 @@
           <mat-icon fontSet="material-symbols-outlined" class="filled">shield</mat-icon>
         </div>
         <div class="brand-text" [class.hidden]="collapsed()">
-          <h2>RBAC 管理中心</h2>
-          <p>企业版</p>
+          <h2 [attr.title]="appConfig.appName">{{ appConfig.appName }}</h2>
+          <p>{{ appConfig.appShortName }}</p>
         </div>
       </div>
     </div>
@@ -128,7 +128,7 @@
       >
         <mat-icon>menu</mat-icon>
       </button>
-      <span class="topbar-title">RBAC 管理中心</span>
+      <span class="topbar-title" [attr.title]="appConfig.appName">{{ appConfig.appName }}</span>
     </div>
 
     <div class="topbar-right">

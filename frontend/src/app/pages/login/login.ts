@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/auth.service';
+import { APP_CONFIG } from '../../core/runtime-config';
 
 @Component({
   selector: 'app-login',
@@ -18,6 +19,7 @@ export class LoginPage {
   readonly hidePassword = signal(true);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly appConfig = inject(APP_CONFIG);
 
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
