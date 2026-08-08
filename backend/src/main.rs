@@ -18,10 +18,13 @@ async fn main() -> ExitCode {
     } else {
         Ok(())
     };
-    if let Err(error) = telemetry::init(LogFormat::bootstrap_from_env()) {
-        eprintln!("failed to initialize logging: {error}");
-        return ExitCode::FAILURE;
-    }
+    let _telemetry_guard = match telemetry::init(LogFormat::bootstrap_from_env()) {
+        Ok(guard) => guard,
+        Err(error) => {
+            eprintln!("failed to initialize logging: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     telemetry::install_panic_hook();
     if let Err(error) = environment_result {
         tracing::error!(

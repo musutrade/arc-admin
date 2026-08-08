@@ -1,5 +1,5 @@
 -- RBAC 初始 schema：users / roles / permission_groups / permissions / user_roles / role_permissions
--- 命名约定：表与字段 snake_case，API 输出 camelCase（见 docs/openapi.yaml）
+-- 命名约定：表与字段 snake_case，API 输出 camelCase（见 docs/openapi.json）
 -- 软删除：deleted_at 置位即删除；唯一约束用部分索引保证不拦截重建
 
 CREATE TABLE users (
@@ -71,4 +71,3 @@ CREATE TABLE role_permissions (
 );
 
 CREATE INDEX idx_role_permissions_permission ON role_permissions (permission_id);
-

@@ -1,9 +1,57 @@
 //! 审计日志 Repository：安全变更记录与只读分页查询。
 
 use crate::access::ActorContext;
-use crate::models::AuditLogRow;
+use crate::models::{AuditArchiveRow, AuditLogRow};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgConnection, PgPool};
+
+pub async fn archive_batch(
+    pool: &PgPool,
+    cutoff: DateTime<Utc>,
+    batch_size: i64,
+) -> Result<Vec<AuditArchiveRow>, sqlx::Error> {
+    sqlx::query_as::<_, AuditArchiveRow>(
+        "SELECT id, actor_user_id, action, target_type, target_id, details, trace_id,
+                organization_id, department_id, created_at
+         FROM audit_logs
+         WHERE created_at < $1
+         ORDER BY id
+         LIMIT $2",
+    )
+    .bind(cutoff)
+    .bind(batch_size)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn delete_archived(
+    pool: &PgPool,
+    ids: &[i64],
+    cutoff: DateTime<Utc>,
+) -> Result<u64, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let mut transaction = pool.begin().await?;
+    sqlx::query("SELECT set_config('arc_admin.audit_maintenance', 'on', true)")
+        .execute(&mut *transaction)
+        .await?;
+    let result = sqlx::query("DELETE FROM audit_logs WHERE id = ANY($1) AND created_at < $2")
+        .bind(ids)
+        .bind(cutoff)
+        .execute(&mut *transaction)
+        .await?;
+    let expected = ids.len() as u64;
+    if result.rows_affected() != expected {
+        return Err(sqlx::Error::Protocol(format!(
+            "audit archive delete mismatch: expected {expected}, deleted {}",
+            result.rows_affected()
+        )));
+    }
+    transaction.commit().await?;
+    Ok(result.rows_affected())
+}
 
 pub async fn record(
     connection: &mut PgConnection,

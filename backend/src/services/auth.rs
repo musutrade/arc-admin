@@ -165,6 +165,7 @@ async fn create_login_session(
             "persistent": persistent,
             "expiresAt": expires_at,
             "revokedBySessionLimit": revoked_sessions,
+            "sourceIpFingerprint": &throttle_keys.source_ip[..12],
         }),
     )
     .await

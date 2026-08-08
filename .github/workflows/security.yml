@@ -1,0 +1,80 @@
+name: Supply chain security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-dependencies:
+    name: Rust dependency policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Audit RustSec advisories
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: backend
+      - name: Check licenses, sources, duplicates, and advisories
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        with:
+          manifest-path: backend/Cargo.toml
+          command: check
+          command-arguments: advisories bans licenses sources
+
+  container-images:
+    name: Container scan and SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: arc-admin-backend:ci
+            dockerfile: backend/Dockerfile
+            artifact: arc-admin-backend.spdx.json
+          - image: arc-admin-frontend:ci
+            dockerfile: frontend/Dockerfile
+            artifact: arc-admin-frontend.spdx.json
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build production image
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "${{ matrix.image }}" .
+      - name: Scan high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+      - name: Generate SPDX JSON SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          image: ${{ matrix.image }}
+          format: spdx-json
+          output-file: ${{ matrix.artifact }}
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          retention-days: 30

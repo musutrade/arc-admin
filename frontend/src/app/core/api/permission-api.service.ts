@@ -1,21 +1,16 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { ApiPermissionGroup } from '../api.models';
+import { Api } from '../../generated/api/api';
+import { listPermissionGroups } from '../../generated/api/fn/permissions/list-permission-groups';
 import { PermissionGroup } from '../models';
-import { API_BASE_URL } from '../runtime-config';
 
 @Injectable({
   providedIn: 'root',
 })
 export class PermissionApiService {
-  private readonly http = inject(HttpClient);
-  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly api = inject(Api);
 
   async getPermissionGroups(): Promise<PermissionGroup[]> {
-    const groups = await firstValueFrom(
-      this.http.get<ApiPermissionGroup[]>(`${this.apiBaseUrl}/permissions/groups`),
-    );
+    const groups = await this.api.invoke(listPermissionGroups);
     return groups.map((group) => ({
       id: String(group.id),
       code: group.code,

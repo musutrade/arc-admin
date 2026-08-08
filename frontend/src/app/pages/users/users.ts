@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnDestroy,
   OnInit,
   computed,
   inject,
@@ -15,7 +16,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { DashboardApiService } from '../../core/api/dashboard-api.service';
 import { RoleApiService } from '../../core/api/role-api.service';
-import { UserApiService } from '../../core/api/user-api.service';
+import { UserApiService, UserListQuery } from '../../core/api/user-api.service';
 import { Role, StatCard, User, UserStatus } from '../../core/models';
 import { AuthService } from '../../core/auth.service';
 import { apiErrorMessage } from '../../core/api-error';
@@ -44,7 +45,7 @@ const STATUS_META: Record<UserStatus, { cls: string; label: string }> = {
   styleUrl: './users.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UsersPage implements OnInit {
+export class UsersPage implements OnInit, OnDestroy {
   readonly users = signal<User[]>([]);
   readonly stats = signal<StatCard[]>([]);
   readonly loading = signal(true);
@@ -52,10 +53,16 @@ export class UsersPage implements OnInit {
   readonly search = signal('');
   readonly roleFilter = signal('all');
   readonly statusFilter = signal('all');
+  readonly sortOption = signal('createdAt:desc');
   readonly selected = signal<Set<string>>(new Set());
   readonly page = signal(1);
   readonly pageSize = 10;
+  readonly total = signal(0);
+  readonly roleOptions = signal<string[]>([]);
   readonly busy = signal(false);
+
+  private searchTimer: ReturnType<typeof setTimeout> | undefined;
+  private requestSequence = 0;
 
   private readonly dashboardApi = inject(DashboardApiService);
   private readonly roleApi = inject(RoleApiService);
@@ -74,56 +81,31 @@ export class UsersPage implements OnInit {
   /** 状态展示元数据暴露给模板 */
   readonly statusMeta = STATUS_META;
 
-  /** 角色筛选选项(从数据提取) */
-  readonly roleOptions = computed<string[]>(() => {
-    const set = new Set<string>();
-    this.users().forEach((u) => u.roles.forEach((r) => set.add(r)));
-    return ['all', ...set];
-  });
-
-  readonly filteredUsers = computed<User[]>(() => {
-    const term = this.search().trim().toLowerCase();
-    const role = this.roleFilter();
-    const status = this.statusFilter();
-    return this.users().filter((u) => {
-      const matchTerm =
-        !term || u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term);
-      const matchRole = role === 'all' || u.roles.includes(role);
-      const matchStatus = status === 'all' || u.status === status;
-      return matchTerm && matchRole && matchStatus;
-    });
-  });
-
   /** 总页数 */
-  readonly totalPages = computed(() =>
-    Math.max(1, Math.ceil(this.filteredUsers().length / this.pageSize)),
-  );
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
 
   /** 当前页数据 */
-  readonly pagedUsers = computed(() => {
-    const start = (this.page() - 1) * this.pageSize;
-    return this.filteredUsers().slice(start, start + this.pageSize);
-  });
+  readonly pagedUsers = computed(() => this.users());
 
   readonly selectedCount = computed(() => this.selected().size);
 
   readonly allChecked = computed(() => {
-    const rows = this.filteredUsers();
+    const rows = this.users();
     return rows.length > 0 && rows.every((u) => this.selected().has(u.id));
   });
 
   readonly someChecked = computed(() => {
-    const rows = this.filteredUsers();
+    const rows = this.users();
     return rows.some((u) => this.selected().has(u.id)) && !this.allChecked();
   });
 
   /** 当前页首条序号(1-based) */
-  readonly pageStart = computed(() => (this.page() - 1) * this.pageSize + 1);
+  readonly pageStart = computed(() =>
+    this.total() === 0 ? 0 : (this.page() - 1) * this.pageSize + 1,
+  );
 
   /** 当前页末条序号 */
-  readonly pageEnd = computed(() =>
-    Math.min(this.page() * this.pageSize, this.filteredUsers().length),
-  );
+  readonly pageEnd = computed(() => Math.min(this.page() * this.pageSize, this.total()));
 
   /** 页码数组(少于 7 页全部展示,否则首尾+省略) */
   readonly pageNumbers = computed<number[]>(() => {
@@ -140,49 +122,86 @@ export class UsersPage implements OnInit {
     void this.loadData();
   }
 
+  ngOnDestroy(): void {
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+    }
+  }
+
   private async loadData(): Promise<void> {
+    const requestSequence = ++this.requestSequence;
     this.loading.set(true);
     this.error.set(null);
     try {
       const statsRequest = this.auth.hasPermission('dashboard:analytics:read')
         ? this.dashboardApi.getUserStats()
         : Promise.resolve([]);
-      const [users, stats] = await Promise.all([this.userApi.getUsers(), statsRequest]);
-      this.users.set(users);
+      const [result, stats] = await Promise.all([
+        this.userApi.getUsers(this.userQuery()),
+        statsRequest,
+      ]);
+      if (requestSequence !== this.requestSequence) {
+        return;
+      }
+      this.users.set(result.items);
+      this.total.set(result.total);
+      this.page.set(result.page);
+      this.roleOptions.set(result.roleOptions);
       this.stats.set(stats);
       this.selected.set(new Set());
-      this.goToPage(this.page());
     } catch (error) {
-      this.error.set(apiErrorMessage(error, '用户数据加载失败，请稍后重试'));
+      if (requestSequence === this.requestSequence) {
+        this.error.set(apiErrorMessage(error, '用户数据加载失败，请稍后重试'));
+      }
     } finally {
-      this.loading.set(false);
+      if (requestSequence === this.requestSequence) {
+        this.loading.set(false);
+      }
     }
   }
 
   searchUsers(value: string): void {
     this.search.set(value);
     this.page.set(1);
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+    }
+    this.searchTimer = setTimeout(() => void this.loadData(), 300);
   }
 
   applyRoleFilter(value: string): void {
     this.roleFilter.set(value);
     this.page.set(1);
+    void this.loadData();
   }
 
   applyStatusFilter(value: string): void {
     this.statusFilter.set(value);
     this.page.set(1);
+    void this.loadData();
+  }
+
+  applySort(value: string): void {
+    this.sortOption.set(value);
+    this.page.set(1);
+    void this.loadData();
   }
 
   resetFilters(): void {
     this.search.set('');
     this.roleFilter.set('all');
     this.statusFilter.set('all');
+    this.sortOption.set('createdAt:desc');
     this.page.set(1);
+    void this.loadData();
   }
 
   goToPage(p: number): void {
-    this.page.set(Math.min(Math.max(1, p), this.totalPages()));
+    const next = Math.min(Math.max(1, p), this.totalPages());
+    if (next !== this.page()) {
+      this.page.set(next);
+      void this.loadData();
+    }
   }
 
   toggleRow(id: string, checked: boolean): void {
@@ -200,7 +219,7 @@ export class UsersPage implements OnInit {
   toggleAll(checked: boolean): void {
     this.selected.update((s) => {
       const next = new Set(s);
-      this.filteredUsers().forEach((u) => {
+      this.users().forEach((u) => {
         if (checked) {
           next.add(u.id);
         } else {
@@ -366,6 +385,25 @@ export class UsersPage implements OnInit {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  private userQuery(): UserListQuery {
+    const [sortBy, sortDirection] = this.sortOption().split(':') as [
+      UserListQuery['sortBy'],
+      UserListQuery['sortDirection'],
+    ];
+    const keyword = this.search().trim();
+    return {
+      page: this.page(),
+      pageSize: this.pageSize,
+      ...(keyword ? { keyword } : {}),
+      ...(this.roleFilter() !== 'all' ? { role: this.roleFilter() } : {}),
+      ...(this.statusFilter() !== 'all'
+        ? { status: this.statusFilter() as UserListQuery['status'] }
+        : {}),
+      sortBy,
+      sortDirection,
+    };
   }
 
   private filterGrantableRoles(roles: Role[]): Role[] {

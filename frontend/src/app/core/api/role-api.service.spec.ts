@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ApiRole } from '../api.models';
+import { RoleResponse as ApiRole } from '../../generated/api/models/role-response';
 import { API_BASE_URL } from '../runtime-config';
 import { RoleApiService } from './role-api.service';
 

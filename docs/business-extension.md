@@ -46,7 +46,7 @@ frontend/src/app/features/stock/
 └── *.spec.ts
 ```
 
-业务域内部负责 DTO 映射、页面状态和业务交互。通用认证、`API_BASE_URL`、错误转换等从 `core` 使用；不要把 `StockQuote`、审批单或 Token 流转状态加入 `core/api.models.ts`。
+业务域内部负责 DTO 映射、页面状态和业务交互。通用认证、`API_BASE_URL`、错误转换等从 `core` 使用；API DTO 由 Rust 契约生成到 `frontend/src/app/generated/api`，不要在前端重复声明 `StockQuote`、审批单或 Token 流转状态字段。
 
 在 `app.navigation.ts` 增加权限要求和中文导航项，再由 `app.routes.ts` 懒加载业务路由。两处必须引用同一个 `ROUTE_ACCESS` 成员，受保护路由未声明权限时守卫会拒绝访问。
 
@@ -66,7 +66,7 @@ backend/src/repositories/stock.rs
 2. Handler 只解析请求、声明权限并映射 HTTP 结果。
 3. Service 校验业务规则并管理事务。
 4. Repository 承担全部 SQL；schema 变化只新增 migration，不修改历史 migration。
-5. 在 `docs/openapi.yaml` 先更新接口契约，再补契约测试和业务测试。
+5. 更新 Rust DTO 与 `backend/src/openapi.rs`，运行 `npm run generate:api:all`，再补契约测试和业务测试。
 
 每张业务主表必须包含以下归属列，并使用外键保证部门与组织一致：
 

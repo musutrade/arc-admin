@@ -1,31 +1,21 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { ApiAuditLog, ApiPage } from '../api.models';
-import { API_BASE_URL } from '../runtime-config';
+import { Api } from '../../generated/api/api';
+import { listAuditLogs } from '../../generated/api/fn/audit/list-audit-logs';
+import { PageAuditLog } from '../../generated/api/models/page-audit-log';
 
 @Injectable({
   providedIn: 'root',
 })
 export class AuditLogApiService {
-  private readonly http = inject(HttpClient);
-  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly api = inject(Api);
 
-  getAuditLogs(
-    page: number,
-    pageSize: number,
-    keyword = '',
-    action = '',
-  ): Promise<ApiPage<ApiAuditLog>> {
-    let params = new HttpParams().set('page', page).set('pageSize', pageSize);
-    if (keyword.trim()) {
-      params = params.set('keyword', keyword.trim());
-    }
-    if (action) {
-      params = params.set('action', action);
-    }
-    return firstValueFrom(
-      this.http.get<ApiPage<ApiAuditLog>>(`${this.apiBaseUrl}/audit-logs`, { params }),
-    );
+  getAuditLogs(page: number, pageSize: number, keyword = '', action = ''): Promise<PageAuditLog> {
+    const normalizedKeyword = keyword.trim();
+    return this.api.invoke(listAuditLogs, {
+      page,
+      pageSize,
+      ...(normalizedKeyword ? { keyword: normalizedKeyword } : {}),
+      ...(action ? { action } : {}),
+    });
   }
 }

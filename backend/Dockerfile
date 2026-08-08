@@ -16,6 +16,7 @@ WORKDIR /app
 COPY --from=builder /build/backend/target/release/arc-admin-backend /app/arc-admin-backend
 COPY --from=builder /build/backend/target/release/migrate /app/migrate
 COPY --from=builder /build/backend/target/release/bootstrap_admin /app/bootstrap_admin
+COPY --from=builder /build/backend/target/release/archive_audit_logs /app/archive_audit_logs
 USER 10001:10001
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

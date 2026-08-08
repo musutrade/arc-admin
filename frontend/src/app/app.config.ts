@@ -18,6 +18,8 @@ import { MAT_SNACK_BAR_DEFAULT_OPTIONS, MatSnackBarConfig } from '@angular/mater
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
 import { APP_CONFIG } from './core/runtime-config';
+import { API_BASE_URL } from './core/runtime-config';
+import { ApiConfiguration } from './generated/api/api-configuration';
 
 registerLocaleData(localeZh);
 
@@ -43,6 +45,12 @@ function initializeRuntimeProduct(): void {
   document.documentElement.dataset['appSlug'] = runtimeConfig.appSlug;
 }
 
+function generatedApiConfiguration(): ApiConfiguration {
+  const configuration = new ApiConfiguration();
+  configuration.rootUrl = inject(API_BASE_URL);
+  return configuration;
+}
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZonelessChangeDetection(),
@@ -50,6 +58,7 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(initializeRuntimeProduct),
     provideAnimationsAsync(),
     provideHttpClient(withInterceptors([authInterceptor])),
+    { provide: ApiConfiguration, useFactory: generatedApiConfiguration },
     provideRouter(routes),
     { provide: LOCALE_ID, useValue: 'zh-CN' },
     {

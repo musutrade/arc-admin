@@ -48,6 +48,10 @@ function checkProductionDeployment() {
     "pids_limit:",
     "archive_mode=on",
     "postgres-wal-archive",
+    "MONITORING_NETWORK",
+    "- monitoring",
+    'profiles: [maintenance]',
+    "AUDIT_ARCHIVE_HOST_DIR",
   ]) {
     requireText(compose, expected, "生产 Compose");
   }
@@ -73,6 +77,7 @@ function checkProductionDeployment() {
       throw new Error(`生产环境示例中的 ${variable} 必须保持为空`);
     }
   }
+  requireText(envExample, "MONITORING_NETWORK=arc-admin-monitoring", "生产环境示例");
   for (const managed of [
     '"deployment"',
     '"backend/Dockerfile"',

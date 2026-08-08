@@ -1,14 +1,17 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { API_BASE_URL } from './runtime-config';
-import { ApiUser, ChangePasswordRequest, LoginResponse, PermissionCodes } from './api.models';
+import { Api } from '../generated/api/api';
+import { changeCurrentUserPassword } from '../generated/api/fn/auth/change-current-user-password';
+import { getCurrentUserPermissions } from '../generated/api/fn/auth/get-current-user-permissions';
+import { getCurrentUser } from '../generated/api/fn/auth/get-current-user';
+import { login as loginRequest } from '../generated/api/fn/auth/login';
+import { logout as logoutRequest } from '../generated/api/fn/auth/logout';
+import { ChangePasswordRequest } from '../generated/api/models/change-password-request';
+import { UserResponse } from '../generated/api/models/user-response';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly http = inject(HttpClient);
-  private readonly apiBaseUrl = inject(API_BASE_URL);
-  private readonly userState = signal<ApiUser | null>(null);
+  private readonly api = inject(Api);
+  private readonly userState = signal<UserResponse | null>(null);
   private readonly permissionState = signal<ReadonlySet<string>>(new Set());
   private sessionCheck: Promise<boolean> | null = null;
 
@@ -16,13 +19,9 @@ export class AuthService {
   readonly permissions = this.permissionState.asReadonly();
 
   async login(username: string, password: string, remember: boolean): Promise<void> {
-    const response = await firstValueFrom(
-      this.http.post<LoginResponse>(`${this.apiBaseUrl}/auth/login`, {
-        username,
-        password,
-        remember,
-      }),
-    );
+    const response = await this.api.invoke(loginRequest, {
+      body: { username, password, remember },
+    });
     this.userState.set(response.user);
     try {
       await this.loadPermissions();
@@ -43,8 +42,8 @@ export class AuthService {
     }
     if (!this.sessionCheck) {
       this.sessionCheck = Promise.all([
-        firstValueFrom(this.http.get<ApiUser>(`${this.apiBaseUrl}/auth/me`)),
-        firstValueFrom(this.http.get<PermissionCodes>(`${this.apiBaseUrl}/auth/me/permissions`)),
+        this.api.invoke(getCurrentUser),
+        this.api.invoke(getCurrentUserPermissions),
       ])
         .then(([user, permissions]) => {
           this.userState.set(user);
@@ -71,14 +70,14 @@ export class AuthService {
   }
 
   async changePassword(request: ChangePasswordRequest): Promise<void> {
-    await firstValueFrom(this.http.put<void>(`${this.apiBaseUrl}/auth/me/password`, request));
+    await this.api.invoke(changeCurrentUserPassword, { body: request });
     this.clearSession();
   }
 
   async refreshSession(): Promise<void> {
     const [user, permissions] = await Promise.all([
-      firstValueFrom(this.http.get<ApiUser>(`${this.apiBaseUrl}/auth/me`)),
-      firstValueFrom(this.http.get<PermissionCodes>(`${this.apiBaseUrl}/auth/me/permissions`)),
+      this.api.invoke(getCurrentUser),
+      this.api.invoke(getCurrentUserPermissions),
     ]);
     this.userState.set(user);
     this.permissionState.set(new Set(permissions.codes));
@@ -86,7 +85,7 @@ export class AuthService {
 
   async logout(): Promise<void> {
     try {
-      await firstValueFrom(this.http.post<void>(`${this.apiBaseUrl}/auth/logout`, null));
+      await this.api.invoke(logoutRequest);
     } finally {
       this.clearSession();
     }
@@ -97,9 +96,7 @@ export class AuthService {
   }
 
   async refreshPermissions(): Promise<void> {
-    const response = await firstValueFrom(
-      this.http.get<PermissionCodes>(`${this.apiBaseUrl}/auth/me/permissions`),
-    );
+    const response = await this.api.invoke(getCurrentUserPermissions);
     this.permissionState.set(new Set(response.codes));
   }
 

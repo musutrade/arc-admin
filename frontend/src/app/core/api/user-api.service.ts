@@ -1,62 +1,64 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { ApiPage, ApiUser, CreateUserRequest, UpdateUserRequest } from '../api.models';
+import { Api } from '../../generated/api/api';
+import { assignUserRoles } from '../../generated/api/fn/users/assign-user-roles';
+import { createUser } from '../../generated/api/fn/users/create-user';
+import { deleteUser } from '../../generated/api/fn/users/delete-user';
+import { listUsers, ListUsers$Params } from '../../generated/api/fn/users/list-users';
+import { updateUser } from '../../generated/api/fn/users/update-user';
+import { CreateUserRequest } from '../../generated/api/models/create-user-request';
+import { UpdateUserRequest } from '../../generated/api/models/update-user-request';
+import { UserResponse } from '../../generated/api/models/user-response';
 import { User } from '../models';
-import { API_BASE_URL } from '../runtime-config';
 
 const AVATAR_COLORS = ['#165dff', '#00b42a', '#ff7d00', '#f53f3f', '#722ed1'];
+
+export type UserListQuery = ListUsers$Params &
+  Required<Pick<ListUsers$Params, 'page' | 'pageSize' | 'sortBy' | 'sortDirection'>>;
+
+export interface UserPage {
+  items: User[];
+  total: number;
+  page: number;
+  pageSize: number;
+  roleOptions: string[];
+}
 
 @Injectable({
   providedIn: 'root',
 })
 export class UserApiService {
-  private readonly http = inject(HttpClient);
-  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly api = inject(Api);
 
-  async getUsers(): Promise<User[]> {
-    const pageSize = 100;
-    const first = await this.getPage(1, pageSize);
-    const pageCount = Math.ceil(first.total / pageSize);
-    const remaining = await Promise.all(
-      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) =>
-        this.getPage(index + 2, pageSize),
-      ),
-    );
-    return [first, ...remaining].flatMap((page) => page.items.map(mapUser));
+  async getUsers(query: UserListQuery): Promise<UserPage> {
+    const result = await this.api.invoke(listUsers, query);
+    return { ...result, items: result.items.map(mapUser) };
   }
 
   async createUser(request: CreateUserRequest): Promise<User> {
-    const user = await firstValueFrom(this.http.post<ApiUser>(`${this.apiBaseUrl}/users`, request));
+    const user = await this.api.invoke(createUser, { body: request });
     return mapUser(user);
   }
 
   async updateUser(id: string, request: UpdateUserRequest): Promise<User> {
-    const user = await firstValueFrom(
-      this.http.put<ApiUser>(`${this.apiBaseUrl}/users/${id}`, request),
-    );
+    const user = await this.api.invoke(updateUser, { id: Number(id), body: request });
     return mapUser(user);
   }
 
   async deleteUser(id: string): Promise<void> {
-    await firstValueFrom(this.http.delete<void>(`${this.apiBaseUrl}/users/${id}`));
+    await this.api.invoke(deleteUser, { id: Number(id) });
   }
 
   async assignUserRoles(id: string, roleIds: string[]): Promise<void> {
-    await firstValueFrom(
-      this.http.put<void>(`${this.apiBaseUrl}/users/${id}/roles`, {
+    await this.api.invoke(assignUserRoles, {
+      id: Number(id),
+      body: {
         roleIds: roleIds.map(Number),
-      }),
-    );
-  }
-
-  private getPage(page: number, pageSize: number): Promise<ApiPage<ApiUser>> {
-    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
-    return firstValueFrom(this.http.get<ApiPage<ApiUser>>(`${this.apiBaseUrl}/users`, { params }));
+      },
+    });
   }
 }
 
-function mapUser(user: ApiUser): User {
+function mapUser(user: UserResponse): User {
   return {
     id: String(user.id),
     username: user.username,

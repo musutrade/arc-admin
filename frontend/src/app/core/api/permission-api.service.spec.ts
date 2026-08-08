@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ApiPermissionGroup } from '../api.models';
+import { PermissionGroupResponse as ApiPermissionGroup } from '../../generated/api/models/permission-group-response';
 import { API_BASE_URL } from '../runtime-config';
 import { PermissionApiService } from './permission-api.service';
 

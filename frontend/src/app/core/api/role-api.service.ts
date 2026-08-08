@@ -1,19 +1,24 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { ApiRole, CreateRoleRequest, RolePermissions, UpdateRoleRequest } from '../api.models';
+import { Api } from '../../generated/api/api';
+import { createRole } from '../../generated/api/fn/roles/create-role';
+import { deleteRole } from '../../generated/api/fn/roles/delete-role';
+import { getRolePermissions } from '../../generated/api/fn/roles/get-role-permissions';
+import { listRoles } from '../../generated/api/fn/roles/list-roles';
+import { updateRolePermissions } from '../../generated/api/fn/roles/update-role-permissions';
+import { updateRole } from '../../generated/api/fn/roles/update-role';
+import { CreateRoleRequest } from '../../generated/api/models/create-role-request';
+import { RoleResponse } from '../../generated/api/models/role-response';
+import { UpdateRoleRequest } from '../../generated/api/models/update-role-request';
 import { Role, RolePermissionRow } from '../models';
-import { API_BASE_URL } from '../runtime-config';
 
 @Injectable({
   providedIn: 'root',
 })
 export class RoleApiService {
-  private readonly http = inject(HttpClient);
-  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly api = inject(Api);
 
   async getRoles(): Promise<Role[]> {
-    const roles = await firstValueFrom(this.http.get<ApiRole[]>(`${this.apiBaseUrl}/roles`));
+    const roles = await this.api.invoke(listRoles);
     return roles.map(mapRole);
   }
 
@@ -30,38 +35,35 @@ export class RoleApiService {
   }
 
   async getAssignedPermissionIds(roleId: string): Promise<string[]> {
-    const response = await firstValueFrom(
-      this.http.get<RolePermissions>(`${this.apiBaseUrl}/roles/${roleId}/permissions`),
-    );
+    const response = await this.api.invoke(getRolePermissions, { id: Number(roleId) });
     return response.permissionIds.map(String);
   }
 
   async createRole(request: CreateRoleRequest): Promise<Role> {
-    const role = await firstValueFrom(this.http.post<ApiRole>(`${this.apiBaseUrl}/roles`, request));
+    const role = await this.api.invoke(createRole, { body: request });
     return mapRole(role);
   }
 
   async updateRole(id: string, request: UpdateRoleRequest): Promise<Role> {
-    const role = await firstValueFrom(
-      this.http.put<ApiRole>(`${this.apiBaseUrl}/roles/${id}`, request),
-    );
+    const role = await this.api.invoke(updateRole, { id: Number(id), body: request });
     return mapRole(role);
   }
 
   async deleteRole(id: string): Promise<void> {
-    await firstValueFrom(this.http.delete<void>(`${this.apiBaseUrl}/roles/${id}`));
+    await this.api.invoke(deleteRole, { id: Number(id) });
   }
 
   async assignRolePermissions(roleId: string, permissionIds: string[]): Promise<void> {
-    await firstValueFrom(
-      this.http.put<void>(`${this.apiBaseUrl}/roles/${roleId}/permissions`, {
+    await this.api.invoke(updateRolePermissions, {
+      id: Number(roleId),
+      body: {
         permissionIds: permissionIds.map(Number),
-      }),
-    );
+      },
+    });
   }
 }
 
-function mapRole(role: ApiRole): Role {
+function mapRole(role: RoleResponse): Role {
   return {
     id: String(role.id),
     code: role.code,

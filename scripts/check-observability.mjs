@@ -18,6 +18,8 @@ function checkObservability() {
   const gitignore = read(".gitignore");
   const compose = read("observability/compose.yaml");
   const alloy = read("observability/alloy/config.alloy");
+  const prometheus = read("observability/prometheus/prometheus.yaml");
+  const blackbox = read("observability/blackbox/blackbox.yaml");
   const loki = read("observability/loki/config.yaml");
   const alerts = read(
     "observability/grafana/provisioning/alerting/log-alerts.yaml",
@@ -25,11 +27,23 @@ function checkObservability() {
   const dashboard = JSON.parse(
     read("observability/grafana/dashboards/application-logs.json"),
   );
+  const metricsDashboard = JSON.parse(
+    read("observability/grafana/dashboards/application-metrics.json"),
+  );
+  const metricsAlerts = read(
+    "observability/grafana/provisioning/alerting/metrics-alerts.yaml",
+  );
+  const prometheusDatasource = read(
+    "observability/grafana/provisioning/datasources/prometheus.yaml",
+  );
 
   for (const image of [
     "grafana/loki:3.7.2",
     "grafana/alloy:v1.18.1",
     "grafana/grafana:13.1.0",
+    "prom/prometheus:v3.13.2",
+    "quay.io/prometheus/blackbox-exporter:v0.28.0",
+    "grafana/tempo:2.10.7",
   ]) {
     requireText(compose, `image: ${image}`, "Compose");
   }
@@ -40,11 +54,15 @@ function checkObservability() {
     '"127.0.0.1:3000:3000"',
     '"127.0.0.1:3100:3100"',
     '"127.0.0.1:12345:12345"',
+    '"127.0.0.1:9090:9090"',
+    '"127.0.0.1:9115:9115"',
+    '"127.0.0.1:3200:3200"',
   ]) {
     requireText(compose, binding, "Compose 本机端口");
   }
   requireText(compose, "GRAFANA_ADMIN_PASSWORD:?", "Grafana 管理员密码保护");
   requireText(compose, "/var/run/docker.sock:ro", "Docker 日志采集");
+  requireText(compose, "external: true", "生产监控网络隔离");
   requireText(gitignore, "/observability/logs/*.jsonl", "本地日志忽略规则");
 
   for (const expected of [
@@ -75,6 +93,19 @@ function checkObservability() {
   }
 
   for (const expected of [
+    "job_name: arc-admin-backend",
+    "metrics_path: /metrics",
+    'targets: ["backend:8080"]',
+    "job_name: arc-admin-entry-probe",
+    "replacement: blackbox:9115",
+  ]) {
+    requireText(prometheus, expected, "Prometheus");
+  }
+  requireText(blackbox, "valid_status_codes: [200]", "Blackbox");
+  requireText(prometheusDatasource, "uid: prometheus", "Prometheus 数据源");
+  requireText(metricsAlerts, "uid: application-entry-down", "指标告警");
+
+  for (const expected of [
     "uid: application-error-burst",
     "uid: application-http-5xx",
     'level="ERROR"',
@@ -96,6 +127,23 @@ function checkObservability() {
   }
   if (!dashboard.panels?.some((panel) => panel.type === "logs")) {
     throw new Error("日志仪表盘缺少日志明细面板");
+  }
+  if (metricsDashboard.uid !== "application-metrics") {
+    throw new Error("指标仪表盘 uid 必须为 application-metrics");
+  }
+  for (const expression of [
+    "arc_admin_http_requests_total",
+    "arc_admin_http_request_duration_seconds_bucket",
+    "arc_admin_db_pool_acquired",
+    "probe_success",
+  ]) {
+    if (
+      !metricsDashboard.panels?.some((panel) =>
+        panel.targets?.some((target) => target.expr?.includes(expression)),
+      )
+    ) {
+      throw new Error(`指标仪表盘缺少 ${expression} 查询`);
+    }
   }
 }
 

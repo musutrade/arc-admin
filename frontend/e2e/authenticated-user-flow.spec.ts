@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test';
 import type {
-  ApiRole,
-  ApiUser,
   ChangePasswordRequest,
   CreateUserRequest,
+  RoleResponse as ApiRole,
   UpdateRoleRequest,
   UpdateUserRequest,
-} from '../src/app/core/api.models';
+  UserResponse as ApiUser,
+} from '../src/app/generated/api/models';
 
 const administrator: ApiUser = {
   id: 1,
@@ -173,7 +173,13 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       await route.fulfill({ json: users.find((user) => user.id === userId) });
     } else if (path === '/api/v1/users') {
       await route.fulfill({
-        json: { items: users, total: users.length, page: 1, pageSize: 100 },
+        json: {
+          items: users,
+          total: users.length,
+          page: 1,
+          pageSize: 10,
+          roleOptions: ['超级管理员', '查看者'],
+        },
       });
     } else {
       await route.fulfill({
@@ -219,6 +225,8 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await confirmPassword.blur();
   await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeVisible();
   await confirmPassword.fill('updated-safe-password');
+  await confirmPassword.blur();
+  await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeHidden();
   const savePassword = changePasswordDialog.getByRole('button', { name: '保存修改' });
   await expect(savePassword).toBeEnabled();
 

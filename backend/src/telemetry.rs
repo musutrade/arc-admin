@@ -1,5 +1,6 @@
 //! Structured application logging and per-request correlation context.
 
+use crate::app_metrics;
 use crate::config::{AppConfig, LogFormat};
 use crate::error;
 use axum::body::Body;
@@ -8,6 +9,14 @@ use axum::http::{HeaderName, Response};
 use axum::middleware::{self, Next};
 use axum::response::Response as AxumResponse;
 use axum::Router;
+use opentelemetry::global;
+use opentelemetry::propagation::Extractor;
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::propagation::TraceContextPropagator;
+use opentelemetry_sdk::trace::SdkTracerProvider;
+use opentelemetry_sdk::Resource;
 use std::any::Any;
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -17,6 +26,9 @@ use tower_http::request_id::{
 };
 use tower_http::trace::TraceLayer;
 use tracing::field::Empty;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
@@ -47,25 +59,80 @@ impl TelemetryMetadata {
     }
 }
 
-pub fn init(format: LogFormat) -> anyhow::Result<()> {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,tower_http=info"));
+pub struct TelemetryGuard {
+    tracer_provider: Option<SdkTracerProvider>,
+}
+
+impl Drop for TelemetryGuard {
+    fn drop(&mut self) {
+        if let Some(provider) = self.tracer_provider.take() {
+            let _ = provider.shutdown_with_timeout(Duration::from_secs(5));
+        }
+    }
+}
+
+pub fn init(format: LogFormat) -> anyhow::Result<TelemetryGuard> {
+    let tracer_provider = build_tracer_provider()?;
+    let tracer = tracer_provider
+        .as_ref()
+        .map(|provider| provider.tracer("arc-admin-backend"));
     match format {
-        LogFormat::Pretty => tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .compact()
+        LogFormat::Pretty => tracing_subscriber::registry()
+            .with(logging_filter())
+            .with(tracer.map(|tracer| tracing_opentelemetry::layer().with_tracer(tracer)))
+            .with(tracing_subscriber::fmt::layer().compact())
             .try_init()
             .map_err(|error| anyhow::anyhow!("failed to initialize logging: {error}"))?,
-        LogFormat::Json => tracing_subscriber::fmt()
-            .with_env_filter(filter)
-            .json()
-            .flatten_event(false)
-            .with_current_span(true)
-            .with_span_list(false)
+        LogFormat::Json => tracing_subscriber::registry()
+            .with(logging_filter())
+            .with(tracer.map(|tracer| tracing_opentelemetry::layer().with_tracer(tracer)))
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .json()
+                    .flatten_event(false)
+                    .with_current_span(true)
+                    .with_span_list(false),
+            )
             .try_init()
             .map_err(|error| anyhow::anyhow!("failed to initialize logging: {error}"))?,
     }
-    Ok(())
+    Ok(TelemetryGuard { tracer_provider })
+}
+
+fn logging_filter() -> EnvFilter {
+    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tower_http=info"))
+}
+
+fn build_tracer_provider() -> anyhow::Result<Option<SdkTracerProvider>> {
+    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let Some(endpoint) = endpoint else {
+        return Ok(None);
+    };
+    let service_name =
+        std::env::var("SERVICE_NAME").unwrap_or_else(|_| "arc-admin-backend".to_string());
+    let environment = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_http()
+        .with_endpoint(endpoint)
+        .build()?;
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(
+            Resource::builder()
+                .with_service_name(service_name)
+                .with_attributes([
+                    KeyValue::new("deployment.environment.name", environment),
+                    KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
+                ])
+                .build(),
+        )
+        .build();
+    global::set_text_map_propagator(TraceContextPropagator::new());
+    global::set_tracer_provider(provider.clone());
+    Ok(Some(provider))
 }
 
 pub fn install_panic_hook() {
@@ -175,7 +242,9 @@ pub fn with_http_observability(router: Router, metadata: TelemetryMetadata) -> R
         ServiceBuilder::new()
             .layer(middleware::from_fn(normalize_request_id))
             .layer(SetRequestIdLayer::new(REQUEST_ID_HEADER, MakeRequestUuid))
+            .layer(middleware::from_fn(app_metrics::record_http_request))
             .layer(trace_layer)
+            .layer(middleware::from_fn(propagate_trace_context))
             .layer(middleware::from_fn(scope_request_trace))
             .layer(PropagateRequestIdLayer::new(REQUEST_ID_HEADER))
             .layer(CatchPanicLayer::custom(http_panic_response)),
@@ -215,6 +284,28 @@ async fn scope_request_trace(request: Request, next: Next) -> AxumResponse {
         .unwrap_or("unavailable")
         .to_string();
     TRACE_ID.scope(trace_id, next.run(request)).await
+}
+
+async fn propagate_trace_context(request: Request, next: Next) -> AxumResponse {
+    let parent = extract_trace_context(request.headers());
+    let _ = tracing::Span::current().set_parent(parent);
+    next.run(request).await
+}
+
+fn extract_trace_context(headers: &axum::http::HeaderMap) -> opentelemetry::Context {
+    global::get_text_map_propagator(|propagator| propagator.extract(&HeaderExtractor(headers)))
+}
+
+struct HeaderExtractor<'a>(&'a axum::http::HeaderMap);
+
+impl Extractor for HeaderExtractor<'_> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|value| value.to_str().ok())
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.keys().map(axum::http::HeaderName::as_str).collect()
+    }
 }
 
 fn request_trace_id(request: &Request) -> Option<&str> {
@@ -264,6 +355,24 @@ mod tests {
         assert!(!valid_request_id(""));
         assert!(!valid_request_id("contains spaces"));
         assert!(!valid_request_id(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn extracts_w3c_trace_parent() {
+        use opentelemetry::trace::TraceContextExt;
+
+        global::set_text_map_propagator(TraceContextPropagator::new());
+        let headers = axum::http::HeaderMap::from_iter([(
+            axum::http::header::HeaderName::from_static("traceparent"),
+            axum::http::HeaderValue::from_static(
+                "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            ),
+        )]);
+        let context = extract_trace_context(&headers);
+        assert_eq!(
+            context.span().span_context().trace_id().to_string(),
+            "4bf92f3577b34da6a3ce929d0e0e4736"
+        );
     }
 
     #[test]

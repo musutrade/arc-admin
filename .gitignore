@@ -5,6 +5,7 @@ target/
 .env
 /deployment/.env.production
 /deployment/tls/
+/deployment/audit-archives/
 
 # 运行时产物
 codex-audit-pipeline/.codex/reports/

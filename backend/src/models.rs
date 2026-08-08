@@ -105,17 +105,107 @@ pub struct AuditLogRow {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, FromRow, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditArchiveRow {
+    pub id: i64,
+    pub actor_user_id: Option<i64>,
+    pub action: String,
+    pub target_type: String,
+    pub target_id: Option<i64>,
+    pub details: Value,
+    pub trace_id: Option<String>,
+    pub organization_id: Option<i64>,
+    pub department_id: Option<i64>,
+    pub created_at: DateTime<Utc>,
+}
+
 // ===== API DTO =====
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[schema(as = UserStatus)]
+pub enum UserStatusSchema {
+    Active,
+    Inactive,
+    Suspended,
+}
+
+#[derive(Debug, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+#[schema(as = DataScope)]
+pub enum DataScopeSchema {
+    All,
+    Organization,
+    DepartmentAndChildren,
+    Department,
+    #[serde(rename = "self")]
+    SelfOnly,
+}
+
+#[derive(Debug, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[schema(as = RoleColor)]
+pub enum RoleColorSchema {
+    Primary,
+    Warning,
+    Success,
+    Danger,
+    Neutral,
+}
+
+#[derive(Debug, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[schema(as = PermissionType)]
+pub enum PermissionTypeSchema {
+    Menu,
+    Button,
+    Api,
+}
+
+#[derive(Debug, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = UserSortBy)]
+pub enum UserSortBySchema {
+    Username,
+    DisplayName,
+    Email,
+    Status,
+    LastLoginAt,
+    CreatedAt,
+}
+
+#[derive(Debug, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[schema(as = SortDirection)]
+pub enum SortDirectionSchema {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct HealthResponse {
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadinessResponse {
+    pub status: String,
+    pub db: bool,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserResponse {
     pub id: i64,
     pub username: String,
     pub display_name: String,
+    #[schema(required = true, nullable = true)]
     pub email: Option<String>,
+    #[schema(value_type = UserStatusSchema)]
     pub status: String,
     pub roles: Vec<String>,
+    #[schema(required = true, nullable = true)]
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
@@ -146,52 +236,64 @@ pub fn user_with_roles_response(row: UserWithRolesRow) -> UserResponse {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RoleResponse {
     pub id: i64,
     pub code: String,
     pub name: String,
     pub category: String,
+    #[schema(required = true, nullable = true)]
     pub icon: Option<String>,
+    #[schema(value_type = RoleColorSchema)]
     pub color: String,
+    #[schema(required = true, nullable = true)]
     pub description: Option<String>,
+    #[schema(value_type = DataScopeSchema)]
     pub data_scope: String,
     pub is_active: bool,
     pub members: i64,
     pub permission_group_ids: Vec<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionResponse {
     pub id: i64,
     pub code: String,
     pub name: String,
+    #[schema(value_type = PermissionTypeSchema)]
     pub r#type: String,
+    #[schema(required = true, nullable = true)]
     pub description: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionGroupResponse {
     pub id: i64,
     pub code: String,
     pub name: String,
+    #[schema(required = true, nullable = true)]
     pub icon: Option<String>,
     pub permissions: Vec<PermissionResponse>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AuditLogResponse {
     pub id: i64,
+    #[schema(required = true, nullable = true)]
     pub actor_user_id: Option<i64>,
+    #[schema(required = true, nullable = true)]
     pub actor_username: Option<String>,
     pub action: String,
     pub target_type: String,
+    #[schema(required = true, nullable = true)]
     pub target_id: Option<i64>,
+    #[schema(value_type = Object)]
     pub details: Value,
+    #[schema(required = true, nullable = true)]
     pub trace_id: Option<String>,
     pub created_at: DateTime<Utc>,
 }
@@ -243,7 +345,7 @@ pub fn nullable_patch<T: Clone>(patch: &NullablePatch<T>) -> (bool, Option<T>) {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
     pub username: String,
@@ -252,40 +354,49 @@ pub struct LoginRequest {
     pub remember: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangePasswordRequest {
     pub current_password: String,
     pub new_password: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
     pub expires_at: DateTime<Utc>,
     pub user: UserResponse,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
 pub struct PageQuery {
     pub page: Option<i64>,
     pub page_size: Option<i64>,
     pub keyword: Option<String>,
+    #[param(value_type = Option<UserStatusSchema>)]
     pub status: Option<String>,
+    pub role: Option<String>,
+    #[param(value_type = Option<UserSortBySchema>)]
+    pub sort_by: Option<String>,
+    #[param(value_type = Option<SortDirectionSchema>)]
+    pub sort_direction: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PageUser {
     pub items: Vec<UserResponse>,
     pub total: i64,
     pub page: i64,
     pub page_size: i64,
+    pub role_options: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
 pub struct AuditLogQuery {
     pub page: Option<i64>,
     pub page_size: Option<i64>,
@@ -293,7 +404,7 @@ pub struct AuditLogQuery {
     pub action: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PageAuditLog {
     pub items: Vec<AuditLogResponse>,
@@ -302,79 +413,88 @@ pub struct PageAuditLog {
     pub page_size: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateUserRequest {
     pub username: String,
     pub password: String,
     pub display_name: String,
     pub email: Option<String>,
+    #[schema(value_type = Option<UserStatusSchema>)]
     pub status: Option<String>,
     pub role_ids: Option<Vec<i64>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateUserRequest {
     pub display_name: Option<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
     pub email: NullablePatch<String>,
+    #[schema(value_type = Option<UserStatusSchema>)]
     pub status: Option<String>,
     pub password: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AssignRolesRequest {
     pub role_ids: Vec<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateRoleRequest {
     pub code: String,
     pub name: String,
     pub category: Option<String>,
     pub icon: Option<String>,
+    #[schema(value_type = Option<RoleColorSchema>)]
     pub color: Option<String>,
     pub description: Option<String>,
+    #[schema(value_type = Option<DataScopeSchema>)]
     pub data_scope: Option<String>,
     pub permission_ids: Option<Vec<i64>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRoleRequest {
     pub name: Option<String>,
     pub category: Option<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
     pub icon: NullablePatch<String>,
+    #[schema(value_type = Option<RoleColorSchema>)]
     pub color: Option<String>,
     #[serde(default)]
+    #[schema(value_type = Option<String>, nullable = true)]
     pub description: NullablePatch<String>,
+    #[schema(value_type = Option<DataScopeSchema>)]
     pub data_scope: Option<String>,
     pub is_active: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RolePermissions {
     pub permission_ids: Vec<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRolePermissionsRequest {
     pub permission_ids: Vec<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionCodes {
     pub codes: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DashboardStats {
     pub total_users: i64,

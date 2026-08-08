@@ -31,13 +31,18 @@ required_steps = [
   "frontend.format",
   "frontend.tests",
   "frontend.e2e",
+  "frontend.fullstack-smoke",
   "frontend.build",
   "workflow.hook-syntax",
   "workflow.project-init-tests",
   "workflow.template-quality",
   "workflow.template-quality-tests",
   "workflow.observability-config",
+  "workflow.tracing-config",
   "workflow.production-deployment-config",
+  "workflow.audit-retention-config",
+  "workflow.api-generation",
+  "workflow.supply-chain-config",
   "workflow.format",
   "workflow.clippy",
   "workflow.tests",
@@ -169,6 +174,7 @@ patterns = [
   ".dockerignore",
   "AGENTS.md",
   "start.sh",
+  "deny.toml",
   "scripts/**",
   "observability/**",
   "deployment/**",
@@ -205,7 +211,14 @@ patterns = [
 components = ["backend", "frontend", "workflow"]
 
 [[scope.rules]]
-patterns = ["docs/openapi.yaml", ".github/workflows/**"]
+patterns = [
+  "backend/src/openapi.rs",
+  "backend/src/bin/export_openapi.rs",
+  "docs/openapi.json",
+  "frontend/ng-openapi-gen.json",
+  "frontend/src/app/generated/api/**",
+  ".github/workflows/**",
+]
 components = ["backend", "frontend", "workflow"]
 
 [[scope.rules]]
@@ -310,6 +323,19 @@ log = "frontend_e2e.log"
 timeout_secs = 240
 
 [[steps]]
+id = "frontend.fullstack-smoke"
+label = "frontend real full-stack smoke test"
+component = "frontend"
+profiles = ["full"]
+program = "npm"
+args = ["run", "e2e:fullstack"]
+cwd = "{frontend}"
+log = "frontend_fullstack_smoke.log"
+timeout_secs = 300
+services = ["test-postgres"]
+remove_env = ["DATABASE_URL"]
+
+[[steps]]
 id = "frontend.build"
 label = "frontend production build"
 component = "frontend"
@@ -399,6 +425,17 @@ log = "observability_config.log"
 timeout_secs = 60
 
 [[steps]]
+id = "workflow.tracing-config"
+label = "optional tracing and compliance configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-tracing.mjs"]
+cwd = "{root}"
+log = "tracing_config.log"
+timeout_secs = 60
+
+[[steps]]
 id = "workflow.production-deployment-config"
 label = "production deployment configuration gate"
 component = "workflow"
@@ -407,6 +444,39 @@ program = "node"
 args = ["{root}/scripts/check-production-deployment.mjs"]
 cwd = "{root}"
 log = "production_deployment_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.audit-retention-config"
+label = "audit retention and archive configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-audit-retention.mjs"]
+cwd = "{root}"
+log = "audit_retention_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.api-generation"
+label = "Rust OpenAPI and Angular client generation gate"
+component = "workflow"
+profiles = ["full"]
+program = "node"
+args = ["{root}/scripts/check-api-generation.mjs"]
+cwd = "{root}"
+log = "api_generation.log"
+timeout_secs = 180
+
+[[steps]]
+id = "workflow.supply-chain-config"
+label = "supply chain security configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-supply-chain.mjs"]
+cwd = "{root}"
+log = "supply_chain_config.log"
 timeout_secs = 60
 
 [[steps]]

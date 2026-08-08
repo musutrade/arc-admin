@@ -42,7 +42,7 @@
 3. Handler 的读接口使用 `RequirePermission<...Read>`，写接口使用 `RequirePermission<...Write>`。CRUD Handler 模板已默认采用此方式。
 4. 复制 Angular 模板，路由 `data.permissions` 和导航项引用同一个 `ROUTE_ACCESS` 常量。
 5. 按钮使用 `AuthService.hasPermission(PERMISSIONS.write)` 控制显示，但后端仍必须重复校验。
-6. 更新 `docs/openapi.yaml`、业务测试和权限契约测试，然后执行 `cargo flow verify --all`。
+6. 更新 Rust DTO 与 `backend/src/openapi.rs`，运行 `npm run generate:api:all`，再补业务测试并执行 `cargo flow verify --all`。
 
 SQL 模板只自动把新权限授予 `super_admin`。其他角色应在权限分配页面显式授权；若产品必须提供内置业务角色，应在同一个 migration 中按明确角色代码列出权限，禁止按前缀批量授权。
 

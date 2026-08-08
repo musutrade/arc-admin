@@ -40,22 +40,24 @@ SERVICE_NAME=arc-admin-backend
 
 审计日志会保存产生该记录的 `trace_id`。管理端“审计日志”页面支持按追踪号搜索和复制，因此可以从用户看到的“问题编号”同时定位运行日志与业务变更。后台任务不在 HTTP 请求上下文中执行时，该字段为空。
 
-## 集中日志栈
+## 指标与集中日志栈
 
-`observability/` 提供单机 Loki、Alloy 和 Grafana：
+`observability/` 提供单机 Prometheus、Blackbox Exporter、Loki、Alloy 和 Grafana：
 
+- Prometheus 抓取后端 `/metrics`，包含 HTTP 请求量、耗时和 PostgreSQL 连接池状态；
+- Blackbox Exporter 从监控网络探测 Nginx 健康入口；
 - Alloy 从 Docker stdout 或本地 JSONL 文件读取日志，解析 P0 的结构化字段；
 - Loki 使用 TSDB v13 保存和查询日志；
-- Grafana 自动装载 Loki 数据源、“应用集中日志”仪表盘和两条基础告警。
+- Grafana 自动装载 Prometheus/Loki 数据源、运行指标/集中日志仪表盘和基础告警。
 
-首次启动前创建本地配置并修改管理员密码。通过项目初始化命令创建的业务仓库已经自动生成该文件和随机密码：
+生产 Compose 会创建专用 `arc-admin-monitoring` 网络，后端 `/metrics` 和内部 Nginx 健康入口只对该网络开放，不通过公网反向代理。若只启动本地可观测性栈，先执行一次 `docker network create arc-admin-monitoring`。然后创建本地配置并修改管理员密码；通过项目初始化命令创建的业务仓库已经自动生成该文件和随机密码：
 
 ```bash
 cp observability/.env.example observability/.env
 docker compose --env-file observability/.env -f observability/compose.yaml up -d
 ```
 
-入口仅绑定到本机：Grafana 为 `http://127.0.0.1:3000`，Loki 为 `http://127.0.0.1:3100`，Alloy 调试界面为 `http://127.0.0.1:12345`。停止服务但保留日志数据：
+入口仅绑定到本机：Grafana 为 `http://127.0.0.1:3000`，Prometheus 为 `http://127.0.0.1:9090`，Blackbox 调试端点为 `http://127.0.0.1:9115`，Loki 为 `http://127.0.0.1:3100`，Alloy 调试界面为 `http://127.0.0.1:12345`。停止服务但保留数据：
 
 ```bash
 docker compose --env-file observability/.env -f observability/compose.yaml down
@@ -117,8 +119,28 @@ Grafana 默认装载以下规则：
 
 - “应用错误日志突增”：5 分钟内 ERROR 超过 5 条并持续 5 分钟，级别 `warning`；
 - “HTTP 5xx 持续出现”：5 分钟内 5xx 超过 3 条并持续 2 分钟，级别 `critical`。
+- “应用入口不可用”：内部 Blackbox 探测连续 2 分钟失败，级别 `critical`。
 
 规则会立即评估，但通知渠道属于部署环境的秘密配置，不写入模板。首次部署后应按照 [Grafana 告警通知配置](grafana-alert-notifications.md)创建企业微信、钉钉、邮件或 Webhook 联系点，并绑定通知策略。测试通知和真实告警均成功送达后，才可视为生产告警闭环完成。
+
+## 外部心跳
+
+同一宿主机上的 Blackbox 只能覆盖应用、反向代理和容器网络故障，无法发现宿主机断电、出口中断或整个可用区故障。生产环境必须再使用位于本系统和部署区域之外的 HTTP 心跳服务，每 1 分钟请求一次 `https://<APP_HOST>/nginx-healthz`，连续 2 至 3 次失败即通知值班联系人。
+
+外部平台中至少设置 HTTPS 证书校验、期望状态码 `200`、5 秒超时、两个不同地区的探测点，以及独立于本机 Grafana 的通知渠道。完成配置后手动停止前端容器进行演练，确认内部 Grafana 告警与外部心跳通知都能到达；再临时阻断整台主机的外网入口，确认只有外部心跳仍能告警。外部平台账号、API 密钥和联系人不进入模板仓库。
+
+## 可选链路追踪
+
+后端支持 OTLP/HTTP 和 W3C `traceparent`。默认 `OTEL_EXPORTER_OTLP_ENDPOINT` 为空，不创建导出器；启用本机 Tempo 时，将生产环境值设为 `http://tempo:4318`，再启动 tracing profile：
+
+```bash
+docker compose --env-file observability/.env \
+  -f observability/compose.yaml --profile tracing up -d
+```
+
+Grafana 会自动装载 Tempo 数据源，可从 trace 的 `trace_id` 属性回查同一个用户可见 `x-request-id` 日志。Tempo 仅在监控网络接收 OTLP，不暴露 4317/4318 宿主机端口；`http://127.0.0.1:3200` 只用于本机健康诊断。
+
+本地 Tempo 默认保留 72 小时，适合故障排查，不是审计归档。span 属性不得包含密码、Cookie、Token、完整请求体或个人敏感字段；跨公网发送到托管 Collector 时，应由同机 Collector 或服务网格负责 mTLS 和密钥注入，不把凭据写进仓库或 OTLP URL。
 
 ## 安全边界
 

@@ -5,6 +5,7 @@ import { RoleApiService } from '../../core/api/role-api.service';
 import { UserApiService } from '../../core/api/user-api.service';
 import { AuthService } from '../../core/auth.service';
 import { User } from '../../core/models';
+import { vi } from 'vitest';
 
 const USERS: User[] = Array.from({ length: 12 }, (_, index) => ({
   id: String(index + 1),
@@ -19,9 +20,27 @@ const USERS: User[] = Array.from({ length: 12 }, (_, index) => ({
 }));
 import { UsersPage } from './users';
 
-const userApiStub: Partial<UserApiService> = {
-  getUsers: () => Promise.resolve(USERS),
-};
+const getUsers = vi.fn(async (query: Parameters<UserApiService['getUsers']>[0]) => {
+  const keyword = query.keyword?.toLowerCase();
+  const filtered = USERS.filter(
+    (user) =>
+      (!keyword ||
+        user.username.toLowerCase().includes(keyword) ||
+        user.name.toLowerCase().includes(keyword) ||
+        user.email.toLowerCase().includes(keyword)) &&
+      (!query.role || user.roles.includes(query.role)) &&
+      (!query.status || user.status === query.status),
+  );
+  const start = (query.page - 1) * query.pageSize;
+  return {
+    items: filtered.slice(start, start + query.pageSize),
+    total: filtered.length,
+    page: query.page,
+    pageSize: query.pageSize,
+    roleOptions: ['Auditor', 'Editor', 'Viewer'],
+  };
+});
+const userApiStub: Partial<UserApiService> = { getUsers };
 const dashboardApiStub: Partial<DashboardApiService> = {
   getUserStats: () => Promise.resolve([]),
 };
@@ -34,6 +53,7 @@ describe('UsersPage', () => {
   let page: UsersPage;
 
   beforeEach(async () => {
+    getUsers.mockClear();
     await TestBed.configureTestingModule({
       imports: [UsersPage],
       providers: [
@@ -50,7 +70,8 @@ describe('UsersPage', () => {
   });
 
   it('loads users and finishes loading on init', () => {
-    expect(page.users().length).toBe(USERS.length);
+    expect(page.users().length).toBe(page.pageSize);
+    expect(page.total()).toBe(USERS.length);
     expect(page.loading()).toBe(false);
   });
 
@@ -59,49 +80,65 @@ describe('UsersPage', () => {
     expect(fixture.nativeElement.textContent).toContain('2026-08-01 08:00');
   });
 
-  it('derives unique role options from users', () => {
+  it('uses server-provided role options', () => {
     const roles = page.roleOptions();
-    expect(roles[0]).toBe('all');
     expect(roles).toContain('Auditor');
   });
 
-  it('filters users by search term', () => {
+  it('sends a debounced keyword to the server', async () => {
+    vi.useFakeTimers();
     page.searchUsers('sarah');
-    expect(page.filteredUsers().map((u) => u.name)).toEqual(['Sarah Jenkins']);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(getUsers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 1, keyword: 'sarah' }),
+    );
+    vi.useRealTimers();
   });
 
-  it('filters users by role', () => {
+  it('sends role filtering to the server', async () => {
     page.applyRoleFilter('Auditor');
-    expect(page.filteredUsers().length).toBeGreaterThan(0);
-    expect(page.filteredUsers().every((u) => u.roles.includes('Auditor'))).toBe(true);
+    await vi.waitFor(() =>
+      expect(getUsers).toHaveBeenLastCalledWith(expect.objectContaining({ role: 'Auditor' })),
+    );
   });
 
-  it('filters users by status', () => {
+  it('sends status filtering to the server', async () => {
     page.applyStatusFilter('suspended');
-    expect(page.filteredUsers().length).toBeGreaterThan(0);
-    expect(page.filteredUsers().every((u) => u.status === 'suspended')).toBe(true);
+    await vi.waitFor(() =>
+      expect(getUsers).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'suspended' })),
+    );
   });
 
-  it('resets filters and returns to the first page', () => {
-    page.searchUsers('zzz');
+  it('resets filters, sorting and page', async () => {
     page.applyRoleFilter('Auditor');
     page.goToPage(2);
+    page.applySort('displayName:asc');
     page.resetFilters();
     expect(page.search()).toBe('');
     expect(page.roleFilter()).toBe('all');
     expect(page.statusFilter()).toBe('all');
+    expect(page.sortOption()).toBe('createdAt:desc');
     expect(page.page()).toBe(1);
-    expect(page.filteredUsers().length).toBe(USERS.length);
+    await vi.waitFor(() =>
+      expect(getUsers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, sortBy: 'createdAt', sortDirection: 'desc' }),
+      ),
+    );
   });
 
-  it('paginates with correct totals and page bounds', () => {
+  it('requests pages with correct totals and bounds', async () => {
     const expectedPages = Math.ceil(USERS.length / page.pageSize);
     expect(page.totalPages()).toBe(expectedPages);
     page.goToPage(99);
     expect(page.page()).toBe(expectedPages);
+    await vi.waitFor(() =>
+      expect(getUsers).toHaveBeenLastCalledWith(expect.objectContaining({ page: expectedPages })),
+    );
     page.goToPage(-5);
     expect(page.page()).toBe(1);
-    expect(page.pagedUsers().length).toBe(page.pageSize);
+    await vi.waitFor(() =>
+      expect(getUsers).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })),
+    );
   });
 
   it('tracks row selection', () => {

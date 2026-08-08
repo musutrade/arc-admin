@@ -1,21 +1,16 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { DashboardStats } from '../api.models';
+import { Api } from '../../generated/api/api';
+import { getDashboardStats } from '../../generated/api/fn/dashboard/get-dashboard-stats';
 import { StatCard } from '../models';
-import { API_BASE_URL } from '../runtime-config';
 
 @Injectable({
   providedIn: 'root',
 })
 export class DashboardApiService {
-  private readonly http = inject(HttpClient);
-  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly api = inject(Api);
 
   async getUserStats(): Promise<StatCard[]> {
-    const stats = await firstValueFrom(
-      this.http.get<DashboardStats>(`${this.apiBaseUrl}/dashboard/stats`),
-    );
+    const stats = await this.api.invoke(getDashboardStats);
     return [
       { label: '用户总数', value: String(stats.totalUsers), icon: 'group' },
       { label: '启用用户', value: String(stats.activeUsers), icon: 'verified_user' },

@@ -1,11 +1,12 @@
 use arc_admin_backend::auth::{self, AuthSessionConfig};
 use arc_admin_backend::models::{NullablePatch, UpdateUserRequest};
-use arc_admin_backend::{build_router, db, services, AppState};
+use arc_admin_backend::{build_router, db, repositories, services, AppState};
 use axum::body::Body;
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::header::{CONTENT_TYPE, COOKIE, SET_COOKIE};
 use axum::http::{Method, Request, Response, StatusCode};
 use axum::Router;
+use chrono::{Duration, Utc};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
@@ -185,6 +186,24 @@ async fn login_and_user_crud_flow() {
             .parse::<SocketAddr>()
             .expect("mock peer address"),
     ));
+
+    let metrics_response = request(&app, Method::GET, "/metrics", None, None, false, None).await;
+    assert_eq!(metrics_response.status(), StatusCode::OK);
+    assert_eq!(
+        metrics_response
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        Some("text/plain; version=0.0.4; charset=utf-8")
+    );
+    let metrics_body = metrics_response
+        .into_body()
+        .collect()
+        .await
+        .expect("collect metrics body")
+        .to_bytes();
+    let metrics_body = String::from_utf8(metrics_body.to_vec()).expect("metrics are UTF-8");
+    assert!(metrics_body.contains("arc_admin_db_pool_size"));
 
     let (status, health) = send(&app, Method::GET, "/api/v1/healthz", None, None).await;
     assert_eq!(status, StatusCode::OK);
@@ -898,6 +917,37 @@ async fn login_and_user_crud_flow() {
     let user_id = created["id"].as_i64().expect("created user id");
     assert_eq!(created["roles"], json!(["查看者"]));
 
+    let (status, filtered_users) = send(
+        &app,
+        Method::GET,
+        "/api/v1/users?keyword=integration&role=%E6%9F%A5%E7%9C%8B%E8%80%85&sortBy=username&sortDirection=desc&page=99&pageSize=1",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(filtered_users["total"], 1);
+    assert_eq!(filtered_users["page"], 1);
+    assert_eq!(filtered_users["items"][0]["username"], "integration_user");
+    assert!(filtered_users["roleOptions"]
+        .as_array()
+        .expect("role options")
+        .contains(&json!("查看者")));
+
+    let (status, invalid_sort) = send(
+        &app,
+        Method::GET,
+        "/api/v1/users?sortBy=passwordHash&sortDirection=asc",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(invalid_sort["error"]["message"]
+        .as_str()
+        .expect("sort validation message")
+        .contains("sortBy"));
+
     let (status, _) = send(
         &app,
         Method::DELETE,
@@ -1197,6 +1247,23 @@ async fn login_and_user_crud_flow() {
     assert!(revocation_reasons.contains("logout"));
     assert!(revocation_reasons.contains("account_status_changed"));
 
+    let (status, login_audit_logs) = send(
+        &app,
+        Method::GET,
+        "/api/v1/audit-logs?page=1&pageSize=100&action=auth.login.success",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(login_audit_logs["items"]
+        .as_array()
+        .expect("login audit items")
+        .iter()
+        .all(|entry| entry["details"]["sourceIpFingerprint"]
+            .as_str()
+            .is_some_and(|fingerprint| fingerprint.len() == 12)));
+
     let deactivate = || UpdateUserRequest {
         display_name: None,
         email: NullablePatch::Missing,
@@ -1231,4 +1298,43 @@ async fn login_and_user_crud_flow() {
     .expect("localized viewer role");
     assert_eq!(localized_role.0, "自定义查看角色");
     assert_eq!(localized_role.1, "只读");
+    sqlx::query("UPDATE roles SET name = '查看者', category = '只读' WHERE code = 'viewer'")
+        .execute(&pool)
+        .await
+        .expect("restore viewer role after localization test");
+
+    let archived_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO audit_logs
+             (actor_user_id, action, target_type, target_id, details, created_at)
+         VALUES ($1, 'test.archive', 'user', $1, '{}'::jsonb, now() - interval '400 days')
+         RETURNING id",
+    )
+    .bind(admin_id)
+    .fetch_one(&pool)
+    .await
+    .expect("insert expired audit row");
+    let update_error = sqlx::query("UPDATE audit_logs SET action = 'tampered' WHERE id = $1")
+        .bind(archived_id)
+        .execute(&pool)
+        .await
+        .expect_err("audit row update must be blocked");
+    let update_error_code = update_error
+        .as_database_error()
+        .and_then(|error| error.code());
+    assert_eq!(update_error_code.as_deref(), Some("55000"));
+    sqlx::query("DELETE FROM audit_logs WHERE id = $1")
+        .bind(archived_id)
+        .execute(&pool)
+        .await
+        .expect_err("direct audit row delete must be blocked");
+
+    let cutoff = Utc::now() - Duration::days(365);
+    let archive_rows = repositories::audit_logs::archive_batch(&pool, cutoff, 100)
+        .await
+        .expect("load audit archive batch");
+    assert!(archive_rows.iter().any(|row| row.id == archived_id));
+    let deleted = repositories::audit_logs::delete_archived(&pool, &[archived_id], cutoff)
+        .await
+        .expect("delete exported audit row through retention repository");
+    assert_eq!(deleted, 1);
 }

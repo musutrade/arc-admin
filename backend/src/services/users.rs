@@ -16,22 +16,40 @@ pub async fn list(
     actor: &ActorContext,
     query: &PageQuery,
 ) -> Result<PageUser, ApiError> {
-    let page = query.page.unwrap_or(1).max(1);
+    let requested_page = query.page.unwrap_or(1).max(1);
     let page_size = query.page_size.unwrap_or(20).clamp(1, 100);
-    let rows = repositories::users::list(
-        pool,
-        actor,
-        query.keyword.clone(),
-        query.status.clone(),
-        page,
+    let keyword = normalized_filter(query.keyword.as_deref());
+    let status = normalized_filter(query.status.as_deref());
+    if status
+        .as_deref()
+        .is_some_and(|value| !matches!(value, "active" | "inactive" | "suspended"))
+    {
+        return Err(ApiError::validation(
+            "status 必须是 active、inactive 或 suspended",
+        ));
+    }
+    let role = normalized_filter(query.role.as_deref());
+    let sort = user_sort(query.sort_by.as_deref(), query.sort_direction.as_deref())?;
+    let mut params = repositories::users::UserListParams {
+        keyword,
+        status,
+        role,
+        sort,
+        page: requested_page,
         page_size,
-    )
-    .await
-    .map_err(db_error)?;
-    let total =
-        repositories::users::count(pool, actor, query.keyword.clone(), query.status.clone())
-            .await
-            .map_err(db_error)?;
+    };
+    let total = repositories::users::count(pool, actor, &params)
+        .await
+        .map_err(db_error)?;
+    let last_page = ((total + page_size - 1) / page_size).max(1);
+    let page = requested_page.min(last_page);
+    params.page = page;
+    let rows = repositories::users::list(pool, actor, &params)
+        .await
+        .map_err(db_error)?;
+    let role_options = repositories::users::list_role_options(pool, actor)
+        .await
+        .map_err(db_error)?;
 
     let items = rows.into_iter().map(user_with_roles_response).collect();
     Ok(PageUser {
@@ -39,7 +57,41 @@ pub async fn list(
         total,
         page,
         page_size,
+        role_options,
     })
+}
+
+fn normalized_filter(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != "all")
+        .map(ToOwned::to_owned)
+}
+
+fn user_sort(
+    sort_by: Option<&str>,
+    sort_direction: Option<&str>,
+) -> Result<repositories::users::UserSort, ApiError> {
+    use repositories::users::UserSort;
+
+    let direction = sort_direction.unwrap_or("desc");
+    let sort = match (sort_by.unwrap_or("createdAt"), direction) {
+        ("username", "asc") => UserSort::UsernameAsc,
+        ("username", "desc") => UserSort::UsernameDesc,
+        ("displayName", "asc") => UserSort::DisplayNameAsc,
+        ("displayName", "desc") => UserSort::DisplayNameDesc,
+        ("email", "asc") => UserSort::EmailAsc,
+        ("email", "desc") => UserSort::EmailDesc,
+        ("status", "asc") => UserSort::StatusAsc,
+        ("status", "desc") => UserSort::StatusDesc,
+        ("lastLoginAt", "asc") => UserSort::LastLoginAtAsc,
+        ("lastLoginAt", "desc") => UserSort::LastLoginAtDesc,
+        ("createdAt", "asc") => UserSort::CreatedAtAsc,
+        ("createdAt", "desc") => UserSort::CreatedAtDesc,
+        (_, "asc" | "desc") => return Err(ApiError::validation("sortBy 不是允许的用户排序字段")),
+        _ => return Err(ApiError::validation("sortDirection 必须是 asc 或 desc")),
+    };
+    Ok(sort)
 }
 
 pub async fn get(pool: &PgPool, actor: &ActorContext, id: i64) -> Result<UserResponse, ApiError> {

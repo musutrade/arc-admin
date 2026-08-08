@@ -7,6 +7,32 @@ use sqlx::{PgConnection, PgPool, Row};
 const USER_COLUMNS: &str =
     "id, username, password_hash, display_name, email, status, organization_id, department_id, token_version, last_login_at, created_at";
 
+#[derive(Debug, Clone, Copy)]
+pub enum UserSort {
+    UsernameAsc,
+    UsernameDesc,
+    DisplayNameAsc,
+    DisplayNameDesc,
+    EmailAsc,
+    EmailDesc,
+    StatusAsc,
+    StatusDesc,
+    LastLoginAtAsc,
+    LastLoginAtDesc,
+    CreatedAtAsc,
+    CreatedAtDesc,
+}
+
+#[derive(Debug, Clone)]
+pub struct UserListParams {
+    pub keyword: Option<String>,
+    pub status: Option<String>,
+    pub role: Option<String>,
+    pub sort: UserSort,
+    pub page: i64,
+    pub page_size: i64,
+}
+
 pub async fn find_by_username(
     pool: &PgPool,
     username: &str,
@@ -70,13 +96,24 @@ pub async fn find_by_id_for_actor(
 pub async fn list(
     pool: &PgPool,
     actor: &ActorContext,
-    keyword: Option<String>,
-    status: Option<String>,
-    page: i64,
-    page_size: i64,
+    params: &UserListParams,
 ) -> Result<Vec<UserWithRolesRow>, sqlx::Error> {
-    let like = keyword.map(|k| format!("%{k}%"));
-    sqlx::query_as::<_, UserWithRolesRow>(
+    let like = params.keyword.as_ref().map(|k| format!("%{k}%"));
+    let order_by = match params.sort {
+        UserSort::UsernameAsc => "u.username ASC",
+        UserSort::UsernameDesc => "u.username DESC",
+        UserSort::DisplayNameAsc => "u.display_name ASC",
+        UserSort::DisplayNameDesc => "u.display_name DESC",
+        UserSort::EmailAsc => "u.email ASC NULLS LAST",
+        UserSort::EmailDesc => "u.email DESC NULLS LAST",
+        UserSort::StatusAsc => "u.status ASC",
+        UserSort::StatusDesc => "u.status DESC",
+        UserSort::LastLoginAtAsc => "u.last_login_at ASC NULLS LAST",
+        UserSort::LastLoginAtDesc => "u.last_login_at DESC NULLS LAST",
+        UserSort::CreatedAtAsc => "u.created_at ASC",
+        UserSort::CreatedAtDesc => "u.created_at DESC",
+    };
+    let query = format!(
         "WITH RECURSIVE visible_departments AS (
              SELECT d.id
              FROM departments d
@@ -109,29 +146,37 @@ pub async fn list(
            )
            AND ($5::text IS NULL OR u.username ILIKE $5 OR u.display_name ILIKE $5 OR u.email ILIKE $5)
            AND ($6::text IS NULL OR u.status = $6)
+           AND ($7::text IS NULL OR EXISTS (
+               SELECT 1 FROM user_roles filter_ur
+               JOIN roles filter_role ON filter_role.id = filter_ur.role_id
+               WHERE filter_ur.user_id = u.id
+                 AND filter_role.is_active = TRUE
+                 AND filter_role.name = $7
+           ))
          GROUP BY u.id
-         ORDER BY u.id
-         LIMIT $7 OFFSET $8"
-    )
-    .bind(actor.data_scope.as_str())
-    .bind(actor.organization_id)
-    .bind(actor.user_id)
-    .bind(actor.department_id)
-    .bind(like)
-    .bind(status)
-    .bind(page_size)
-    .bind((page - 1) * page_size)
-    .fetch_all(pool)
-    .await
+         ORDER BY {order_by}, u.id ASC
+         LIMIT $8 OFFSET $9"
+    );
+    sqlx::query_as::<_, UserWithRolesRow>(&query)
+        .bind(actor.data_scope.as_str())
+        .bind(actor.organization_id)
+        .bind(actor.user_id)
+        .bind(actor.department_id)
+        .bind(like)
+        .bind(&params.status)
+        .bind(&params.role)
+        .bind(params.page_size)
+        .bind((params.page - 1) * params.page_size)
+        .fetch_all(pool)
+        .await
 }
 
 pub async fn count(
     pool: &PgPool,
     actor: &ActorContext,
-    keyword: Option<String>,
-    status: Option<String>,
+    params: &UserListParams,
 ) -> Result<i64, sqlx::Error> {
-    let like = keyword.map(|k| format!("%{k}%"));
+    let like = params.keyword.as_ref().map(|k| format!("%{k}%"));
     let row = sqlx::query(
         "WITH RECURSIVE visible_departments AS (
              SELECT d.id
@@ -156,17 +201,65 @@ pub async fn count(
                )
            )
            AND ($5::text IS NULL OR username ILIKE $5 OR display_name ILIKE $5 OR email ILIKE $5)
-           AND ($6::text IS NULL OR status = $6)",
+           AND ($6::text IS NULL OR status = $6)
+           AND ($7::text IS NULL OR EXISTS (
+               SELECT 1 FROM user_roles filter_ur
+               JOIN roles filter_role ON filter_role.id = filter_ur.role_id
+               WHERE filter_ur.user_id = users.id
+                 AND filter_role.is_active = TRUE
+                 AND filter_role.name = $7
+           ))",
     )
     .bind(actor.data_scope.as_str())
     .bind(actor.organization_id)
     .bind(actor.user_id)
     .bind(actor.department_id)
     .bind(like)
-    .bind(status)
+    .bind(&params.status)
+    .bind(&params.role)
     .fetch_one(pool)
     .await?;
     row.try_get::<i64, _>(0)
+}
+
+pub async fn list_role_options(
+    pool: &PgPool,
+    actor: &ActorContext,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar(
+        "WITH RECURSIVE visible_departments AS (
+             SELECT d.id
+             FROM departments d
+             WHERE d.id = $4 AND d.organization_id = $2
+             UNION
+             SELECT child.id
+             FROM departments child
+             JOIN visible_departments parent ON child.parent_id = parent.id
+             WHERE child.organization_id = $2
+         )
+         SELECT DISTINCT r.name
+         FROM users u
+         JOIN user_roles ur ON ur.user_id = u.id
+         JOIN roles r ON r.id = ur.role_id AND r.is_active = TRUE
+         WHERE u.deleted_at IS NULL
+           AND (
+               $1 = 'all'
+               OR u.organization_id = $2 AND (
+                   $1 = 'organization'
+                   OR $1 = 'self' AND u.id = $3
+                   OR $1 = 'department' AND u.department_id = $4
+                   OR $1 = 'department_and_children'
+                      AND u.department_id IN (SELECT id FROM visible_departments)
+               )
+           )
+         ORDER BY r.name",
+    )
+    .bind(actor.data_scope.as_str())
+    .bind(actor.organization_id)
+    .bind(actor.user_id)
+    .bind(actor.department_id)
+    .fetch_all(pool)
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]

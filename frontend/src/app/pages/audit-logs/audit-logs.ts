@@ -11,8 +11,8 @@ import {
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuditLogApiService } from '../../core/api/audit-log-api.service';
-import { ApiAuditLog } from '../../core/api.models';
 import { apiErrorMessage } from '../../core/api-error';
+import { AuditLogResponse } from '../../generated/api/models/audit-log-response';
 
 const ACTION_LABELS: Record<string, string> = {
   'auth.login.success': '登录成功',
@@ -44,7 +44,7 @@ export class AuditLogs implements OnInit {
   private readonly auditLogApi = inject(AuditLogApiService);
   private readonly clipboard = inject(Clipboard);
 
-  readonly logs = signal<ApiAuditLog[]>([]);
+  readonly logs = signal<AuditLogResponse[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly keyword = signal('');
@@ -85,7 +85,7 @@ export class AuditLogs implements OnInit {
     return ACTION_LABELS[action] ?? action;
   }
 
-  targetLabel(log: ApiAuditLog): string {
+  targetLabel(log: AuditLogResponse): string {
     const type =
       log.targetType === 'user' ? '用户' : log.targetType === 'role' ? '角色' : log.targetType;
     return log.targetId === null ? type : `${type} #${log.targetId}`;

@@ -2,6 +2,24 @@
 
 本项目遵循语义化版本。每个发布版本必须对应一个不可移动的同名 Git 标签，派生项目升级时使用标签内容作为三方合并基线。
 
+## [v2.3.0] - 2026-08-08
+
+### 新增
+
+- 用户目录改为服务端搜索、角色筛选、排序和分页，避免前端并发拉取全部用户；
+- 由 Rust DTO 生成 OpenAPI 3.1，再生成 Angular DTO/API Client，并增加契约漂移门禁；
+- 增加连接真实 Angular、Axum 与一次性 PostgreSQL 的跨端冒烟测试；
+- 增加 RustSec、`cargo deny`、CodeQL、Trivy 镜像扫描和 SPDX SBOM 工作流；
+- 增加 Prometheus 应用与连接池指标、Blackbox 内部探测、外部心跳接入说明，以及可选的 OpenTelemetry/Tempo 链路追踪；
+- 审计日志增加来源指纹、数据库级只追加保护、JSON Lines 归档、SHA-256 清单与保留任务。
+
+### 升级说明
+
+- 前端不再维护手写 API 字段定义；修改接口时先更新 Rust DTO 与 `backend/src/openapi.rs`，再运行 `npm run generate:api:all`；
+- 生产环境应配置独立的审计归档目录与异地不可变存储，并按 `docs/audit-retention.md` 执行恢复演练；
+- Prometheus、Blackbox 和 Tempo 通过 `arc-admin-monitoring` 容器网络访问应用；真正的外部可用性监测仍需部署在故障域之外；
+- Tempo 与高合规参数默认不启用，只有明确的数据分类、保留策略和容量预算后才应使用。
+
 ## [v2.2.0] - 2026-08-08
 
 ### 新增

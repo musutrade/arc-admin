@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ApiUser } from '../api.models';
+import { UserResponse as ApiUser } from '../../generated/api/models/user-response';
 import { API_BASE_URL } from '../runtime-config';
 import { UserApiService } from './user-api.service';
 
@@ -35,20 +35,40 @@ describe('UserApiService', () => {
   afterEach(() => http.verify());
 
   it('maps paged API users into view users', async () => {
-    const result = service.getUsers();
+    const result = service.getUsers({
+      page: 2,
+      pageSize: 10,
+      keyword: 'sarah',
+      role: '查看者',
+      status: 'active',
+      sortBy: 'displayName',
+      sortDirection: 'asc',
+    });
     const request = http.expectOne(
-      (candidate) => candidate.url === '/api/v1/users' && candidate.params.get('page') === '1',
+      (candidate) => candidate.url === '/api/v1/users' && candidate.params.get('page') === '2',
     );
-    request.flush({ items: [apiUser], total: 1, page: 1, pageSize: 100 });
+    expect(request.request.params.get('keyword')).toBe('sarah');
+    expect(request.request.params.get('role')).toBe('查看者');
+    expect(request.request.params.get('status')).toBe('active');
+    expect(request.request.params.get('sortBy')).toBe('displayName');
+    expect(request.request.params.get('sortDirection')).toBe('asc');
+    request.flush({ items: [apiUser], total: 11, page: 2, pageSize: 10, roleOptions: ['查看者'] });
 
-    await expect(result).resolves.toEqual([
+    await expect(result).resolves.toEqual(
       expect.objectContaining({
-        id: '7',
-        username: 'sarah',
-        name: 'Sarah Chen',
-        lastLogin: null,
+        total: 11,
+        page: 2,
+        roleOptions: ['查看者'],
+        items: [
+          expect.objectContaining({
+            id: '7',
+            username: 'sarah',
+            name: 'Sarah Chen',
+            lastLogin: null,
+          }),
+        ],
       }),
-    ]);
+    );
   });
 
   it('updates a user through the existing user endpoint', async () => {

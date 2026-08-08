@@ -4,7 +4,7 @@
 
 - `frontend/`：Angular 22 standalone 应用，负责界面、路由和前端交互状态。
 - `backend/`：Axum API，负责认证、授权、业务规则和持久化。
-- `docs/openapi.yaml`：前后端 HTTP 契约的事实来源。
+- `backend/src/openapi.rs` 与后端 DTO：前后端 HTTP 契约的可编辑来源；`docs/openapi.json` 和 Angular Client 均为生成产物。
 - `codex-audit-pipeline/`：`arc-flow` Rust CLI，统一负责范围路由、静态审计、安全扫描、测试编排、报告和 Git hook profile。
 
 ## 后端分层
@@ -92,10 +92,10 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 
 ## 契约与测试
 
-- `API_ROUTE_CONTRACT`、`API_SCHEMA_REQUIRED_FIELDS` 和 `backend/tests/openapi_contract.rs` 校验 OpenAPI 的路径、HTTP 方法及关键响应必填字段。
+- `API_ROUTE_CONTRACT` 和 `backend/tests/openapi_contract.rs` 校验生成路径与实际路由一致，`workflow.api-generation` 校验 OpenAPI 与 Angular Client 没有漂移。
 - `backend/tests/api_flow.rs` 使用真实迁移和 PostgreSQL，覆盖安全初始化、默认密码失效、Cookie/CSRF、登录限流、会话撤销、权限拒绝、事务回滚和超级管理员保护。
 - `/healthz` 仅表示进程存活；`/readyz` 检查 PostgreSQL，可用于负载均衡就绪探针。服务收到 Ctrl+C 或 SIGTERM 后执行优雅停机。
 - Angular 单测使用 Vitest/jsdom；Playwright 使用拦截 API 的确定性数据，在桌面 Chromium 和 Pixel 7 视口覆盖登录、权限导航、用户创建及未认证重定向。
 - arc-flow 对 SQL 写入位置、分层依赖和旧模板模式做确定性扫描，并管理外部命令超时与一次性 PostgreSQL 生命周期。
 
-当前响应必填字段由轻量常量检查，尚未覆盖所有请求字段、枚举和格式。接口规模明显扩大后可引入 `utoipa`，由后端类型生成 OpenAPI 并让前端生成 DTO。
+所有请求、响应、枚举和参数由 `utoipa` 从 Rust 类型生成 OpenAPI 3.1，再由 `ng-openapi-gen` 生成 Angular DTO 和调用函数。禁止手改 `docs/openapi.json` 或 `frontend/src/app/generated/api/`。

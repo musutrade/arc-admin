@@ -1,61 +1,32 @@
-use arc_admin_backend::{API_PREFIX, API_ROUTE_CONTRACT, API_SCHEMA_REQUIRED_FIELDS};
+use arc_admin_backend::{openapi, API_PREFIX, API_ROUTE_CONTRACT};
 use axum::http::Uri;
-use serde::de::IgnoredAny;
-use serde::Deserialize;
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-#[derive(Deserialize)]
-struct OpenApiDocument {
-    servers: Vec<OpenApiServer>,
-    paths: BTreeMap<String, BTreeMap<String, IgnoredAny>>,
-    components: OpenApiComponents,
-}
-
-#[derive(Deserialize)]
-struct OpenApiServer {
-    url: String,
-}
-
-#[derive(Deserialize)]
-struct OpenApiComponents {
-    schemas: BTreeMap<String, OpenApiSchema>,
-}
-
-#[derive(Deserialize)]
-struct OpenApiSchema {
-    #[serde(default)]
-    required: BTreeSet<String>,
-}
-
-fn load_openapi() -> OpenApiDocument {
-    let specification_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../docs/openapi.yaml");
-    let specification = std::fs::read_to_string(&specification_path)
-        .unwrap_or_else(|error| panic!("read {}: {error}", specification_path.display()));
-    serde_saphyr::from_str(&specification).expect("parse OpenAPI YAML")
+fn generated_openapi() -> serde_json::Value {
+    serde_json::to_value(openapi::document()).expect("serialize generated OpenAPI")
 }
 
 #[test]
 fn openapi_operations_match_backend_contract() {
-    let document = load_openapi();
-    assert!(
-        !document.servers.is_empty(),
-        "OpenAPI has at least one server"
-    );
-    for server in &document.servers {
-        let uri = server
-            .url
+    let document = generated_openapi();
+    let servers = document["servers"].as_array().expect("OpenAPI servers");
+    assert!(!servers.is_empty(), "OpenAPI has at least one server");
+    for server in servers {
+        let url = server["url"].as_str().expect("OpenAPI server URL");
+        let uri = server["url"]
+            .as_str()
+            .expect("server URL")
             .parse::<Uri>()
-            .unwrap_or_else(|error| panic!("parse OpenAPI server URL {:?}: {error}", server.url));
+            .unwrap_or_else(|error| panic!("parse OpenAPI server URL {url:?}: {error}"));
         assert_eq!(uri.path(), API_PREFIX, "OpenAPI server path drift");
     }
 
     let http_methods = ["get", "post", "put", "patch", "delete"];
     let mut documented = BTreeSet::new();
-    for (path, operations) in document.paths {
+    for (path, operations) in document["paths"].as_object().expect("OpenAPI paths") {
         for method in http_methods {
-            if operations.contains_key(method) {
+            if operations.get(method).is_some() {
                 documented.insert((format!("{API_PREFIX}{path}"), method.to_string()));
             }
         }
@@ -74,19 +45,16 @@ fn openapi_operations_match_backend_contract() {
 }
 
 #[test]
-fn openapi_required_response_fields_match_backend_contract() {
-    let document = load_openapi();
-    for (schema, fields) in API_SCHEMA_REQUIRED_FIELDS {
-        let documented = &document
-            .components
-            .schemas
-            .get(*schema)
-            .unwrap_or_else(|| panic!("missing OpenAPI schema {schema:?}"))
-            .required;
-        let expected = fields
-            .iter()
-            .map(|field| (*field).to_string())
-            .collect::<BTreeSet<_>>();
-        assert_eq!(documented, &expected, "OpenAPI schema {schema:?} drift");
-    }
+fn checked_in_openapi_artifact_matches_rust_types() {
+    let specification_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../docs/openapi.json");
+    let checked_in = std::fs::read_to_string(&specification_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", specification_path.display()));
+    let generated = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&openapi::document()).expect("serialize generated OpenAPI")
+    );
+    assert_eq!(
+        checked_in, generated,
+        "运行 cargo run --bin export_openapi 更新契约"
+    );
 }

@@ -33,10 +33,23 @@
       >
         <option value="all">全部角色</option>
         @for (r of roleOptions(); track r) {
-          @if (r !== 'all') {
-            <option [value]="r">{{ r }}</option>
-          }
+          <option [value]="r">{{ r }}</option>
         }
+      </select>
+    </div>
+    <div class="filter-select-group">
+      <span>排序：</span>
+      <select
+        class="filter-select"
+        [value]="sortOption()"
+        (change)="applySort($any($event.target).value)"
+      >
+        <option value="createdAt:desc">最新创建</option>
+        <option value="createdAt:asc">最早创建</option>
+        <option value="displayName:asc">姓名升序</option>
+        <option value="displayName:desc">姓名降序</option>
+        <option value="lastLoginAt:desc">最近登录</option>
+        <option value="username:asc">用户名升序</option>
       </select>
     </div>
     <div class="filter-select-group">
@@ -218,7 +231,7 @@
         </div>
         <div class="pagination">
           <span class="page-info"
-            >显示第 {{ pageStart() }}-{{ pageEnd() }} 条，共 {{ filteredUsers().length }} 条</span
+            >显示第 {{ pageStart() }}-{{ pageEnd() }} 条，共 {{ total() }} 条</span
           >
           <div class="page-btns">
             <button

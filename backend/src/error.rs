@@ -137,17 +137,17 @@ fn error_response(
     (status, Json(body)).into_response()
 }
 
-#[derive(Serialize)]
-struct ErrorEnvelope {
-    error: ErrorBody,
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ErrorEnvelope {
+    pub error: ErrorBody,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct ErrorBody {
-    code: &'static str,
-    message: String,
-    trace_id: String,
+pub struct ErrorBody {
+    pub code: &'static str,
+    pub message: String,
+    pub trace_id: String,
 }
 
 /// sqlx 错误 → ApiError（唯一约束 → 409，外键 → 422，其余 → 500）

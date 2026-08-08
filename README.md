@@ -17,8 +17,8 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 │   ├── src/main.rs            # 配置、连接池、迁移与监听入口
 │   ├── migrations/            # SQLX 迁移（不可变，只增不改）
 │   └── .env.example
-├── observability/             # Loki + Alloy + Grafana 集中日志栈
-├── docs/openapi.yaml          # API 契约（前后端唯一事实来源）
+├── observability/             # Prometheus + Blackbox + Loki + Alloy + Grafana
+├── docs/openapi.json          # 从 Rust 类型生成的 OpenAPI 契约
 ├── scripts/                   # 业务项目初始化命令及测试
 ├── FRAMEWORK_VERSION          # 模板版本标识
 ├── .arc-flow/                 # 可复用工作流 schema v2 配置
@@ -96,7 +96,7 @@ cd backend && cargo run                    # http://localhost:8080/api/v1/health
 cargo flow doctor
 ```
 
-集中日志栈按需启动，完整说明见[日志与故障定位](docs/observability.md)：
+可观测性栈按需启动，提供指标、入口探测和集中日志，完整说明见[日志与故障定位](docs/observability.md)：
 
 ```bash
 cp observability/.env.example observability/.env
@@ -136,7 +136,10 @@ cargo flow verify --all
 - [架构说明](docs/architecture.md)：前后端分层和依赖边界；
 - [业务模块扩展指南](docs/business-extension.md)：新业务域的目录、权限、路由和后端接入清单；
 - [业务权限模板](docs/business-permissions.md)：SQL、Rust、Angular 三端权限声明和最小授权策略；
-- [日志与故障定位](docs/observability.md)：JSON Lines、问题编号、敏感字段和查询方式；
+- [日志与故障定位](docs/observability.md)：Prometheus 指标、内部探测、外部心跳、JSON Lines 和问题编号；
+- [供应链安全](docs/supply-chain-security.md)：依赖审计、CodeQL、镜像扫描和 SBOM；
+- [审计日志保留](docs/audit-retention.md)：只追加保护、JSONL 归档、校验清单和恢复演练；
+- [高合规部署基线](docs/high-compliance.md)：可选 OTLP/Tempo、会话收紧、不可变证据和未完成控制；
 - [Grafana 告警通知配置](docs/grafana-alert-notifications.md)：企业微信、钉钉、邮件、Webhook、通知策略和上线验收；
 - [框架版本与派生项目升级](docs/framework-upgrades.md)：版本发布、三方合并、冲突处理和完整验证；
 - [最小生产部署](docs/production-deployment.md)：非 root 镜像、TLS、反向代理、迁移任务和 Compose；
@@ -148,12 +151,12 @@ cargo flow verify --all
 
 ## API 契约
 
-[docs/openapi.yaml](docs/openapi.yaml) 是前后端联调的唯一事实来源：
+[backend/src/openapi.rs](backend/src/openapi.rs) 和后端 DTO 是契约的唯一可编辑来源，生成产物为 [docs/openapi.json](docs/openapi.json)：
 
 - 后端按契约实现路由与 DTO（`/api/v1/...`，服务端口由 `backend/.env` 的 `PORT` 控制，默认 8080）；
 - 前端通过 `HttpClient`、HttpOnly Cookie 会话、CSRF interceptor 和 DTO 映射直接调用契约接口；开发服务器把 `/api/v1` 代理到后端；
 - 数据库 schema 与基础 RBAC 数据由 `backend/migrations/` 管理；历史演示管理员会被迁移禁用，真实管理员必须显式初始化；
-- `backend/tests/openapi_contract.rs` 会在 CI 中校验 OpenAPI 路径、HTTP 方法及关键响应必填字段没有漂移。
+- `npm run generate:api:all` 会更新 OpenAPI 和 Angular DTO/API Client；`cargo flow verify` 会校验生成产物没有漂移。
 
 ## 运行时产品配置
 

@@ -1,6 +1,50 @@
 name: ${COMPOSE_PROJECT_NAME:-arc-admin-observability}
 
 services:
+  tempo:
+    profiles: [tracing]
+    image: grafana/tempo:2.10.7
+    command:
+      - -config.file=/etc/tempo/config.yaml
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - observability
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:v3.13.2
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - observability
+      - monitoring
+
+  blackbox:
+    image: quay.io/prometheus/blackbox-exporter:v0.28.0
+    command:
+      - --config.file=/etc/blackbox/blackbox.yaml
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9115:9115"
+    volumes:
+      - ./blackbox/blackbox.yaml:/etc/blackbox/blackbox.yaml:ro
+    networks:
+      - observability
+      - monitoring
+
   loki:
     image: grafana/loki:3.7.2
     command:
@@ -24,6 +68,7 @@ services:
     restart: unless-stopped
     depends_on:
       - loki
+      - prometheus
     ports:
       - "127.0.0.1:12345:12345"
     volumes:
@@ -59,8 +104,13 @@ services:
 
 networks:
   observability:
+  monitoring:
+    name: ${MONITORING_NETWORK:-arc-admin-monitoring}
+    external: true
 
 volumes:
   alloy-data:
   grafana-data:
   loki-data:
+  prometheus-data:
+  tempo-data:

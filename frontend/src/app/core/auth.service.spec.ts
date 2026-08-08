@@ -2,7 +2,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from './runtime-config';
-import { ApiUser, LoginResponse } from './api.models';
+import { LoginResponse } from '../generated/api/models/login-response';
+import { UserResponse as ApiUser } from '../generated/api/models/user-response';
 import { AuthService } from './auth.service';
 
 const user: ApiUser = {
@@ -48,8 +49,13 @@ describe('AuthService', () => {
       remember: true,
     });
     loginRequest.flush(loginResponse);
-    await Promise.resolve();
-    http.expectOne('/api/v1/auth/me/permissions').flush({ codes: ['user:directory:read'] });
+    let permissionRequest: ReturnType<HttpTestingController['expectOne']> | undefined;
+    await vi.waitFor(() => {
+      const requests = http.match('/api/v1/auth/me/permissions');
+      expect(requests).toHaveLength(1);
+      permissionRequest = requests[0];
+    });
+    permissionRequest?.flush({ codes: ['user:directory:read'] });
     await result;
 
     expect(service.currentUser()).toEqual(user);
@@ -59,10 +65,13 @@ describe('AuthService', () => {
   it('revokes a partial server session when permission loading fails', async () => {
     const result = service.login('admin', 'secure-password', false);
     http.expectOne('/api/v1/auth/login').flush(loginResponse);
-    await Promise.resolve();
-    http
-      .expectOne('/api/v1/auth/me/permissions')
-      .flush({ message: 'failed' }, { status: 500, statusText: 'Server Error' });
+    let permissionRequest: ReturnType<HttpTestingController['expectOne']> | undefined;
+    await vi.waitFor(() => {
+      const requests = http.match('/api/v1/auth/me/permissions');
+      expect(requests).toHaveLength(1);
+      permissionRequest = requests[0];
+    });
+    permissionRequest?.flush({ message: 'failed' }, { status: 500, statusText: 'Server Error' });
     let logoutRequest: ReturnType<HttpTestingController['expectOne']> | undefined;
     await vi.waitFor(() => {
       const requests = http.match('/api/v1/auth/logout');

@@ -10,6 +10,10 @@ x-backend-environment: &backend-environment
   LOG_FORMAT: json
   RUST_LOG: info,tower_http=info,sqlx=warn
   SERVICE_NAME: arc-admin-backend
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_traceidratio}
+  OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.10}
   DB_MAX_CONNECTIONS: ${DB_MAX_CONNECTIONS:-20}
   DB_MIN_CONNECTIONS: ${DB_MIN_CONNECTIONS:-2}
   DB_ACQUIRE_TIMEOUT_SECS: ${DB_ACQUIRE_TIMEOUT_SECS:-5}
@@ -54,7 +58,7 @@ services:
       - data
 
   migrate:
-    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.2.0}
+    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.3.0}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -76,8 +80,38 @@ services:
     networks:
       - data
 
+  audit-archive:
+    profiles: [maintenance]
+    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.3.0}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["/app/archive_audit_logs"]
+    restart: "no"
+    environment:
+      <<: *backend-environment
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-365}
+      AUDIT_ARCHIVE_BATCH_SIZE: ${AUDIT_ARCHIVE_BATCH_SIZE:-10000}
+      AUDIT_ARCHIVE_DIR: /archives
+    depends_on:
+      database:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    volumes:
+      - ${AUDIT_ARCHIVE_HOST_DIR:-./deployment/audit-archives}:/archives
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    networks:
+      - data
+
   backend:
-    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.2.0}
+    image: ${BACKEND_IMAGE:-arc-admin-backend:v2.3.0}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -100,9 +134,10 @@ services:
     networks:
       - app
       - data
+      - monitoring
 
   frontend:
-    image: ${FRONTEND_IMAGE:-arc-admin-frontend:v2.2.0}
+    image: ${FRONTEND_IMAGE:-arc-admin-frontend:v2.3.0}
     build:
       context: .
       dockerfile: frontend/Dockerfile
@@ -127,6 +162,7 @@ services:
     pids_limit: 64
     networks:
       - app
+      - monitoring
 
 networks:
   app:
@@ -135,6 +171,8 @@ networks:
         - subnet: 172.30.0.0/24
   data:
     internal: true
+  monitoring:
+    name: ${MONITORING_NETWORK:-arc-admin-monitoring}
 
 volumes:
   postgres-data:
