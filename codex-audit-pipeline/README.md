@@ -380,6 +380,8 @@ git config core.hooksPath codex-audit-pipeline/hooks
 
 `pre-commit` 执行 `cargo flow hook`。hook profile 不运行数据库集成测试或 production build；交付前使用 `cargo flow verify --all`。
 
+业务代码模板由 `.codex/templates/manifest.json` 统一登记。`hook` 和 `full` 流程会执行模板质量门禁，检查清单覆盖、占位符一致性和示例渲染结果；TypeScript 模板使用编译器诊断，Rust 模板使用 `rustfmt --check`，SQL 模板检查引号、注释、括号和语句终止符。对应入口为 `scripts/check-templates.mjs`，负向测试位于 `scripts/check-templates.test.mjs`。
+
 独立安装方式的新项目可以创建同样的薄 hook：
 
 ```sh

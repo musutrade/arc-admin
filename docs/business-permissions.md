@@ -46,6 +46,22 @@
 
 SQL 模板只自动把新权限授予 `super_admin`。其他角色应在权限分配页面显式授权；若产品必须提供内置业务角色，应在同一个 migration 中按明确角色代码列出权限，禁止按前缀批量授权。
 
+## 模板质量门禁
+
+`codex-audit-pipeline/.codex/templates/manifest.json` 是业务模板的唯一登记清单。新增、删除或重命名 `.tmpl` 文件时必须同步更新清单，并为每个占位符提供示例值。
+
+门禁会检查模板是否完整登记、占位符与示例值是否一致、是否残留冲突标记或禁用模式，并分别使用 TypeScript 编译器、`rustfmt` 和 SQL 结构扫描器验证渲染结果。
+
+本地可以单独执行：
+
+```bash
+node scripts/check-templates.mjs
+node --test scripts/check-templates.test.mjs
+cargo flow verify --components workflow
+```
+
+该门禁已加入 `hook` 和 `full` 验证流程，提交钩子与交付前完整验证都会执行。
+
 ## 自定义动作
 
 审批、导出、转账等动作应使用独立权限，例如：

@@ -1,4 +1,5 @@
-// 使用前替换: {{ENTITY_NAME}}, {{TABLE_NAME}}, {{COLUMN_LIST}}, {{VALUE_PLACEHOLDER}}
+// 使用前替换: {{ENTITY_NAME}}, {{TABLE_NAME}}, {{COLUMN_LIST}},
+//              {{VALUE_PLACEHOLDER}}，并用 BIND_FIELDS 替换下方绑定表达式。
 // 注意: Repository 层是唯一允许 SQL 写操作的地方（audit allowlist）
 // 风格与 backend/src/repositories/*.rs 一致：
 //   自由函数 + &PgPool，返回 sqlx::Error（由 Service 层映射为 ApiError）
@@ -8,10 +9,7 @@ use sqlx::{PgPool, Row};
 
 const ENTITY_COLUMNS: &str = "id, {{COLUMN_LIST}}, created_at, updated_at";
 
-pub async fn find_by_id(
-    pool: &PgPool,
-    id: i64,
-) -> Result<Option<{{ENTITY_NAME}}Row>, sqlx::Error> {
+pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<{{ENTITY_NAME}}Row>, sqlx::Error> {
     sqlx::query_as::<_, {{ENTITY_NAME}}Row>(&format!(
         "SELECT {ENTITY_COLUMNS} FROM {{TABLE_NAME}} WHERE id = $1 AND deleted_at IS NULL"
     ))
@@ -52,8 +50,7 @@ pub async fn create(
          VALUES ({{VALUE_PLACEHOLDER}})
          RETURNING {ENTITY_COLUMNS}"
     ))
-    // 按字段逐个 .bind(...)，与 users::create 模式一致
-    .bind(&data.field1)
+    {{BIND_FIELDS}}
     .fetch_one(pool)
     .await
 }

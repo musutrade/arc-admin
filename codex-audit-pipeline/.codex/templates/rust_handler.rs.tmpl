@@ -7,11 +7,9 @@
 use crate::auth::RequirePermission;
 use crate::error::ApiError;
 use crate::models::{
-    {{ENTITY_NAME}}CreateRequest, {{ENTITY_NAME}}Response, PageQuery, Page{{ENTITY_NAME}},
+    {{ENTITY_NAME}}CreateRequest, {{ENTITY_NAME}}Response, Page{{ENTITY_NAME}}, PageQuery,
 };
-use crate::permissions::{{PERMISSION_MODULE}}::{
-    {{READ_PERMISSION_TYPE}}, {{WRITE_PERMISSION_TYPE}},
-};
+use crate::permissions::{{PERMISSION_MODULE}}::{{{READ_PERMISSION_TYPE}}, {{WRITE_PERMISSION_TYPE}}};
 use crate::services;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
@@ -23,7 +21,9 @@ pub async fn list(
     _auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
     Query(query): Query<PageQuery>,
 ) -> Result<Json<Page{{ENTITY_NAME}}>, ApiError> {
-    services::{{entity_name}}::list(&state.pool, &query).await.map(Json)
+    services::{{entity_name}}::list(&state.pool, &query)
+        .await
+        .map(Json)
 }
 
 pub async fn get(
@@ -31,7 +31,9 @@ pub async fn get(
     _auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
     Path(id): Path<i64>,
 ) -> Result<Json<{{ENTITY_NAME}}Response>, ApiError> {
-    services::{{entity_name}}::get(&state.pool, id).await.map(Json)
+    services::{{entity_name}}::get(&state.pool, id)
+        .await
+        .map(Json)
 }
 
 pub async fn create(

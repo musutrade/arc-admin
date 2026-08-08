@@ -109,6 +109,8 @@ cargo flow verify --all
 
 `verify` 固定先执行凭据扫描和架构审计，门禁通过后才运行配置中的 lint、compile、test、build。后端测试优先使用 `TEST_DATABASE_URL`；未配置时自动启动一次性 PostgreSQL 容器，结束后清理，不使用开发库或生产库。
 
+模板变更会在 `hook` 和 `full` 验证中自动执行质量门禁。门禁以 `codex-audit-pipeline/.codex/templates/manifest.json` 为清单，检查模板登记、占位符、示例渲染结果以及 TypeScript、Rust、SQL 的基础语法质量。
+
 详细资料：
 
 - [开发指南](docs/development.md)：本项目的本地开发、测试和提交步骤；

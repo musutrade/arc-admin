@@ -34,6 +34,8 @@ required_steps = [
   "frontend.build",
   "workflow.hook-syntax",
   "workflow.project-init-tests",
+  "workflow.template-quality",
+  "workflow.template-quality-tests",
   "workflow.format",
   "workflow.clippy",
   "workflow.tests",
@@ -330,6 +332,28 @@ program = "node"
 args = ["--test", "{root}/scripts/init-project.test.mjs"]
 cwd = "{root}"
 log = "project_init_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.template-quality"
+label = "template quality gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-templates.mjs"]
+cwd = "{root}"
+log = "template_quality.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.template-quality-tests"
+label = "template quality gate tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/check-templates.test.mjs"]
+cwd = "{root}"
+log = "template_quality_tests.log"
 timeout_secs = 60
 
 [[steps]]
