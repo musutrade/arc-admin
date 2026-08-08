@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { DataService } from '../../core/data.service';
+import { PermissionApiService } from '../../core/api/permission-api.service';
 import { PermissionGroup, PermissionType } from '../../core/models';
 
 const TYPE_META: Record<PermissionType, { icon: string; cls: string; label: string }> = {
@@ -41,7 +41,7 @@ export class PermissionsPage implements OnInit {
 
   readonly typeOptions: ('all' | PermissionType)[] = ['all', 'menu', 'button', 'api'];
 
-  private readonly data = inject(DataService);
+  private readonly permissionApi = inject(PermissionApiService);
 
   readonly filteredGroups = computed<FilteredGroup[]>(() => {
     const term = this.search().trim().toLowerCase();
@@ -74,7 +74,7 @@ export class PermissionsPage implements OnInit {
   }
 
   private loadGroups(): void {
-    this.data
+    this.permissionApi
       .getPermissionGroups()
       .then((groups) => {
         this.groups.set(groups);

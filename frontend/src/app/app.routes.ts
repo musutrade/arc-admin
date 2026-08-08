@@ -3,6 +3,7 @@ import { CanActivateFn, Router, Routes } from '@angular/router';
 import { LayoutComponent } from './layout/layout';
 import { LoginPage } from './pages/login/login';
 import { AuthService } from './core/auth.service';
+import { ROUTE_ACCESS } from './app.navigation';
 
 /** 无需登录即可访问的错误页 */
 const PUBLIC_PATHS = new Set(['403', '404', '500']);
@@ -23,15 +24,12 @@ export const authGuard: CanActivateFn = (route) => {
 export const permissionGuard: CanActivateFn = (route) => {
   const router = inject(Router);
   const auth = inject(AuthService);
-  const permission = route.data['permission'] as string | undefined;
-  const permissions = (route.data['permissions'] as string[] | undefined) ?? [];
+  const permissions = route.data['permissions'] as readonly string[] | undefined;
   return auth.ensureSession().then((authenticated) => {
     if (!authenticated) {
       return router.createUrlTree(['/login']);
     }
-    const allowed = permission
-      ? auth.hasPermission(permission)
-      : auth.hasAllPermissions(permissions);
+    const allowed = Boolean(permissions?.length) && auth.hasAllPermissions(permissions ?? []);
     return allowed ? true : router.createUrlTree(['/403']);
   });
 };
@@ -47,39 +45,33 @@ export const routes: Routes = [
       {
         path: 'permissions',
         canActivate: [authGuard, permissionGuard],
-        data: { permission: 'permission:directory:read' },
+        data: { permissions: ROUTE_ACCESS.permissionDirectory },
         loadComponent: () =>
           import('./pages/permissions/permissions').then((m) => m.PermissionsPage),
       },
       {
         path: 'users',
         canActivate: [authGuard, permissionGuard],
-        data: { permission: 'user:directory:read' },
+        data: { permissions: ROUTE_ACCESS.users },
         loadComponent: () => import('./pages/users/users').then((m) => m.UsersPage),
       },
       {
         path: 'roles',
         canActivate: [authGuard, permissionGuard],
-        data: { permission: 'role:directory:read' },
+        data: { permissions: ROUTE_ACCESS.roles },
         loadComponent: () => import('./pages/roles/roles').then((m) => m.RolesPage),
       },
       {
         path: 'role-permissions',
         canActivate: [authGuard, permissionGuard],
-        data: {
-          permissions: [
-            'role:permissions:write',
-            'role:directory:read',
-            'permission:directory:read',
-          ],
-        },
+        data: { permissions: ROUTE_ACCESS.rolePermissions },
         loadComponent: () =>
           import('./pages/role-permissions/role-permissions').then((m) => m.RolePermissionsPage),
       },
       {
         path: 'audit-logs',
         canActivate: [authGuard, permissionGuard],
-        data: { permission: 'audit:logs:read' },
+        data: { permissions: ROUTE_ACCESS.auditLogs },
         loadComponent: () => import('./pages/audit-logs/audit-logs').then((m) => m.AuditLogs),
       },
       {

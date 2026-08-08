@@ -10,6 +10,7 @@ import { ThemeService } from '../core/theme.service';
 import { AuthService } from '../core/auth.service';
 import { ChangePasswordDialog } from '../core/change-password.dialog';
 import { APP_CONFIG } from '../core/runtime-config';
+import { APP_NAVIGATION, NavigationGroup, NavigationItem } from '../app.navigation';
 
 @Component({
   selector: 'app-layout',
@@ -29,10 +30,9 @@ import { APP_CONFIG } from '../core/runtime-config';
 export class LayoutComponent {
   readonly collapsed = signal(false);
   readonly sidebarOpen = signal(false);
-  /** User Management 子菜单展开状态 */
-  readonly userSubOpen = signal(false);
-  /** 当前是否处于 /users 相关路由(高亮 User Management 父项) */
-  readonly usersActive = signal(false);
+  readonly navigationItems = APP_NAVIGATION;
+  readonly expandedGroups = signal<ReadonlySet<string>>(new Set());
+  readonly currentUrl = signal('');
   private readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -43,21 +43,13 @@ export class LayoutComponent {
   readonly isDark = this.theme.isDark;
 
   constructor() {
-    const onUsersRoute = () => this.router.url.startsWith('/users');
-    this.usersActive.set(onUsersRoute());
-    this.userSubOpen.set(onUsersRoute());
+    this.syncNavigation(this.router.url);
     this.router.events
       .pipe(
         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
         takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe((event) => {
-        const isUsers = event.url.startsWith('/users');
-        this.usersActive.set(isUsers);
-        if (isUsers) {
-          this.userSubOpen.set(true);
-        }
-      });
+      .subscribe((event) => this.syncNavigation(event.urlAfterRedirects));
   }
 
   toggleTheme(): void {
@@ -68,20 +60,34 @@ export class LayoutComponent {
     this.collapsed.update((v) => !v);
   }
 
-  toggleUserMenu(): void {
-    this.userSubOpen.update((v) => !v);
+  canAccess(item: NavigationItem): boolean {
+    return this.auth.hasAllPermissions(item.permissions);
   }
 
-  closeUserMenu(): void {
-    this.userSubOpen.set(false);
+  isNavigationActive(item: NavigationItem): boolean {
+    return item.kind === 'group'
+      ? item.children.some((child) => this.isRouteActive(child.route))
+      : this.isRouteActive(item.route);
   }
 
-  can(permission: string): boolean {
-    return this.auth.hasPermission(permission);
+  isGroupExpanded(id: string): boolean {
+    return this.expandedGroups().has(id);
   }
 
-  canAll(permissions: readonly string[]): boolean {
-    return this.auth.hasAllPermissions(permissions);
+  toggleNavigationGroup(group: NavigationGroup): void {
+    this.expandedGroups.update((current) => {
+      const next = new Set(current);
+      if (next.has(group.id)) {
+        next.delete(group.id);
+      } else {
+        next.add(group.id);
+      }
+      return next;
+    });
+  }
+
+  closeMobileNavigation(): void {
+    this.sidebarOpen.set(false);
   }
 
   openChangePassword(): void {
@@ -100,5 +106,26 @@ export class LayoutComponent {
   logout(): void {
     this.auth.logout();
     this.router.navigate(['/login']);
+  }
+
+  private syncNavigation(url: string): void {
+    this.currentUrl.set(url);
+    this.expandedGroups.update((current) => {
+      const next = new Set(current);
+      for (const item of this.navigationItems) {
+        if (
+          item.kind === 'group' &&
+          item.children.some((child) => this.isRouteActive(child.route))
+        ) {
+          next.add(item.id);
+        }
+      }
+      return next;
+    });
+  }
+
+  private isRouteActive(route: string): boolean {
+    const url = this.currentUrl();
+    return url === route || url.startsWith(`${route}/`) || url.startsWith(`${route}?`);
   }
 }

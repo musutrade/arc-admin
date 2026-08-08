@@ -8,29 +8,24 @@ import {
   provideRouter,
 } from '@angular/router';
 import { authGuard, permissionGuard } from './app.routes';
+import { ROUTE_ACCESS } from './app.navigation';
 import { AuthService } from './core/auth.service';
 
-function makeRoute(
-  path: string,
-  permission?: string,
-  permissions?: string[],
-): ActivatedRouteSnapshot {
+function makeRoute(path: string, permissions?: readonly string[]): ActivatedRouteSnapshot {
   return {
     routeConfig: { path },
-    data: permission ? { permission } : permissions ? { permissions } : {},
+    data: permissions ? { permissions } : {},
   } as unknown as ActivatedRouteSnapshot;
 }
 
 describe('route guards', () => {
   const auth = {
     ensureSession: vi.fn(() => Promise.resolve(false)),
-    hasPermission: vi.fn(() => false),
     hasAllPermissions: vi.fn(() => false),
   };
 
   beforeEach(() => {
     auth.ensureSession.mockReset().mockResolvedValue(false);
-    auth.hasPermission.mockReset().mockReturnValue(false);
     auth.hasAllPermissions.mockReset().mockReturnValue(false);
     TestBed.configureTestingModule({
       providers: [
@@ -47,18 +42,9 @@ describe('route guards', () => {
     );
   }
 
-  function runPermission(permission: string): unknown {
+  function runPermissions(permissions?: readonly string[]): unknown {
     return TestBed.runInInjectionContext(() =>
-      permissionGuard(makeRoute('users', permission), {} as RouterStateSnapshot),
-    );
-  }
-
-  function runPermissions(permissions: string[]): unknown {
-    return TestBed.runInInjectionContext(() =>
-      permissionGuard(
-        makeRoute('role-permissions', undefined, permissions),
-        {} as RouterStateSnapshot,
-      ),
+      permissionGuard(makeRoute('protected', permissions), {} as RouterStateSnapshot),
     );
   }
 
@@ -82,25 +68,32 @@ describe('route guards', () => {
 
   it('redirects authenticated users without the required permission', async () => {
     auth.ensureSession.mockResolvedValue(true);
-    const result = await runPermission('user:directory:read');
+    const result = await runPermissions(ROUTE_ACCESS.users);
     const router = TestBed.inject(Router);
     expect(router.serializeUrl(result as UrlTree)).toBe('/403');
   });
 
   it('allows authenticated users with the required permission', async () => {
     auth.ensureSession.mockResolvedValue(true);
-    auth.hasPermission.mockReturnValue(true);
-    await expect(runPermission('user:directory:read')).resolves.toBe(true);
+    auth.hasAllPermissions.mockReturnValue(true);
+    await expect(runPermissions(ROUTE_ACCESS.users)).resolves.toBe(true);
   });
 
   it('requires every dependency for the role permission page', async () => {
     auth.ensureSession.mockResolvedValue(true);
-    const required = ['role:permissions:write', 'role:directory:read', 'permission:directory:read'];
+    const required = ROUTE_ACCESS.rolePermissions;
     const router = TestBed.inject(Router);
     const denied = await runPermissions(required);
     expect(router.serializeUrl(denied as UrlTree)).toBe('/403');
 
     auth.hasAllPermissions.mockReturnValue(true);
     await expect(runPermissions(required)).resolves.toBe(true);
+  });
+
+  it('fails closed when a protected route has no permission declaration', async () => {
+    auth.ensureSession.mockResolvedValue(true);
+    const router = TestBed.inject(Router);
+    const denied = await runPermissions();
+    expect(router.serializeUrl(denied as UrlTree)).toBe('/403');
   });
 });

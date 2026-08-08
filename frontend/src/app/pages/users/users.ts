@@ -13,7 +13,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
-import { DataService } from '../../core/data.service';
+import { DashboardApiService } from '../../core/api/dashboard-api.service';
+import { RoleApiService } from '../../core/api/role-api.service';
+import { UserApiService } from '../../core/api/user-api.service';
 import { Role, StatCard, User, UserStatus } from '../../core/models';
 import { AuthService } from '../../core/auth.service';
 import { apiErrorMessage } from '../../core/api-error';
@@ -55,7 +57,9 @@ export class UsersPage implements OnInit {
   readonly pageSize = 10;
   readonly busy = signal(false);
 
-  private readonly data = inject(DataService);
+  private readonly dashboardApi = inject(DashboardApiService);
+  private readonly roleApi = inject(RoleApiService);
+  private readonly userApi = inject(UserApiService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
@@ -141,9 +145,9 @@ export class UsersPage implements OnInit {
     this.error.set(null);
     try {
       const statsRequest = this.auth.hasPermission('dashboard:analytics:read')
-        ? this.data.getUserStats()
+        ? this.dashboardApi.getUserStats()
         : Promise.resolve([]);
-      const [users, stats] = await Promise.all([this.data.getUsers(), statsRequest]);
+      const [users, stats] = await Promise.all([this.userApi.getUsers(), statsRequest]);
       this.users.set(users);
       this.stats.set(stats);
       this.selected.set(new Set());
@@ -223,7 +227,7 @@ export class UsersPage implements OnInit {
       return;
     }
     await this.runMutation(
-      () => this.data.updateUser(user.id, { password }),
+      () => this.userApi.updateUser(user.id, { password }),
       `已重置 ${user.name} 的密码`,
     );
   }
@@ -243,7 +247,7 @@ export class UsersPage implements OnInit {
       return;
     }
     await this.runMutation(
-      () => this.data.updateUser(user.id, { status: activating ? 'active' : 'inactive' }),
+      () => this.userApi.updateUser(user.id, { status: activating ? 'active' : 'inactive' }),
       `已${action} ${user.name}`,
     );
   }
@@ -261,7 +265,7 @@ export class UsersPage implements OnInit {
     if (!confirmed) {
       return;
     }
-    await this.runMutation(() => this.data.deleteUser(user.id), `已删除 ${user.name}`);
+    await this.runMutation(() => this.userApi.deleteUser(user.id), `已删除 ${user.name}`);
   }
 
   async deleteSelected(): Promise<void> {
@@ -273,7 +277,7 @@ export class UsersPage implements OnInit {
       return;
     }
     await this.runMutation(
-      () => Promise.all(ids.map((id) => this.data.deleteUser(id))).then(() => undefined),
+      () => Promise.all(ids.map((id) => this.userApi.deleteUser(id))).then(() => undefined),
       `已删除 ${ids.length} 个用户`,
     );
   }
@@ -284,7 +288,7 @@ export class UsersPage implements OnInit {
       return;
     }
     try {
-      const roles = this.filterGrantableRoles(await this.data.getRoles());
+      const roles = this.filterGrantableRoles(await this.roleApi.getRoles());
       const roleIds: string[] | undefined = await firstValueFrom(
         this.dialog.open(RoleSelectionDialog, { data: roles }).afterClosed(),
       );
@@ -293,7 +297,7 @@ export class UsersPage implements OnInit {
       }
       await this.runMutation(
         () =>
-          Promise.all(ids.map((id) => this.data.assignUserRoles(id, roleIds))).then(
+          Promise.all(ids.map((id) => this.userApi.assignUserRoles(id, roleIds))).then(
             () => undefined,
           ),
         `已更新 ${ids.length} 个用户的角色`,
@@ -308,7 +312,7 @@ export class UsersPage implements OnInit {
       const canManageRoles = this.canManageRoles();
       const canManageStatus = this.canManageStatus();
       const canResetPassword = this.canResetPassword();
-      const roles = canManageRoles ? this.filterGrantableRoles(await this.data.getRoles()) : [];
+      const roles = canManageRoles ? this.filterGrantableRoles(await this.roleApi.getRoles()) : [];
       const result: UserEditorResult | undefined = await firstValueFrom(
         this.dialog
           .open(UserEditorDialog, {
@@ -321,20 +325,20 @@ export class UsersPage implements OnInit {
       }
       if (user) {
         await this.runMutation(async () => {
-          await this.data.updateUser(user.id, {
+          await this.userApi.updateUser(user.id, {
             displayName: result.displayName,
             email: result.email || null,
             ...(canManageStatus ? { status: result.status } : {}),
             ...(canResetPassword && result.password ? { password: result.password } : {}),
           });
           if (canManageRoles) {
-            await this.data.assignUserRoles(user.id, result.roleIds);
+            await this.userApi.assignUserRoles(user.id, result.roleIds);
           }
         }, `已更新 ${result.displayName}`);
       } else {
         await this.runMutation(
           () =>
-            this.data.createUser({
+            this.userApi.createUser({
               username: result.username,
               password: result.password,
               displayName: result.displayName,

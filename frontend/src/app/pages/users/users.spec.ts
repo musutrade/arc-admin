@@ -1,7 +1,9 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { DashboardApiService } from '../../core/api/dashboard-api.service';
+import { RoleApiService } from '../../core/api/role-api.service';
+import { UserApiService } from '../../core/api/user-api.service';
 import { AuthService } from '../../core/auth.service';
-import { DataService } from '../../core/data.service';
 import { User } from '../../core/models';
 
 const USERS: User[] = Array.from({ length: 12 }, (_, index) => ({
@@ -17,8 +19,10 @@ const USERS: User[] = Array.from({ length: 12 }, (_, index) => ({
 }));
 import { UsersPage } from './users';
 
-const dataServiceStub: Partial<DataService> = {
+const userApiStub: Partial<UserApiService> = {
   getUsers: () => Promise.resolve(USERS),
+};
+const dashboardApiStub: Partial<DashboardApiService> = {
   getUserStats: () => Promise.resolve([]),
 };
 const authServiceStub: Partial<AuthService> = {
@@ -34,7 +38,9 @@ describe('UsersPage', () => {
       imports: [UsersPage],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: DataService, useValue: dataServiceStub },
+        { provide: UserApiService, useValue: userApiStub },
+        { provide: DashboardApiService, useValue: dashboardApiStub },
+        { provide: RoleApiService, useValue: {} },
         { provide: AuthService, useValue: authServiceStub },
       ],
     }).compileComponents();

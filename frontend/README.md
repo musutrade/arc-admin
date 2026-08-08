@@ -32,7 +32,8 @@ npm run build         # 输出到 dist/arc-admin
 - `AuthService` 登录后保存 Bearer token，并从 `/auth/me/permissions` 获取权限码；权限加载失败会清除整个部分会话。
 - `authInterceptor` 为 API 请求附加 token，收到 401 后清理会话并跳转登录页。
 - 路由守卫会向服务端复核现有 token；页面和按钮按权限码显示，但后端授权始终是最终安全边界。
-- `DataService` 将 OpenAPI 的数值 ID、nullable 字段和分页响应映射到视图模型。
+- `core/api` 下按资源拆分的 API Service 将 OpenAPI 的数值 ID、nullable 字段和分页响应映射到视图模型。
+- 路由守卫与侧栏共用 `app.navigation.ts` 的权限要求；新业务统一放入 `features/<domain>`。
 - 默认 API 根路径是 `/api/v1`。部署时覆盖静态 `config.js` 的 `window.__ARC_ADMIN_CONFIG__.apiBaseUrl` 即可切换地址，无需重新构建。
 
 ## 页面清单
@@ -73,13 +74,17 @@ npm run build         # 输出到 dist/arc-admin
 
 ```
 src/app/
-├── core/            # API DTO、认证、interceptor、DataService、ThemeService
-├── layout/          # 主布局(侧边栏 + 顶栏 + 主题切换)
-└── pages/
-    ├── login/       # 登录页
-    ├── permissions/ # 权限管理
-    ├── users/       # 用户管理
-    ├── roles/       # 角色管理
-    ├── role-permissions/  # 分配权限 + 对话框
-    └── errors/      # 403 / 404 / 500
+├── app.navigation.ts # 共享路由权限与导航配置
+├── core/
+│   └── api/           # 模板内置的 RBAC 平台资源客户端
+├── features/          # 新业务域，每个域自带页面、数据访问、模型与测试
+├── layout/            # 主布局(侧边栏 + 顶栏 + 主题切换)
+└── pages/             # 模板内置的 RBAC 平台页面
+    ├── login/
+    ├── permissions/
+    ├── users/
+    ├── roles/
+    ├── role-permissions/
+    ├── audit-logs/
+    └── errors/
 ```

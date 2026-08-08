@@ -1,4 +1,5 @@
 <!-- ARC_PROJECT_HEADER_START -->
+
 # arc-admin
 
 RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后端。
@@ -10,7 +11,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 .
 ├── AGENTS.md                  # Codex 全局公约（会话启动自动加载）
 ├── frontend/                  # Angular 22 + Material M3 前端
-│   └── src/app/{core,layout,pages}
+│   └── src/app/{core,features,layout,pages}
 ├── backend/                   # Rust + Axum + SQLX 后端
 │   ├── src/lib.rs             # 应用路由与可测试的 AppState
 │   ├── src/main.rs            # 配置、连接池、迁移与监听入口
@@ -28,6 +29,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 ```
 
 <!-- ARC_TEMPLATE_USAGE_START -->
+
 ## 从模板创建业务项目
 
 从 GitHub Template 创建独立仓库后，在新仓库根目录执行一次初始化：
@@ -48,6 +50,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 ```bash
 ./scripts/init-project.sh --help
 ```
+
 <!-- ARC_TEMPLATE_USAGE_END -->
 
 ## 快速开始
@@ -110,6 +113,7 @@ cargo flow verify --all
 
 - [开发指南](docs/development.md)：本项目的本地开发、测试和提交步骤；
 - [架构说明](docs/architecture.md)：前后端分层和依赖边界；
+- [业务模块扩展指南](docs/business-extension.md)：新业务域的目录、权限、路由和后端接入清单；
 - [项目公约](AGENTS.md)：Codex、Reviewer、Tester 和 Git 安全约束；
 - [arc-flow 操作手册](codex-audit-pipeline/README.md)：安装、命令、预设、CI、报告和故障排查；
 - [schema v2 配置参考](codex-audit-pipeline/docs/configuration.md)：`flow.toml` 与 `audit.toml` 的字段级说明。
@@ -129,11 +133,11 @@ cargo flow verify --all
 
 ```javascript
 window.__ARC_ADMIN_CONFIG__ = {
-  appName: 'RBAC 管理中心',
-  appShortName: 'RBAC',
-  appSlug: 'arc-admin',
-  apiBaseUrl: '/api/v1',
-  themeStorageKey: 'arc-admin-theme',
+  appName: "RBAC 管理中心",
+  appShortName: "RBAC",
+  appSlug: "arc-admin",
+  apiBaseUrl: "/api/v1",
+  themeStorageKey: "arc-admin-theme",
 };
 ```
 

@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { DataService } from '../../core/data.service';
+import { AuditLogApiService } from '../../core/api/audit-log-api.service';
 
 import { AuditLogs } from './audit-logs';
 
@@ -14,7 +14,7 @@ describe('AuditLogs', () => {
       providers: [
         provideZonelessChangeDetection(),
         {
-          provide: DataService,
+          provide: AuditLogApiService,
           useValue: {
             getAuditLogs: () =>
               Promise.resolve({

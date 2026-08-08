@@ -95,6 +95,42 @@ suggestion = "请将 DOM 操作逻辑移到 Component 层"
 allowlist = []
 exclude_patterns = []
 
+[[arch_rules]]
+name = "前端 Core 不应依赖业务 Feature"
+layer = "frontend-core"
+paths = ["frontend/src/app/core"]
+extensions = ["ts"]
+forbidden_patterns = [
+  '''from\s+['"][^'"]*features(?:/|['"])''',
+  '''import\s*\(\s*['"][^'"]*features(?:/|['"])''',
+]
+allowed_patterns = []
+suggestion = "请将业务组合放在 app.routes.ts、app.navigation.ts 或对应 features/<domain> 内，Core 只能提供基础能力"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Handler 层不应直接依赖 Repository"
+layer = "handler"
+paths = ["backend/src/handlers"]
+extensions = ["rs"]
+forbidden_patterns = ['crate::repositories(?:\b|::)']
+allowed_patterns = []
+suggestion = "请由 Handler 调用 Service，再由 Service 调用 Repository"
+allowlist = []
+exclude_patterns = []
+
+[[arch_rules]]
+name = "Repository 层不应依赖上层"
+layer = "repository"
+paths = ["backend/src/repositories"]
+extensions = ["rs"]
+forbidden_patterns = ['crate::(?:handlers|services)(?:\b|::)']
+allowed_patterns = []
+suggestion = "Repository 只负责持久化，不得依赖 Handler 或 Service"
+allowlist = []
+exclude_patterns = []
+
 [[hard_rules]]
 name = "代码模板不得引用过时框架"
 severity = "error"

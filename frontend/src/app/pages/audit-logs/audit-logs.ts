@@ -9,9 +9,9 @@ import {
 } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { AuditLogApiService } from '../../core/api/audit-log-api.service';
 import { ApiAuditLog } from '../../core/api.models';
 import { apiErrorMessage } from '../../core/api-error';
-import { DataService } from '../../core/data.service';
 
 const ACTION_LABELS: Record<string, string> = {
   'user.create': '创建用户',
@@ -36,7 +36,7 @@ const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, label]) => ({ 
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AuditLogs implements OnInit {
-  private readonly data = inject(DataService);
+  private readonly auditLogApi = inject(AuditLogApiService);
 
   readonly logs = signal<ApiAuditLog[]>([]);
   readonly loading = signal(true);
@@ -92,7 +92,7 @@ export class AuditLogs implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const page = await this.data.getAuditLogs(
+      const page = await this.auditLogApi.getAuditLogs(
         this.page(),
         this.pageSize,
         this.keyword(),

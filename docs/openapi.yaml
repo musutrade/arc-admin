@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: |
     RBAC 管理后台 API 契约（Angular 前端 + Rust/Axum/SQLX 后端共同遵守）。
-    本文件是前后端联调的唯一事实来源：后端按此实现路由与 DTO，前端 DataService 按此映射 HTTP 响应。
+    本文件是前后端联调的唯一事实来源：后端按此实现路由与 DTO，前端各资源 API Service 按此映射 HTTP 响应。
 
     ## 前端字段映射
     - User.name            → displayName（界面展示名）

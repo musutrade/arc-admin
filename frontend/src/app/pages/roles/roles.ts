@@ -11,10 +11,11 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
+import { PermissionApiService } from '../../core/api/permission-api.service';
+import { RoleApiService } from '../../core/api/role-api.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { ConfirmDialog } from '../../core/confirm.dialog';
-import { DataService } from '../../core/data.service';
 import { Role, RolePermissionRow } from '../../core/models';
 import { AssignPermissionsDialog } from '../role-permissions/assign-permissions.dialog';
 import { RoleEditorDialog, RoleEditorResult } from './role-editor.dialog';
@@ -33,7 +34,8 @@ export class RolesPage implements OnInit {
   readonly view = signal<'grid' | 'list'>('grid');
   readonly busy = signal(false);
 
-  private readonly data = inject(DataService);
+  private readonly permissionApi = inject(PermissionApiService);
+  private readonly roleApi = inject(RoleApiService);
   private readonly auth = inject(AuthService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
@@ -49,7 +51,7 @@ export class RolesPage implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      this.roles.set(await this.data.getRoles());
+      this.roles.set(await this.roleApi.getRoles());
     } catch (error) {
       this.error.set(apiErrorMessage(error, '角色数据加载失败，请稍后重试'));
     } finally {
@@ -93,7 +95,7 @@ export class RolesPage implements OnInit {
       return;
     }
     await this.runMutation(
-      () => this.data.updateRole(role.id, { isActive: activating }),
+      () => this.roleApi.updateRole(role.id, { isActive: activating }),
       `已${action} ${role.name}`,
     );
   }
@@ -118,14 +120,14 @@ export class RolesPage implements OnInit {
     if (!confirmed) {
       return;
     }
-    await this.runMutation(() => this.data.deleteRole(role.id), `已删除 ${role.name}`);
+    await this.runMutation(() => this.roleApi.deleteRole(role.id), `已删除 ${role.name}`);
   }
 
   async onEditPermissions(role: Role): Promise<void> {
     try {
       const [groups, assigned] = await Promise.all([
-        this.data.getPermissionGroups(),
-        this.data.getAssignedPermissionIds(role.id),
+        this.permissionApi.getPermissionGroups(),
+        this.roleApi.getAssignedPermissionIds(role.id),
       ]);
       const row: RolePermissionRow = {
         roleId: role.id,
@@ -148,7 +150,7 @@ export class RolesPage implements OnInit {
       );
       if (permissionIds) {
         await this.runMutation(
-          () => this.data.assignRolePermissions(role.id, permissionIds),
+          () => this.roleApi.assignRolePermissions(role.id, permissionIds),
           `已更新 ${role.name} 的权限`,
         );
       }
@@ -167,7 +169,7 @@ export class RolesPage implements OnInit {
     if (role) {
       await this.runMutation(
         () =>
-          this.data.updateRole(role.id, {
+          this.roleApi.updateRole(role.id, {
             name: result.name,
             category: result.category,
             icon: result.icon || null,
@@ -180,7 +182,7 @@ export class RolesPage implements OnInit {
     } else {
       await this.runMutation(
         () =>
-          this.data.createRole({
+          this.roleApi.createRole({
             code: result.code,
             name: result.name,
             category: result.category,

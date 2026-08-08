@@ -17,86 +17,56 @@
 
     <!-- 导航 -->
     <nav class="sidebar-nav custom-scrollbar">
-      @if (can('user:directory:read')) {
-        <div class="nav-group">
-          <button
-            class="nav-item"
-            [class.justify-center]="collapsed()"
-            [class.active]="usersActive()"
-            [attr.aria-expanded]="userSubOpen()"
-            (click)="toggleUserMenu()"
-            [attr.title]="collapsed() ? '用户管理' : null"
-          >
-            <mat-icon fontSet="material-symbols-outlined">group</mat-icon>
-            <span class="nav-label" [class.hidden]="collapsed()">用户管理</span>
-            <mat-icon class="nav-caret" [class.hidden]="collapsed()" [class.rotated]="userSubOpen()"
-              >expand_more</mat-icon
-            >
-          </button>
-          <div class="nav-sub" [class.hidden]="collapsed() || !userSubOpen()">
+      @for (item of navigationItems; track item.id) {
+        @if (canAccess(item)) {
+          @if (item.kind === 'group') {
+            <div class="nav-group">
+              <button
+                class="nav-item"
+                [class.justify-center]="collapsed()"
+                [class.active]="isNavigationActive(item)"
+                [attr.aria-expanded]="isGroupExpanded(item.id)"
+                (click)="toggleNavigationGroup(item)"
+                [attr.title]="collapsed() ? item.label : null"
+              >
+                <mat-icon fontSet="material-symbols-outlined">{{ item.icon }}</mat-icon>
+                <span class="nav-label" [class.hidden]="collapsed()">{{ item.label }}</span>
+                <mat-icon
+                  class="nav-caret"
+                  [class.hidden]="collapsed()"
+                  [class.rotated]="isGroupExpanded(item.id)"
+                  >expand_more</mat-icon
+                >
+              </button>
+              <div class="nav-sub" [class.hidden]="collapsed() || !isGroupExpanded(item.id)">
+                @for (child of item.children; track child.id) {
+                  @if (canAccess(child)) {
+                    <a
+                      [routerLink]="child.route"
+                      routerLinkActive="sub-active"
+                      class="nav-sub-item"
+                      (click)="closeMobileNavigation()"
+                    >
+                      <span>{{ child.label }}</span>
+                    </a>
+                  }
+                }
+              </div>
+            </div>
+          } @else {
             <a
-              routerLink="/users"
-              routerLinkActive="sub-active"
-              class="nav-sub-item"
-              (click)="sidebarOpen.set(false)"
+              [routerLink]="item.route"
+              routerLinkActive="nav-active"
+              class="nav-item"
+              [class.justify-center]="collapsed()"
+              (click)="closeMobileNavigation()"
+              [attr.title]="collapsed() ? item.label : null"
             >
-              <span>用户列表</span>
+              <mat-icon fontSet="material-symbols-outlined">{{ item.icon }}</mat-icon>
+              <span class="nav-label" [class.hidden]="collapsed()">{{ item.label }}</span>
             </a>
-          </div>
-        </div>
-      }
-
-      @if (can('role:directory:read')) {
-        <a
-          routerLink="/roles"
-          routerLinkActive="nav-active"
-          class="nav-item"
-          [class.justify-center]="collapsed()"
-          (click)="closeUserMenu(); sidebarOpen.set(false)"
-          [attr.title]="collapsed() ? '角色管理' : null"
-        >
-          <mat-icon fontSet="material-symbols-outlined">badge</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">角色管理</span>
-        </a>
-      }
-      @if (can('permission:directory:read')) {
-        <a
-          routerLink="/permissions"
-          routerLinkActive="nav-active"
-          class="nav-item"
-          [class.justify-center]="collapsed()"
-          (click)="closeUserMenu(); sidebarOpen.set(false)"
-          [attr.title]="collapsed() ? '权限目录' : null"
-        >
-          <mat-icon fontSet="material-symbols-outlined">lock_person</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">权限目录</span>
-        </a>
-      }
-      @if (canAll(['role:permissions:write', 'role:directory:read', 'permission:directory:read'])) {
-        <a
-          routerLink="/role-permissions"
-          routerLinkActive="nav-active"
-          class="nav-item"
-          [class.justify-center]="collapsed()"
-          (click)="closeUserMenu(); sidebarOpen.set(false)"
-          [attr.title]="collapsed() ? '权限分配' : null"
-        >
-          <mat-icon fontSet="material-symbols-outlined">shield</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">权限分配</span>
-        </a>
-      }
-      @if (can('audit:logs:read')) {
-        <a
-          routerLink="/audit-logs"
-          routerLinkActive="nav-active"
-          class="nav-item"
-          [class.justify-center]="collapsed()"
-          (click)="closeUserMenu(); sidebarOpen.set(false)"
-          [attr.title]="collapsed() ? '审计日志' : null"
-        >
-          <mat-icon fontSet="material-symbols-outlined">fact_check</mat-icon>
-          <span class="nav-label" [class.hidden]="collapsed()">审计日志</span>
-        </a>
+          }
+        }
       }
     </nav>
 

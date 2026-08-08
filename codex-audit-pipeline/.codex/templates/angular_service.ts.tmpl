@@ -1,34 +1,36 @@
+// 放置于 frontend/src/app/features/<domain>/data-access/
 // 使用前替换: {{ENTITY_NAME}}, {{FILE_NAME}}, {{ROUTE_PATH}}
-// 注意: 只有 Service 层允许注入 HttpClient (auditor 会拦截 Component 直连)
-// 风格与 frontend/src/app/core/data.service.ts 一致：standalone + inject() + 契约分页
-import { Injectable, inject } from '@angular/core';
+// 只有 Service 允许注入 HttpClient，页面组件不得直接访问 API。
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { {{ENTITY_NAME}}, Page } from '../models/{{FILE_NAME}}.model';
+import { API_BASE_URL } from '../../../core/runtime-config';
 
 @Injectable({ providedIn: 'root' })
-export class {{ENTITY_NAME}}Service {
+export class {{ENTITY_NAME}}ApiService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/v1/{{ROUTE_PATH}}';
+  private readonly apiBaseUrl = inject(API_BASE_URL);
+  private readonly baseUrl = `${this.apiBaseUrl}/{{ROUTE_PATH}}`;
 
-  getById(id: number): Observable<{{ENTITY_NAME}}> {
-    return this.http.get<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`);
+  getById(id: number): Promise<{{ENTITY_NAME}}> {
+    return firstValueFrom(this.http.get<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`));
   }
 
-  list(page = 1, pageSize = 20): Observable<Page<{{ENTITY_NAME}}>> {
+  list(page = 1, pageSize = 20): Promise<Page<{{ENTITY_NAME}}>> {
     const params = new HttpParams().set('page', page).set('pageSize', pageSize);
-    return this.http.get<Page<{{ENTITY_NAME}}>>(this.baseUrl, { params });
+    return firstValueFrom(this.http.get<Page<{{ENTITY_NAME}}>>(this.baseUrl, { params }));
   }
 
-  create(data: Partial<{{ENTITY_NAME}}>): Observable<{{ENTITY_NAME}}> {
-    return this.http.post<{{ENTITY_NAME}}>(this.baseUrl, data);
+  create(data: Partial<{{ENTITY_NAME}}>): Promise<{{ENTITY_NAME}}> {
+    return firstValueFrom(this.http.post<{{ENTITY_NAME}}>(this.baseUrl, data));
   }
 
-  update(id: number, data: Partial<{{ENTITY_NAME}}>): Observable<{{ENTITY_NAME}}> {
-    return this.http.put<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`, data);
+  update(id: number, data: Partial<{{ENTITY_NAME}}>): Promise<{{ENTITY_NAME}}> {
+    return firstValueFrom(this.http.put<{{ENTITY_NAME}}>(`${this.baseUrl}/${id}`, data));
   }
 
-  delete(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  async delete(id: number): Promise<void> {
+    await firstValueFrom(this.http.delete<void>(`${this.baseUrl}/${id}`));
   }
 }

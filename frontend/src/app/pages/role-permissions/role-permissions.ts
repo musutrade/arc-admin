@@ -11,9 +11,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
+import { PermissionApiService } from '../../core/api/permission-api.service';
+import { RoleApiService } from '../../core/api/role-api.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
-import { DataService } from '../../core/data.service';
 import { RolePermissionRow } from '../../core/models';
 import { AssignPermissionsDialog } from './assign-permissions.dialog';
 import { RoleEditorDialog, RoleEditorResult } from '../roles/role-editor.dialog';
@@ -30,7 +31,8 @@ export class RolePermissionsPage implements OnInit {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly busy = signal(false);
-  private readonly data = inject(DataService);
+  private readonly permissionApi = inject(PermissionApiService);
+  private readonly roleApi = inject(RoleApiService);
   private readonly dialog = inject(MatDialog);
   private readonly auth = inject(AuthService);
   private readonly snackBar = inject(MatSnackBar);
@@ -45,7 +47,7 @@ export class RolePermissionsPage implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      this.rows.set(await this.data.getRolePermissionRows());
+      this.rows.set(await this.roleApi.getRolePermissionRows());
     } catch (error) {
       this.error.set(apiErrorMessage(error, '角色权限数据加载失败，请稍后重试'));
     } finally {
@@ -56,8 +58,8 @@ export class RolePermissionsPage implements OnInit {
   async onEditPermissions(row: RolePermissionRow): Promise<void> {
     try {
       const [groups, assigned] = await Promise.all([
-        this.data.getPermissionGroups(),
-        this.data.getAssignedPermissionIds(row.roleId),
+        this.permissionApi.getPermissionGroups(),
+        this.roleApi.getAssignedPermissionIds(row.roleId),
       ]);
       const permissionIds: string[] | undefined = await firstValueFrom(
         this.dialog
@@ -74,7 +76,7 @@ export class RolePermissionsPage implements OnInit {
         return;
       }
       this.busy.set(true);
-      await this.data.assignRolePermissions(row.roleId, permissionIds);
+      await this.roleApi.assignRolePermissions(row.roleId, permissionIds);
       await this.auth.refreshSession();
       this.snackBar.open(`已更新 ${row.roleName} 的权限`, '关闭', { duration: 3000 });
       await this.loadRows();
@@ -94,7 +96,7 @@ export class RolePermissionsPage implements OnInit {
     }
     try {
       this.busy.set(true);
-      await this.data.createRole({
+      await this.roleApi.createRole({
         code: result.code,
         name: result.name,
         category: result.category,
