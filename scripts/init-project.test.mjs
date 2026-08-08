@@ -27,11 +27,16 @@ function createFixture() {
   mkdirSync(join(root, "frontend/public"), { recursive: true });
   mkdirSync(join(root, "backend"), { recursive: true });
   mkdirSync(join(root, "observability"), { recursive: true });
+  mkdirSync(join(root, ".arc-framework"), { recursive: true });
   writeFileSync(
     join(root, "README.md"),
     "<!-- ARC_PROJECT_HEADER_START -->\n# arc-admin\n\nRBAC 框架。\n<!-- ARC_PROJECT_HEADER_END -->\n\n<!-- ARC_TEMPLATE_USAGE_START -->\n## 从模板创建业务项目\n<!-- ARC_TEMPLATE_USAGE_END -->\n",
   );
-  writeFileSync(join(root, "FRAMEWORK_VERSION"), "v1.1.0-dev\n");
+  writeFileSync(join(root, "FRAMEWORK_VERSION"), "v1.1.0\n");
+  writeFileSync(
+    join(root, ".arc-framework/manifest.json"),
+    '{"schemaVersion":1,"framework":"arc-admin","managedRoots":["scripts"],"managedFiles":["FRAMEWORK_VERSION"]}\n',
+  );
   writeFileSync(
     join(root, "frontend/public/config.js"),
     "window.__ARC_ADMIN_CONFIG__ = {};\n",
@@ -83,7 +88,7 @@ test("initializes a clean template without tracking the local environment", () =
     grafanaSecretFactory: () => "g".repeat(32),
   });
 
-  assert.equal(result.frameworkVersion, "v1.1.0-dev");
+  assert.equal(result.frameworkVersion, "v1.1.0");
   const readme = readFileSync(join(root, "README.md"), "utf8");
   assert.match(readme, /# 股票分析系统/);
   assert.doesNotMatch(readme, /从模板创建业务项目/);
@@ -108,6 +113,8 @@ test("initializes a clean template without tracking the local environment", () =
     readFileSync(join(root, ".arc-project.json"), "utf8"),
   );
   assert.equal(metadata.project.permissionPrefix, "stock");
+  assert.equal(metadata.schemaVersion, 2);
+  assert.equal(metadata.framework.initializedVersion, "v1.1.0");
   assert.doesNotMatch(git(root, ["status", "--porcelain"]), /backend\/\.env/);
   assert.doesNotMatch(
     git(root, ["status", "--porcelain"]),
@@ -146,6 +153,18 @@ test("rejects a dirty worktree and invalid identifiers", () => {
         "stock:*",
       ]),
     /--slug/,
+  );
+});
+
+test("rejects project initialization from an unreleased framework version", () => {
+  const root = createFixture();
+  writeFileSync(join(root, "FRAMEWORK_VERSION"), "v1.2.0-dev\n");
+  git(root, ["add", "FRAMEWORK_VERSION"]);
+  git(root, ["commit", "-qm", "development version"]);
+
+  assert.throws(
+    () => initializeProject(root, projectOptions(), { doctorMode: "never" }),
+    /只能从正式版本初始化项目/,
   );
 });
 

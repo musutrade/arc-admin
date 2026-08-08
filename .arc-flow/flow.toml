@@ -163,12 +163,14 @@ unmatched = "fail"
 [[scope.rules]]
 patterns = [
   "README.md",
+  "CHANGELOG.md",
   ".gitignore",
   "AGENTS.md",
   "start.sh",
   "scripts/**",
   "observability/**",
   "FRAMEWORK_VERSION",
+  ".arc-framework/**",
   ".arc-project.json",
   "docs/**",
   "codex-audit-pipeline/README.md",
@@ -335,6 +337,28 @@ program = "node"
 args = ["--test", "{root}/scripts/init-project.test.mjs"]
 cwd = "{root}"
 log = "project_init_tests.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.framework-release-config"
+label = "framework release configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-framework-release.mjs"]
+cwd = "{root}"
+log = "framework_release_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.framework-upgrade-tests"
+label = "framework upgrade tests"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["--test", "{root}/scripts/upgrade-framework.test.mjs"]
+cwd = "{root}"
+log = "framework_upgrade_tests.log"
 timeout_secs = 60
 
 [[steps]]

@@ -2,11 +2,11 @@
 
 业务权限必须同时落到数据库目录、后端 API 授权和前端交互控制。仓库提供三份同步模板：
 
-| 模板                            | 目标文件                                                                    | 作用                                      |
-| ------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------- |
-| `business_permissions.sql.tmpl` | `backend/migrations/<NEXT_VERSION>_add_<domain>_<resource>_permissions.sql` | 创建权限组、权限目录和默认角色授权        |
-| `rust_permissions.rs.tmpl`      | `backend/src/permissions/<resource>.rs`                                     | 声明 `RequirePermission` 使用的类型化权限 |
-| `angular_permissions.ts.tmpl`   | `frontend/src/app/features/<domain>/<resource>.permissions.ts`              | 声明路由、导航和按钮共用的权限常量        |
+| 模板                            | 目标文件                                                                     | 作用                                      |
+| ------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
+| `business_permissions.sql.tmpl` | `backend/migrations/<UTC_TIMESTAMP>_add_<domain>_<resource>_permissions.sql` | 创建权限组、权限目录和默认角色授权        |
+| `rust_permissions.rs.tmpl`      | `backend/src/permissions/<resource>.rs`                                      | 声明 `RequirePermission` 使用的类型化权限 |
+| `angular_permissions.ts.tmpl`   | `frontend/src/app/features/<domain>/<resource>.permissions.ts`               | 声明路由、导航和按钮共用的权限常量        |
 
 模板位于 `codex-audit-pipeline/.codex/templates/`。权限码统一采用：
 
@@ -37,7 +37,7 @@
 
 ## 接入顺序
 
-1. 复制 SQL 模板为下一个 migration，只能新增 migration，已应用文件不可修改。
+1. 复制 SQL 模板并以 UTC 时间戳命名 migration，例如 `20260808000100_add_stock_quote_permissions.sql`；只能新增 migration，已应用文件不可修改。
 2. 复制 Rust 模板，并在 `backend/src/permissions.rs` 增加 `pub mod <permission_module>;`。
 3. Handler 的读接口使用 `RequirePermission<...Read>`，写接口使用 `RequirePermission<...Write>`。CRUD Handler 模板已默认采用此方式。
 4. 复制 Angular 模板，路由 `data.permissions` 和导航项引用同一个 `ROUTE_ACCESS` 常量。

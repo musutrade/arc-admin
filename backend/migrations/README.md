@@ -3,7 +3,7 @@
 约定（已写入根目录 AGENTS.md）：
 
 1. **迁移不可变**：一旦在任何环境应用过，就永远不修改，只新增文件。
-2. 命名：`<序号>_<描述>.sql`，序号递增，例如 `0001_init_users_roles_permissions.sql`。
+2. 历史框架迁移保留原编号；新增框架和业务迁移统一使用 `<UTC时间戳>_<描述>.sql`，例如 `20260808000100_add_stock_quote_permissions.sql`，避免派生项目与后续框架迁移重名。
 3. 写操作（INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE）允许出现在 migrations 层（审计 allowlist）。
 
 新增业务权限时，从 `codex-audit-pipeline/.codex/templates/business_permissions.sql.tmpl`

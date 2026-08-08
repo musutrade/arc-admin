@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "..");
 const PROJECT_FILE = ".arc-project.json";
+const FRAMEWORK_MANIFEST = ".arc-framework/manifest.json";
+const RELEASE_VERSION = /^v\d+\.\d+\.\d+$/;
 const HEADER_START = "<!-- ARC_PROJECT_HEADER_START -->";
 const HEADER_END = "<!-- ARC_PROJECT_HEADER_END -->";
 const TEMPLATE_USAGE_START = "<!-- ARC_TEMPLATE_USAGE_START -->";
@@ -279,8 +281,12 @@ ${HEADER_END}`;
 function buildProjectMetadata(options, frameworkVersion) {
   return `${JSON.stringify(
     {
-      schemaVersion: 1,
-      framework: { name: "arc-admin", version: frameworkVersion },
+      schemaVersion: 2,
+      framework: {
+        name: "arc-admin",
+        version: frameworkVersion,
+        initializedVersion: frameworkVersion,
+      },
       project: {
         slug: options.slug,
         title: options.title,
@@ -322,6 +328,7 @@ export function initializeProject(
   assertSafeRepository(root);
 
   const frameworkVersionPath = requiredFile(root, "FRAMEWORK_VERSION");
+  requiredFile(root, FRAMEWORK_MANIFEST);
   const readmePath = requiredFile(root, "README.md");
   const configPath = requiredFile(root, "frontend/public/config.js");
   const environmentExamplePath = requiredFile(root, "backend/.env.example");
@@ -341,6 +348,9 @@ export function initializeProject(
   const frameworkVersion = readFileSync(frameworkVersionPath, "utf8").trim();
   if (!frameworkVersion) {
     fail("FRAMEWORK_VERSION 不能为空");
+  }
+  if (!RELEASE_VERSION.test(frameworkVersion)) {
+    fail("只能从正式版本初始化项目，FRAMEWORK_VERSION 必须是 vX.Y.Z");
   }
 
   const jwtSecret = secretFactory();

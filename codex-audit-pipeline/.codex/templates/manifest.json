@@ -86,7 +86,7 @@
     {
       "file": "business_permissions.sql.tmpl",
       "language": "sql",
-      "outputFile": "0009_add_stock_quote_permissions.sql",
+      "outputFile": "20260808000100_add_stock_quote_permissions.sql",
       "requiredPatterns": [
         "WHERE r\\.code = 'super_admin'",
         "ON CONFLICT DO NOTHING"

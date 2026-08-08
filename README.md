@@ -54,6 +54,17 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
 
 <!-- ARC_TEMPLATE_USAGE_END -->
 
+## 升级框架
+
+派生项目不会自动获得模板后续修复。框架发布新版本后，应从新版本模板克隆中运行三方合并升级命令：
+
+```bash
+../arc-admin-framework/scripts/upgrade-framework.sh --check
+../arc-admin-framework/scripts/upgrade-framework.sh
+```
+
+升级器只处理清单中的框架文件，保留业务新增文件，冲突时不会写入；成功写入后自动执行环境体检和全量验证。完整流程见[框架版本与派生项目升级](docs/framework-upgrades.md)。
+
 ## 快速开始
 
 ```bash
@@ -127,6 +138,7 @@ cargo flow verify --all
 - [业务权限模板](docs/business-permissions.md)：SQL、Rust、Angular 三端权限声明和最小授权策略；
 - [日志与故障定位](docs/observability.md)：JSON Lines、问题编号、敏感字段和查询方式；
 - [Grafana 告警通知配置](docs/grafana-alert-notifications.md)：企业微信、钉钉、邮件、Webhook、通知策略和上线验收；
+- [框架版本与派生项目升级](docs/framework-upgrades.md)：版本发布、三方合并、冲突处理和完整验证；
 - [项目公约](AGENTS.md)：Codex、Reviewer、Tester 和 Git 安全约束；
 - [arc-flow 操作手册](codex-audit-pipeline/README.md)：安装、命令、预设、CI、报告和故障排查；
 - [schema v2 配置参考](codex-audit-pipeline/docs/configuration.md)：`flow.toml` 与 `audit.toml` 的字段级说明。

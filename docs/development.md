@@ -80,3 +80,9 @@ npm audit --omit=dev --audit-level=high
 - 禁止 force push 和直接删除受保护分支。
 
 CI 使用与本地相同的 `cargo flow` 命令，失败报告以 Actions artifact 保留 14 天。
+
+## 框架升级
+
+派生项目使用 `.arc-project.json` 记录框架版本。升级必须从检出目标正式标签的模板仓库执行，先运行 `--check`，再执行升级；命令会三方合并框架文件，并在成功写入后运行 `cargo flow doctor` 和 `cargo flow verify --all`。
+
+详细的发布、升级和冲突处理流程见[框架版本与派生项目升级](framework-upgrades.md)。
