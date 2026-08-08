@@ -7,7 +7,8 @@ version = 2
 yanked = "deny"
 unmaintained = "workspace"
 unsound = "workspace"
-ignore = []
+# SQLx 0.8 records its inactive MySQL driver in Cargo.lock. The application only enables PostgreSQL.
+ignore = ["RUSTSEC-2023-0071"]
 
 [licenses]
 confidence-threshold = 0.93

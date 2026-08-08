@@ -7,7 +7,8 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM nginx:1.28.3-alpine AS runtime
+FROM nginx:1.30.4-alpine3.24 AS runtime
+RUN apk upgrade --no-cache
 COPY deployment/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /build/frontend/dist/arc-admin/browser /usr/share/nginx/html
 USER 101:101

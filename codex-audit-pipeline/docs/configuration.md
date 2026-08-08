@@ -246,6 +246,7 @@ image = "postgres:16-alpine"
 image_env = "ARC_FLOW_POSTGRES_IMAGE"
 external_env = "TEST_DATABASE_URL"
 inject_env = "TEST_DATABASE_URL"
+external_value_policy = "isolated-postgres"
 startup_timeout_secs = 30
 timeout_env = "ARC_FLOW_DATABASE_TIMEOUT_SECS"
 container_port = 5432
@@ -260,6 +261,7 @@ connection = "postgres://test:test@127.0.0.1:{host_port}/app_test"
 | `image_env`            | 否   | 覆盖镜像名                                     |
 | `external_env`         | 否   | 若该变量已设置，直接使用其值并跳过 Docker      |
 | `inject_env`           | 是   | 注入测试步骤的变量名                           |
+| `external_value_policy` | 否  | 外部值安全策略；测试 PostgreSQL 使用 `isolated-postgres` |
 | `startup_timeout_secs` | 是   | 整个 Docker 启动过程的秒数，范围 1 到 300      |
 | `timeout_env`          | 否   | 覆盖启动超时                                   |
 | `container_port`       | 是   | 容器监听端口；宿主端口随机绑定到 `127.0.0.1`   |
@@ -268,6 +270,10 @@ connection = "postgres://test:test@127.0.0.1:{host_port}/app_test"
 | `connection`           | 是   | 注入值，必须包含 `{host_port}`                 |
 
 服务按需启动，同一轮验证内复用。Docker daemon 探测、容器创建、端口查询和健康检查共享一个启动截止时间；验证成功、失败、超时或收到中断信号时都会在独立清理超时内尝试 `docker rm --force`。镜像不会自动拉取，先用 `docker pull <image>` 准备。
+
+`isolated-postgres` 会要求 URL 使用 `postgres`/`postgresql` 协议，数据库名以 `_test` 或
+`-test` 结尾，并拒绝与当前 `DATABASE_URL` 指向同一数据库。默认只允许本机回环地址；确需
+使用已确认隔离的远程测试库时，额外设置 `ARC_FLOW_ALLOW_REMOTE_TEST_DATABASE=1`。
 
 一个步骤可以依赖多个服务：
 

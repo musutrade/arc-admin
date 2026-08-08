@@ -303,6 +303,8 @@ fn execute(task: Task, parser: Option<&ParserConfig>, steps: &mut Vec<TaskResult
 }
 
 fn parse_result_count(content: &str, parser: &ParserConfig) -> Result<(usize, usize)> {
+    let ansi = Regex::new(r"\x1b\[[0-?]*[ -/]*[@-~]")?;
+    let normalized = ansi.replace_all(content, "");
     match parser {
         ParserConfig::Regex {
             patterns,
@@ -313,7 +315,7 @@ fn parse_result_count(content: &str, parser: &ParserConfig) -> Result<(usize, us
             for pattern in patterns {
                 let regex = Regex::new(pattern)?;
                 count += regex
-                    .captures_iter(content)
+                    .captures_iter(&normalized)
                     .filter_map(|captures| captures.get(*capture)?.as_str().parse::<usize>().ok())
                     .sum::<usize>();
             }
@@ -379,6 +381,17 @@ mod tests {
             parse_result_count("passed: 7", &parser).expect("count"),
             (7, 2)
         );
+    }
+
+    #[test]
+    fn regex_parser_ignores_ansi_color_sequences() {
+        let parser = ParserConfig::Regex {
+            patterns: vec![r"Tests\s+([0-9]+) passed".into()],
+            capture: 1,
+            minimum: 1,
+        };
+        let log = "\u{1b}[1mTests\u{1b}[22m  \u{1b}[32m58 passed\u{1b}[39m";
+        assert_eq!(parse_result_count(log, &parser).expect("count"), (58, 1));
     }
 
     #[test]

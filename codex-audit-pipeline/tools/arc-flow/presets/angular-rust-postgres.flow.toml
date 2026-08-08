@@ -67,6 +67,7 @@ kind = "docker"
 image = "postgres:16-alpine"
 external_env = "TEST_DATABASE_URL"
 inject_env = "TEST_DATABASE_URL"
+external_value_policy = "isolated-postgres"
 startup_timeout_secs = 30
 container_port = 5432
 environment = { POSTGRES_USER = "app_test", POSTGRES_PASSWORD = "app_test", POSTGRES_DB = "app_test" }

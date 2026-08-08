@@ -71,7 +71,7 @@ git config core.hooksPath codex-audit-pipeline/hooks
 cargo flow doctor
 ```
 
-`doctor` 不会连接生产数据库。后端完整测试使用已有 `TEST_DATABASE_URL`，或者启动绑定到 `127.0.0.1` 随机端口的一次性 PostgreSQL。
+`doctor` 不会连接生产数据库。后端完整测试使用已有 `TEST_DATABASE_URL`，或者启动绑定到 `127.0.0.1` 随机端口的一次性 PostgreSQL。启用 `isolated-postgres` 策略后，测试库名称必须以 `_test` 或 `-test` 结尾，并拒绝复用 `DATABASE_URL`；远程测试库还需显式设置 `ARC_FLOW_ALLOW_REMOTE_TEST_DATABASE=1`。
 
 ## 安装与新项目接入
 

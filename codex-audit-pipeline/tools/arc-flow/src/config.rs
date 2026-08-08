@@ -142,6 +142,8 @@ pub enum ServiceConfig {
         #[serde(default)]
         external_env: Option<String>,
         inject_env: String,
+        #[serde(default)]
+        external_value_policy: ExternalValuePolicy,
         startup_timeout_secs: u64,
         #[serde(default)]
         timeout_env: Option<String>,
@@ -155,6 +157,14 @@ pub enum ServiceConfig {
         source_env: String,
         inject_env: String,
     },
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExternalValuePolicy {
+    #[default]
+    None,
+    IsolatedPostgres,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -366,6 +376,7 @@ impl FlowConfig {
                     image_env,
                     external_env,
                     inject_env,
+                    external_value_policy,
                     startup_timeout_secs,
                     timeout_env,
                     container_port,
@@ -388,6 +399,10 @@ impl FlowConfig {
                     }
                     if let Some(name) = external_env {
                         validate_env_name("service.external_env", name)?;
+                    }
+                    if *external_value_policy != ExternalValuePolicy::None && external_env.is_none()
+                    {
+                        bail!("Docker service {id:?} external_value_policy requires external_env");
                     }
                     validate_env_name("service.inject_env", inject_env)?;
                     if healthcheck.is_empty() {
@@ -894,6 +909,7 @@ pub fn migrate_v1(source: &str, project_name: &str) -> Result<FlowConfig> {
             image_env: Some("ARC_FLOW_POSTGRES_IMAGE".into()),
             external_env: Some("TEST_DATABASE_URL".into()),
             inject_env: "TEST_DATABASE_URL".into(),
+            external_value_policy: ExternalValuePolicy::IsolatedPostgres,
             startup_timeout_secs: legacy.database.startup_timeout_secs,
             timeout_env: Some("ARC_FLOW_DATABASE_TIMEOUT_SECS".into()),
             container_port: legacy.database.container_port,

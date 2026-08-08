@@ -64,6 +64,10 @@ TEST_DATABASE_URL=postgres://user:password@127.0.0.1:5432/arc_admin_test \
 cargo flow verify --components backend
 ```
 
+测试库名称必须以 `_test` 或 `-test` 结尾，且不得与 `DATABASE_URL` 指向同一数据库。
+默认只接受本机回环地址；使用已确认隔离的远程测试库时，还需显式设置
+`ARC_FLOW_ALLOW_REMOTE_TEST_DATABASE=1`。
+
 前端依赖的 CI 门禁只阻断生产依赖的 high/critical 漏洞：
 
 ```bash
