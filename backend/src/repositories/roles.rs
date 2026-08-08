@@ -4,7 +4,7 @@ use crate::models::{RoleRow, RoleWithPermissionsRow};
 use sqlx::{PgConnection, PgPool, Row};
 
 const ROLE_SELECT: &str = "SELECT r.id, r.code, r.name, r.category, r.icon, r.color, \
-    r.description, r.is_active, \
+    r.description, r.data_scope, r.is_active, \
     (SELECT count(*) FROM user_roles ur \
      JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL \
      WHERE ur.role_id = r.id) AS members \
@@ -12,7 +12,8 @@ const ROLE_SELECT: &str = "SELECT r.id, r.code, r.name, r.category, r.icon, r.co
 
 pub async fn list_all(pool: &PgPool) -> Result<Vec<RoleWithPermissionsRow>, sqlx::Error> {
     sqlx::query_as::<_, RoleWithPermissionsRow>(
-        "SELECT r.id, r.code, r.name, r.category, r.icon, r.color, r.description, r.is_active,
+        "SELECT r.id, r.code, r.name, r.category, r.icon, r.color, r.description,
+                r.data_scope, r.is_active,
                 (SELECT count(*) FROM user_roles ur
                  JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL
                  WHERE ur.role_id = r.id) AS members,
@@ -39,6 +40,7 @@ pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<RoleRow>, sqlx:
         .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn create(
     connection: &mut PgConnection,
     code: &str,
@@ -47,10 +49,11 @@ pub async fn create(
     icon: Option<String>,
     color: Option<String>,
     description: Option<String>,
+    data_scope: &str,
 ) -> Result<i64, sqlx::Error> {
     let row = sqlx::query(
-        "INSERT INTO roles (code, name, category, icon, color, description)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        "INSERT INTO roles (code, name, category, icon, color, description, data_scope)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id",
     )
     .bind(code)
@@ -59,6 +62,7 @@ pub async fn create(
     .bind(icon)
     .bind(color)
     .bind(description)
+    .bind(data_scope)
     .fetch_one(&mut *connection)
     .await?;
     row.try_get::<i64, _>(0)
@@ -82,6 +86,7 @@ pub async fn update(
     color: Option<String>,
     description_is_set: bool,
     description: Option<String>,
+    data_scope: Option<String>,
     is_active: Option<bool>,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query(
@@ -91,7 +96,8 @@ pub async fn update(
              icon = CASE WHEN $4 THEN $5 ELSE icon END,
              color = COALESCE($6, color),
              description = CASE WHEN $7 THEN $8 ELSE description END,
-             is_active = COALESCE($9, is_active),
+             data_scope = COALESCE($9, data_scope),
+             is_active = COALESCE($10, is_active),
              updated_at = now()
          WHERE id = $1",
     )
@@ -103,6 +109,7 @@ pub async fn update(
     .bind(color)
     .bind(description_is_set)
     .bind(description)
+    .bind(data_scope)
     .bind(is_active)
     .execute(connection)
     .await?;

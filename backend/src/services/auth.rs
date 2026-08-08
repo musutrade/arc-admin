@@ -423,6 +423,9 @@ pub async fn bootstrap_super_admin(
     let existing = repositories::users::find_by_username(pool, username)
         .await
         .map_err(db_error)?;
+    let (organization_id, department_id) = repositories::organizations::default_assignment(pool)
+        .await
+        .map_err(db_error)?;
     let password_hash = hash_password(password)?;
     let mut transaction = pool.begin().await.map_err(db_error)?;
     let row = if let Some(existing) = existing {
@@ -443,6 +446,8 @@ pub async fn bootstrap_super_admin(
             display_name,
             email,
             "active",
+            organization_id,
+            department_id,
         )
         .await
         .map_err(db_error)?

@@ -67,13 +67,17 @@ async fn main() -> ExitCode {
 }
 
 async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<()> {
-    let pool = db::init_pool(&config.database_url).await?;
-    let migrations = db::run_migrations(&pool).await?;
-    tracing::info!(
-        applied_migrations = migrations.applied,
-        embedded_migrations = migrations.embedded,
-        "database migrations ready"
-    );
+    let pool = db::init_pool_with_config(&config.database_url, &config.database_pool).await?;
+    if config.auto_migrate {
+        let migrations = db::run_migrations(&pool).await?;
+        tracing::info!(
+            applied_migrations = migrations.applied,
+            embedded_migrations = migrations.embedded,
+            "database migrations ready"
+        );
+    } else {
+        tracing::info!("automatic database migrations disabled");
+    }
 
     let state = AppState {
         pool,

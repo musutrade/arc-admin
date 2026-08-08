@@ -11,7 +11,9 @@ use axum::Json;
 
 pub async fn stats(
     State(state): State<AppState>,
-    _auth: RequirePermission<DashboardRead>,
+    auth: RequirePermission<DashboardRead>,
 ) -> Result<Json<DashboardStats>, ApiError> {
-    services::permissions::stats(&state.pool).await.map(Json)
+    services::permissions::stats(&state.pool, &auth)
+        .await
+        .map(Json)
 }

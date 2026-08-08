@@ -14,18 +14,20 @@ use axum::Json;
 
 pub async fn list(
     State(state): State<AppState>,
-    _auth: RequirePermission<UserRead>,
+    auth: RequirePermission<UserRead>,
     Query(query): Query<PageQuery>,
 ) -> Result<Json<PageUser>, ApiError> {
-    services::users::list(&state.pool, &query).await.map(Json)
+    services::users::list(&state.pool, &auth, &query)
+        .await
+        .map(Json)
 }
 
 pub async fn get(
     State(state): State<AppState>,
-    _auth: RequirePermission<UserRead>,
+    auth: RequirePermission<UserRead>,
     Path(id): Path<i64>,
 ) -> Result<Json<UserResponse>, ApiError> {
-    services::users::get(&state.pool, id).await.map(Json)
+    services::users::get(&state.pool, &auth, id).await.map(Json)
 }
 
 pub async fn create(
@@ -47,14 +49,9 @@ pub async fn create(
     {
         auth.require("user:admin:deactivate")?;
     }
-    services::users::create(
-        &state.pool,
-        Some(auth.user_id),
-        &req,
-        auth.has("user:super_admin:grant"),
-    )
-    .await
-    .map(|user| (StatusCode::CREATED, Json(user)))
+    services::users::create(&state.pool, &auth, &req, auth.has("user:super_admin:grant"))
+        .await
+        .map(|user| (StatusCode::CREATED, Json(user)))
 }
 
 pub async fn update(
@@ -72,7 +69,7 @@ pub async fn update(
     services::users::update(
         &state.pool,
         id,
-        Some(auth.user_id),
+        Some(&auth),
         &req,
         auth.has("user:super_admin:grant"),
     )
@@ -85,7 +82,7 @@ pub async fn delete(
     auth: RequirePermission<UserDeactivate>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    services::users::delete(&state.pool, id, Some(auth.user_id)).await?;
+    services::users::delete(&state.pool, id, Some(&auth)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -97,7 +94,7 @@ pub async fn assign_roles(
 ) -> Result<StatusCode, ApiError> {
     services::users::assign_roles(
         &state.pool,
-        Some(auth.user_id),
+        Some(&auth),
         id,
         &req,
         auth.has("user:super_admin:grant"),

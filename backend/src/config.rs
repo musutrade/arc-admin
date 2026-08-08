@@ -1,6 +1,7 @@
 //! Runtime configuration and production safety checks.
 
 use crate::auth::CSRF_HEADER;
+use crate::db::DatabasePoolConfig;
 use crate::telemetry::REQUEST_ID_HEADER;
 use anyhow::{bail, Context};
 use axum::http::header::CONTENT_TYPE;
@@ -50,6 +51,8 @@ impl LogFormat {
 
 pub struct AppConfig {
     pub database_url: String,
+    pub database_pool: DatabasePoolConfig,
+    pub auto_migrate: bool,
     pub port: u16,
     pub session_ttl_secs: i64,
     pub session_idle_timeout_secs: i64,
@@ -71,6 +74,14 @@ pub struct AppConfig {
 #[derive(Default)]
 struct ConfigValues {
     database_url: Option<String>,
+    db_max_connections: Option<String>,
+    db_min_connections: Option<String>,
+    db_acquire_timeout_secs: Option<String>,
+    db_connect_timeout_secs: Option<String>,
+    db_idle_timeout_secs: Option<String>,
+    db_max_lifetime_secs: Option<String>,
+    db_statement_timeout_ms: Option<String>,
+    auto_migrate: Option<String>,
     port: Option<String>,
     session_ttl_secs: Option<String>,
     session_idle_timeout_secs: Option<String>,
@@ -93,6 +104,14 @@ impl AppConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         Self::from_values(ConfigValues {
             database_url: std::env::var("DATABASE_URL").ok(),
+            db_max_connections: std::env::var("DB_MAX_CONNECTIONS").ok(),
+            db_min_connections: std::env::var("DB_MIN_CONNECTIONS").ok(),
+            db_acquire_timeout_secs: std::env::var("DB_ACQUIRE_TIMEOUT_SECS").ok(),
+            db_connect_timeout_secs: std::env::var("DB_CONNECT_TIMEOUT_SECS").ok(),
+            db_idle_timeout_secs: std::env::var("DB_IDLE_TIMEOUT_SECS").ok(),
+            db_max_lifetime_secs: std::env::var("DB_MAX_LIFETIME_SECS").ok(),
+            db_statement_timeout_ms: std::env::var("DB_STATEMENT_TIMEOUT_MS").ok(),
+            auto_migrate: std::env::var("AUTO_MIGRATE").ok(),
             port: std::env::var("PORT").ok(),
             session_ttl_secs: std::env::var("SESSION_TTL_SECS").ok(),
             session_idle_timeout_secs: std::env::var("SESSION_IDLE_TIMEOUT_SECS").ok(),
@@ -118,6 +137,14 @@ impl AppConfig {
     fn from_values(values: ConfigValues) -> anyhow::Result<Self> {
         let ConfigValues {
             database_url,
+            db_max_connections,
+            db_min_connections,
+            db_acquire_timeout_secs,
+            db_connect_timeout_secs,
+            db_idle_timeout_secs,
+            db_max_lifetime_secs,
+            db_statement_timeout_ms,
+            auto_migrate,
             port,
             session_ttl_secs,
             session_idle_timeout_secs,
@@ -144,6 +171,20 @@ impl AppConfig {
             "production" | "prod" => AppEnvironment::Production,
             value => bail!("APP_ENV must be development, test, or production; got {value:?}"),
         };
+        let database_pool = DatabasePoolConfig::from_optional_values(
+            db_max_connections,
+            db_min_connections,
+            db_acquire_timeout_secs,
+            db_connect_timeout_secs,
+            db_idle_timeout_secs,
+            db_max_lifetime_secs,
+            db_statement_timeout_ms,
+        )?;
+        let auto_migrate = parse_bool(
+            "AUTO_MIGRATE",
+            auto_migrate,
+            environment != AppEnvironment::Production,
+        )?;
         let port = port
             .as_deref()
             .unwrap_or("8080")
@@ -212,6 +253,8 @@ impl AppConfig {
 
         Ok(Self {
             database_url,
+            database_pool,
+            auto_migrate,
             port,
             session_ttl_secs,
             session_idle_timeout_secs,
@@ -277,6 +320,15 @@ fn positive_i32(name: &str, value: Option<String>, default: i32) -> anyhow::Resu
     Ok(value)
 }
 
+fn parse_bool(name: &str, value: Option<String>, default: bool) -> anyhow::Result<bool> {
+    match value.as_deref() {
+        None => Ok(default),
+        Some("true" | "1") => Ok(true),
+        Some("false" | "0") => Ok(false),
+        Some(value) => bail!("{name} must be true or false; got {value:?}"),
+    }
+}
+
 fn parse_origins(value: Option<String>) -> anyhow::Result<Vec<HeaderValue>> {
     value
         .unwrap_or_default()
@@ -329,6 +381,7 @@ mod tests {
         assert_eq!(config.session_ttl_secs, 28_800);
         assert_eq!(config.login_max_failures, 5);
         assert_eq!(config.login_ip_max_failures, 50);
+        assert!(config.auto_migrate);
         assert!(config.trusted_proxy_cidrs.is_empty());
     }
 
@@ -347,6 +400,7 @@ mod tests {
             config("production", Some("https://admin.example.com")).expect("production config");
 
         assert_eq!(config.log_format, LogFormat::Json);
+        assert!(!config.auto_migrate);
     }
 
     #[test]

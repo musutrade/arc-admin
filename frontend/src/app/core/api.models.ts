@@ -54,6 +54,7 @@ export interface ApiRole {
   icon: string | null;
   color: 'primary' | 'warning' | 'success' | 'danger' | 'neutral';
   description: string | null;
+  dataScope: 'all' | 'organization' | 'department_and_children' | 'department' | 'self';
   isActive: boolean;
   members: number;
   permissionGroupIds: number[];
@@ -106,6 +107,7 @@ export interface CreateRoleRequest {
   icon?: string | null;
   color?: ApiRole['color'];
   description?: string | null;
+  dataScope?: ApiRole['dataScope'];
   permissionIds?: number[];
 }
 
@@ -115,5 +117,6 @@ export interface UpdateRoleRequest {
   icon?: string | null;
   color?: ApiRole['color'];
   description?: string | null;
+  dataScope?: ApiRole['dataScope'];
   isActive?: boolean;
 }

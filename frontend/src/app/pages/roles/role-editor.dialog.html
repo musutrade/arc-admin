@@ -68,6 +68,20 @@
         <option [ngValue]="false">停用</option>
       </select>
     </div>
+    <div class="form-field">
+      <label for="role-data-scope">数据范围</label>
+      <select
+        id="role-data-scope"
+        formControlName="dataScope"
+        [title]="role?.code === 'super_admin' ? '内置超级管理员固定为全部数据' : '角色数据范围'"
+      >
+        <option value="all">全部数据</option>
+        <option value="organization">当前组织</option>
+        <option value="department_and_children">当前部门及下级</option>
+        <option value="department">当前部门</option>
+        <option value="self">仅本人</option>
+      </select>
+    </div>
     <div class="form-field full-width">
       <label for="role-description">描述</label>
       <textarea id="role-description" formControlName="description"></textarea>

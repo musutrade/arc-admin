@@ -1,5 +1,6 @@
 //! 用户服务：参数校验 + 业务规则（无 SQL）
 
+use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::{
     nullable_patch, user_response, user_with_roles_response, AssignRolesRequest, CreateUserRequest,
@@ -10,11 +11,16 @@ use crate::services::auth;
 use serde_json::json;
 use sqlx::PgPool;
 
-pub async fn list(pool: &PgPool, query: &PageQuery) -> Result<PageUser, ApiError> {
+pub async fn list(
+    pool: &PgPool,
+    actor: &ActorContext,
+    query: &PageQuery,
+) -> Result<PageUser, ApiError> {
     let page = query.page.unwrap_or(1).max(1);
     let page_size = query.page_size.unwrap_or(20).clamp(1, 100);
     let rows = repositories::users::list(
         pool,
+        actor,
         query.keyword.clone(),
         query.status.clone(),
         page,
@@ -22,9 +28,10 @@ pub async fn list(pool: &PgPool, query: &PageQuery) -> Result<PageUser, ApiError
     )
     .await
     .map_err(db_error)?;
-    let total = repositories::users::count(pool, query.keyword.clone(), query.status.clone())
-        .await
-        .map_err(db_error)?;
+    let total =
+        repositories::users::count(pool, actor, query.keyword.clone(), query.status.clone())
+            .await
+            .map_err(db_error)?;
 
     let items = rows.into_iter().map(user_with_roles_response).collect();
     Ok(PageUser {
@@ -35,8 +42,8 @@ pub async fn list(pool: &PgPool, query: &PageQuery) -> Result<PageUser, ApiError
     })
 }
 
-pub async fn get(pool: &PgPool, id: i64) -> Result<UserResponse, ApiError> {
-    let row = repositories::users::find_by_id(pool, id)
+pub async fn get(pool: &PgPool, actor: &ActorContext, id: i64) -> Result<UserResponse, ApiError> {
+    let row = repositories::users::find_by_id_for_actor(pool, actor, id)
         .await
         .map_err(db_error)?
         .ok_or_else(|| ApiError::not_found("用户不存在"))?;
@@ -48,10 +55,14 @@ pub async fn get(pool: &PgPool, id: i64) -> Result<UserResponse, ApiError> {
 
 pub async fn create(
     pool: &PgPool,
-    actor_user_id: Option<i64>,
+    actor: &ActorContext,
     req: &CreateUserRequest,
     can_grant_super_admin: bool,
 ) -> Result<UserResponse, ApiError> {
+    if !actor.can_create_peer() {
+        return Err(ApiError::forbidden("当前数据范围不允许创建其他用户"));
+    }
+    let actor_user_id = Some(actor.user_id);
     let username = req.username.trim();
     if !(3..=64).contains(&username.len()) {
         return Err(ApiError::validation("用户名长度需在 3-64 个字符之间"));
@@ -86,6 +97,8 @@ pub async fn create(
         display_name,
         req.email.clone(),
         &status,
+        actor.organization_id,
+        actor.department_id,
     )
     .await
     .map_err(db_error)?;
@@ -118,10 +131,12 @@ pub async fn create(
 pub async fn update(
     pool: &PgPool,
     id: i64,
-    actor_user_id: Option<i64>,
+    actor: Option<&ActorContext>,
     req: &UpdateUserRequest,
     can_grant_super_admin: bool,
 ) -> Result<UserResponse, ApiError> {
+    ensure_actor_can_access(pool, actor, id).await?;
+    let actor_user_id = actor.map(|context| context.user_id);
     let display_name = req
         .display_name
         .as_ref()
@@ -225,7 +240,9 @@ pub async fn update(
     Ok(user_response(row, roles))
 }
 
-pub async fn delete(pool: &PgPool, id: i64, actor_user_id: Option<i64>) -> Result<(), ApiError> {
+pub async fn delete(pool: &PgPool, id: i64, actor: Option<&ActorContext>) -> Result<(), ApiError> {
+    ensure_actor_can_access(pool, actor, id).await?;
+    let actor_user_id = actor.map(|context| context.user_id);
     if actor_user_id == Some(id) {
         return Err(ApiError::forbidden("不能删除当前登录账号"));
     }
@@ -267,15 +284,13 @@ pub async fn delete(pool: &PgPool, id: i64, actor_user_id: Option<i64>) -> Resul
 
 pub async fn assign_roles(
     pool: &PgPool,
-    actor_user_id: Option<i64>,
+    actor: Option<&ActorContext>,
     user_id: i64,
     req: &AssignRolesRequest,
     can_grant_super_admin: bool,
 ) -> Result<(), ApiError> {
-    repositories::users::find_by_id(pool, user_id)
-        .await
-        .map_err(db_error)?
-        .ok_or_else(|| ApiError::not_found("用户不存在"))?;
+    ensure_actor_can_access(pool, actor, user_id).await?;
+    let actor_user_id = actor.map(|context| context.user_id);
     let super_admin_role_id = repositories::roles::id_by_code(pool, "super_admin")
         .await
         .map_err(db_error)?;
@@ -304,6 +319,20 @@ pub async fn assign_roles(
     .await
     .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
+    Ok(())
+}
+
+async fn ensure_actor_can_access(
+    pool: &PgPool,
+    actor: Option<&ActorContext>,
+    user_id: i64,
+) -> Result<(), ApiError> {
+    let row = match actor {
+        Some(actor) => repositories::users::find_by_id_for_actor(pool, actor, user_id).await,
+        None => repositories::users::find_by_id(pool, user_id).await,
+    }
+    .map_err(db_error)?;
+    row.ok_or_else(|| ApiError::not_found("用户不存在"))?;
     Ok(())
 }
 

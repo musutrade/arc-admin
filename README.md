@@ -139,6 +139,8 @@ cargo flow verify --all
 - [日志与故障定位](docs/observability.md)：JSON Lines、问题编号、敏感字段和查询方式；
 - [Grafana 告警通知配置](docs/grafana-alert-notifications.md)：企业微信、钉钉、邮件、Webhook、通知策略和上线验收；
 - [框架版本与派生项目升级](docs/framework-upgrades.md)：版本发布、三方合并、冲突处理和完整验证；
+- [最小生产部署](docs/production-deployment.md)：非 root 镜像、TLS、反向代理、迁移任务和 Compose；
+- [PostgreSQL 备份与恢复](docs/postgresql-backup-recovery.md)：备份、PITR、恢复演练和 RPO/RTO；
 - [安全能力待办](docs/security-roadmap.md)：尚未实现的高权限认证能力及上线验收条件；
 - [项目公约](AGENTS.md)：Codex、Reviewer、Tester 和 Git 安全约束；
 - [arc-flow 操作手册](codex-audit-pipeline/README.md)：安装、命令、预设、CI、报告和故障排查；

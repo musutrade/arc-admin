@@ -3,6 +3,8 @@ node_modules/
 dist/
 target/
 .env
+/deployment/.env.production
+/deployment/tls/
 
 # 运行时产物
 codex-audit-pipeline/.codex/reports/

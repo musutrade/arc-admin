@@ -37,6 +37,7 @@ required_steps = [
   "workflow.template-quality",
   "workflow.template-quality-tests",
   "workflow.observability-config",
+  "workflow.production-deployment-config",
   "workflow.format",
   "workflow.clippy",
   "workflow.tests",
@@ -165,10 +166,13 @@ patterns = [
   "README.md",
   "CHANGELOG.md",
   ".gitignore",
+  ".dockerignore",
   "AGENTS.md",
   "start.sh",
   "scripts/**",
   "observability/**",
+  "deployment/**",
+  "compose.production.yaml",
   "FRAMEWORK_VERSION",
   ".arc-framework/**",
   ".arc-project.json",
@@ -392,6 +396,17 @@ program = "node"
 args = ["{root}/scripts/check-observability.mjs"]
 cwd = "{root}"
 log = "observability_config.log"
+timeout_secs = 60
+
+[[steps]]
+id = "workflow.production-deployment-config"
+label = "production deployment configuration gate"
+component = "workflow"
+profiles = ["full", "hook"]
+program = "node"
+args = ["{root}/scripts/check-production-deployment.mjs"]
+cwd = "{root}"
+log = "production_deployment_config.log"
 timeout_secs = 60
 
 [[steps]]

@@ -11,10 +11,10 @@ use axum::Json;
 
 pub async fn list(
     State(state): State<AppState>,
-    _auth: RequirePermission<AuditLogRead>,
+    auth: RequirePermission<AuditLogRead>,
     Query(query): Query<AuditLogQuery>,
 ) -> Result<Json<PageAuditLog>, ApiError> {
-    services::audit_logs::list(&state.pool, &query)
+    services::audit_logs::list(&state.pool, &auth, &query)
         .await
         .map(Json)
 }

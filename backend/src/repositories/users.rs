@@ -1,10 +1,11 @@
 //! 用户 Repository：唯一的用户数据访问层（SQL 写操作只允许出现在这里）
 
+use crate::access::ActorContext;
 use crate::models::{UserRow, UserWithRolesRow};
 use sqlx::{PgConnection, PgPool, Row};
 
 const USER_COLUMNS: &str =
-    "id, username, password_hash, display_name, email, status, token_version, last_login_at, created_at";
+    "id, username, password_hash, display_name, email, status, organization_id, department_id, token_version, last_login_at, created_at";
 
 pub async fn find_by_username(
     pool: &PgPool,
@@ -27,8 +28,48 @@ pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<UserRow>, sqlx:
     .await
 }
 
+pub async fn find_by_id_for_actor(
+    pool: &PgPool,
+    actor: &ActorContext,
+    id: i64,
+) -> Result<Option<UserRow>, sqlx::Error> {
+    sqlx::query_as::<_, UserRow>(&format!(
+        "WITH RECURSIVE visible_departments AS (
+             SELECT d.id
+             FROM departments d
+             WHERE d.id = $4 AND d.organization_id = $2
+             UNION
+             SELECT child.id
+             FROM departments child
+             JOIN visible_departments parent ON child.parent_id = parent.id
+             WHERE child.organization_id = $2
+         )
+         SELECT {USER_COLUMNS}
+         FROM users
+         WHERE id = $1 AND deleted_at IS NULL
+           AND (
+               $5 = 'all'
+               OR organization_id = $2 AND (
+                   $5 = 'organization'
+                   OR $5 = 'self' AND id = $3
+                   OR $5 = 'department' AND department_id = $4
+                   OR $5 = 'department_and_children'
+                      AND department_id IN (SELECT id FROM visible_departments)
+               )
+           )"
+    ))
+    .bind(id)
+    .bind(actor.organization_id)
+    .bind(actor.user_id)
+    .bind(actor.department_id)
+    .bind(actor.data_scope.as_str())
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn list(
     pool: &PgPool,
+    actor: &ActorContext,
     keyword: Option<String>,
     status: Option<String>,
     page: i64,
@@ -36,7 +77,17 @@ pub async fn list(
 ) -> Result<Vec<UserWithRolesRow>, sqlx::Error> {
     let like = keyword.map(|k| format!("%{k}%"));
     sqlx::query_as::<_, UserWithRolesRow>(
-        "SELECT u.id, u.username, u.display_name, u.email, u.status,
+        "WITH RECURSIVE visible_departments AS (
+             SELECT d.id
+             FROM departments d
+             WHERE d.id = $4 AND d.organization_id = $2
+             UNION
+             SELECT child.id
+             FROM departments child
+             JOIN visible_departments parent ON child.parent_id = parent.id
+             WHERE child.organization_id = $2
+         )
+         SELECT u.id, u.username, u.display_name, u.email, u.status,
                 u.last_login_at, u.created_at,
                 COALESCE(
                     array_agg(DISTINCT r.name ORDER BY r.name) FILTER (WHERE r.id IS NOT NULL),
@@ -46,12 +97,26 @@ pub async fn list(
          LEFT JOIN user_roles ur ON ur.user_id = u.id
          LEFT JOIN roles r ON r.id = ur.role_id AND r.is_active = TRUE
          WHERE u.deleted_at IS NULL
-           AND ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
-           AND ($2::text IS NULL OR u.status = $2)
+           AND (
+               $1 = 'all'
+               OR u.organization_id = $2 AND (
+                   $1 = 'organization'
+                   OR $1 = 'self' AND u.id = $3
+                   OR $1 = 'department' AND u.department_id = $4
+                   OR $1 = 'department_and_children'
+                      AND u.department_id IN (SELECT id FROM visible_departments)
+               )
+           )
+           AND ($5::text IS NULL OR u.username ILIKE $5 OR u.display_name ILIKE $5 OR u.email ILIKE $5)
+           AND ($6::text IS NULL OR u.status = $6)
          GROUP BY u.id
          ORDER BY u.id
-         LIMIT $3 OFFSET $4"
+         LIMIT $7 OFFSET $8"
     )
+    .bind(actor.data_scope.as_str())
+    .bind(actor.organization_id)
+    .bind(actor.user_id)
+    .bind(actor.department_id)
     .bind(like)
     .bind(status)
     .bind(page_size)
@@ -62,16 +127,41 @@ pub async fn list(
 
 pub async fn count(
     pool: &PgPool,
+    actor: &ActorContext,
     keyword: Option<String>,
     status: Option<String>,
 ) -> Result<i64, sqlx::Error> {
     let like = keyword.map(|k| format!("%{k}%"));
     let row = sqlx::query(
-        "SELECT count(*) FROM users
+        "WITH RECURSIVE visible_departments AS (
+             SELECT d.id
+             FROM departments d
+             WHERE d.id = $4 AND d.organization_id = $2
+             UNION
+             SELECT child.id
+             FROM departments child
+             JOIN visible_departments parent ON child.parent_id = parent.id
+             WHERE child.organization_id = $2
+         )
+         SELECT count(*) FROM users
          WHERE deleted_at IS NULL
-           AND ($1::text IS NULL OR username ILIKE $1 OR display_name ILIKE $1 OR email ILIKE $1)
-           AND ($2::text IS NULL OR status = $2)",
+           AND (
+               $1 = 'all'
+               OR organization_id = $2 AND (
+                   $1 = 'organization'
+                   OR $1 = 'self' AND id = $3
+                   OR $1 = 'department' AND department_id = $4
+                   OR $1 = 'department_and_children'
+                      AND department_id IN (SELECT id FROM visible_departments)
+               )
+           )
+           AND ($5::text IS NULL OR username ILIKE $5 OR display_name ILIKE $5 OR email ILIKE $5)
+           AND ($6::text IS NULL OR status = $6)",
     )
+    .bind(actor.data_scope.as_str())
+    .bind(actor.organization_id)
+    .bind(actor.user_id)
+    .bind(actor.department_id)
     .bind(like)
     .bind(status)
     .fetch_one(pool)
@@ -79,6 +169,7 @@ pub async fn count(
     row.try_get::<i64, _>(0)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn create(
     connection: &mut PgConnection,
     username: &str,
@@ -86,10 +177,15 @@ pub async fn create(
     display_name: &str,
     email: Option<String>,
     status: &str,
+    organization_id: i64,
+    department_id: Option<i64>,
 ) -> Result<UserRow, sqlx::Error> {
     sqlx::query_as::<_, UserRow>(&format!(
-        "INSERT INTO users (username, password_hash, display_name, email, status)
-         VALUES ($1, $2, $3, $4, $5)
+        "INSERT INTO users (
+             username, password_hash, display_name, email, status,
+             organization_id, department_id
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING {USER_COLUMNS}"
     ))
     .bind(username)
@@ -97,6 +193,8 @@ pub async fn create(
     .bind(display_name)
     .bind(email)
     .bind(status)
+    .bind(organization_id)
+    .bind(department_id)
     .fetch_one(&mut *connection)
     .await
 }

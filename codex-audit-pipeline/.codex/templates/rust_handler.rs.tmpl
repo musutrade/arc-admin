@@ -18,39 +18,39 @@ use axum::Json;
 
 pub async fn list(
     State(state): State<AppState>,
-    _auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
+    auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
     Query(query): Query<PageQuery>,
 ) -> Result<Json<Page{{ENTITY_NAME}}>, ApiError> {
-    services::{{entity_name}}::list(&state.pool, &query)
+    services::{{entity_name}}::list(&state.pool, &auth, &query)
         .await
         .map(Json)
 }
 
 pub async fn get(
     State(state): State<AppState>,
-    _auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
+    auth: RequirePermission<{{READ_PERMISSION_TYPE}}>,
     Path(id): Path<i64>,
 ) -> Result<Json<{{ENTITY_NAME}}Response>, ApiError> {
-    services::{{entity_name}}::get(&state.pool, id)
+    services::{{entity_name}}::get(&state.pool, &auth, id)
         .await
         .map(Json)
 }
 
 pub async fn create(
     State(state): State<AppState>,
-    _auth: RequirePermission<{{WRITE_PERMISSION_TYPE}}>,
+    auth: RequirePermission<{{WRITE_PERMISSION_TYPE}}>,
     Json(req): Json<{{ENTITY_NAME}}CreateRequest>,
 ) -> Result<(StatusCode, Json<{{ENTITY_NAME}}Response>), ApiError> {
-    services::{{entity_name}}::create(&state.pool, &req)
+    services::{{entity_name}}::create(&state.pool, &auth, &req)
         .await
         .map(|data| (StatusCode::CREATED, Json(data)))
 }
 
 pub async fn delete(
     State(state): State<AppState>,
-    _auth: RequirePermission<{{WRITE_PERMISSION_TYPE}}>,
+    auth: RequirePermission<{{WRITE_PERMISSION_TYPE}}>,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
-    services::{{entity_name}}::delete(&state.pool, id).await?;
+    services::{{entity_name}}::delete(&state.pool, &auth, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -70,6 +70,7 @@ function mapRole(role: ApiRole): Role {
     icon: role.icon ?? 'badge',
     color: role.color,
     description: role.description ?? '',
+    dataScope: role.dataScope,
     members: role.members,
     permissionGroupIds: role.permissionGroupIds.map(String),
     isActive: role.isActive,

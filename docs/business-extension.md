@@ -68,6 +68,16 @@ backend/src/repositories/stock.rs
 4. Repository 承担全部 SQL；schema 变化只新增 migration，不修改历史 migration。
 5. 在 `docs/openapi.yaml` 先更新接口契约，再补契约测试和业务测试。
 
+每张业务主表必须包含以下归属列，并使用外键保证部门与组织一致：
+
+```sql
+organization_id BIGINT NOT NULL REFERENCES organizations (id),
+department_id   BIGINT,
+owner_user_id   BIGINT NOT NULL REFERENCES users (id)
+```
+
+CRUD 模板要求 `ActorContext` 从 Handler 传到 Repository，并在查询、更新和删除 SQL 中同时应用角色数据范围。`all` 才能跨组织；其他范围都先限定 `organization_id`，再分别限定组织、部门树、当前部门或 `owner_user_id`。禁止在 Service 或前端对未过滤结果做二次筛选。
+
 权限码使用项目初始化时的业务前缀，例如 `stock:quote:read`、`oa:approval:write`、`token:transfer:approve`。数据库、Rust 和 Angular 应从同一套[业务权限模板](business-permissions.md)开始，菜单权限、按钮权限和 API 权限按实际动作拆分，后端每个受保护接口都必须校验对应权限。
 
 ## 跨业务域协作
@@ -79,7 +89,7 @@ backend/src/repositories/stock.rs
 
 ## 完成清单
 
-1. 新增 migration、Repository、Service、Handler 和 OpenAPI 契约。
+1. 新增带组织、部门和所有者列的 migration、Repository、Service、Handler 和 OpenAPI 契约。
 2. 从业务权限模板创建权限 migration、Rust 标记和 Angular 常量，并用后端提取器保护接口。
 3. 新增 `features/<domain>` 页面、资源服务、模型与测试。
 4. 在共享权限表、导航和路由中注册入口。

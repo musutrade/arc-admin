@@ -103,6 +103,7 @@ export class RolePermissionsPage implements OnInit {
         icon: result.icon || null,
         color: result.color,
         description: result.description || null,
+        dataScope: result.dataScope,
       });
       await this.auth.refreshSession();
       this.snackBar.open(`已创建 ${result.name}`, '关闭', { duration: 3000 });

@@ -16,7 +16,7 @@ import { RoleApiService } from '../../core/api/role-api.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { ConfirmDialog } from '../../core/confirm.dialog';
-import { Role, RolePermissionRow } from '../../core/models';
+import { DataScope, Role, RolePermissionRow } from '../../core/models';
 import { AssignPermissionsDialog } from '../role-permissions/assign-permissions.dialog';
 import { RoleEditorDialog, RoleEditorResult } from './role-editor.dialog';
 
@@ -42,6 +42,16 @@ export class RolesPage implements OnInit {
 
   readonly canWrite = computed(() => this.auth.hasPermission('role:write'));
   readonly canAssign = computed(() => this.auth.hasPermission('role:permissions:write'));
+
+  dataScopeLabel(dataScope: DataScope): string {
+    return {
+      all: '全部数据',
+      organization: '当前组织',
+      department_and_children: '部门及下级',
+      department: '当前部门',
+      self: '仅本人',
+    }[dataScope];
+  }
 
   ngOnInit(): void {
     void this.loadRoles();
@@ -175,6 +185,7 @@ export class RolesPage implements OnInit {
             icon: result.icon || null,
             color: result.color,
             description: result.description || null,
+            dataScope: result.dataScope,
             isActive: result.isActive,
           }),
         `已更新 ${result.name}`,
@@ -189,6 +200,7 @@ export class RolesPage implements OnInit {
             icon: result.icon || null,
             color: result.color,
             description: result.description || null,
+            dataScope: result.dataScope,
           }),
         `已创建 ${result.name}`,
       );

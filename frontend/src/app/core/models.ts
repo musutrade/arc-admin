@@ -15,6 +15,7 @@ export interface User {
 }
 
 export type PermissionType = 'menu' | 'button' | 'api';
+export type DataScope = 'all' | 'organization' | 'department_and_children' | 'department' | 'self';
 
 export interface Permission {
   id: string;
@@ -40,6 +41,7 @@ export interface Role {
   icon: string;
   color: 'primary' | 'warning' | 'success' | 'danger' | 'neutral';
   description: string;
+  dataScope: DataScope;
   members: number;
   permissionGroupIds: string[];
   isActive: boolean;

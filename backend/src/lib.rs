@@ -9,6 +9,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
+pub mod access;
 pub mod auth;
 pub mod config;
 pub mod db;
@@ -87,6 +88,7 @@ pub const API_SCHEMA_REQUIRED_FIELDS: &[(&str, &[&str])] = &[
             "icon",
             "color",
             "description",
+            "dataScope",
             "isActive",
             "members",
             "permissionGroupIds",

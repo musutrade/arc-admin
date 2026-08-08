@@ -13,6 +13,7 @@ const apiRole: ApiRole = {
   icon: null,
   color: 'success',
   description: null,
+  dataScope: 'self',
   isActive: true,
   members: 4,
   permissionGroupIds: [1],
@@ -40,7 +41,7 @@ describe('RoleApiService', () => {
     const roles = service.getRoles();
     http.expectOne('/api/v1/roles').flush([apiRole]);
     await expect(roles).resolves.toEqual([
-      expect.objectContaining({ id: '3', code: 'viewer', isActive: true }),
+      expect.objectContaining({ id: '3', code: 'viewer', dataScope: 'self', isActive: true }),
     ]);
 
     const rows = service.getRolePermissionRows();

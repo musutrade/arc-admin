@@ -1,5 +1,6 @@
 //! 权限服务：组装权限组树 + 仪表盘统计（无 SQL）
 
+use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::{
     DashboardStats, DashboardStatsRow, PermissionGroupResponse, PermissionResponse,
@@ -40,8 +41,8 @@ pub async fn groups(pool: &PgPool) -> Result<Vec<PermissionGroupResponse>, ApiEr
     Ok(groups)
 }
 
-pub async fn stats(pool: &PgPool) -> Result<DashboardStats, ApiError> {
-    let row: DashboardStatsRow = repositories::permissions::stats(pool)
+pub async fn stats(pool: &PgPool, actor: &ActorContext) -> Result<DashboardStats, ApiError> {
+    let row: DashboardStatsRow = repositories::permissions::stats(pool, actor)
         .await
         .map_err(db_error)?;
     Ok(row.into())

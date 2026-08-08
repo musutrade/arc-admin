@@ -3,7 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
-import { Role } from '../../core/models';
+import { DataScope, Role } from '../../core/models';
 
 interface RoleIconOption {
   value: string;
@@ -81,8 +81,11 @@ export interface RoleEditorResult {
   icon: string;
   color: Role['color'];
   description: string;
+  dataScope: DataScope;
   isActive: boolean;
 }
+
+const DEFAULT_DATA_SCOPE: DataScope = 'self';
 
 @Component({
   selector: 'app-role-editor-dialog',
@@ -107,6 +110,12 @@ export class RoleEditorDialog {
     icon: [this.role?.icon ?? 'badge', [Validators.required]],
     color: [this.role?.color ?? ('neutral' as Role['color'])],
     description: [this.role?.description ?? ''],
+    dataScope: [
+      {
+        value: this.role?.dataScope ?? DEFAULT_DATA_SCOPE,
+        disabled: this.role?.code === 'super_admin',
+      },
+    ],
     isActive: [{ value: this.role?.isActive ?? true, disabled: this.role?.code === 'super_admin' }],
   });
 

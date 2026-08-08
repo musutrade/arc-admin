@@ -1,5 +1,6 @@
 //! 角色服务：参数校验 + 业务规则（无 SQL）
 
+use crate::access::DataScope;
 use crate::error::{db_error, ApiError};
 use crate::models::{
     nullable_patch, CreateRoleRequest, RolePermissions, RoleResponse, RoleRow,
@@ -11,6 +12,13 @@ use sqlx::PgPool;
 use std::collections::BTreeSet;
 
 const ROLE_COLORS: [&str; 5] = ["primary", "warning", "success", "danger", "neutral"];
+const DATA_SCOPES: [&str; 5] = [
+    "all",
+    "organization",
+    "department_and_children",
+    "department",
+    "self",
+];
 
 async fn to_response(pool: &PgPool, row: RoleRow) -> Result<RoleResponse, ApiError> {
     let permission_group_ids = repositories::roles::permission_group_ids_by_role(pool, row.id)
@@ -24,6 +32,7 @@ async fn to_response(pool: &PgPool, row: RoleRow) -> Result<RoleResponse, ApiErr
         icon: row.icon,
         color: row.color,
         description: row.description,
+        data_scope: row.data_scope,
         is_active: row.is_active,
         members: row.members,
         permission_group_ids,
@@ -46,6 +55,7 @@ fn list_response(row: RoleWithPermissionsRow) -> RoleResponse {
         icon: row.icon,
         color: row.color,
         description: row.description,
+        data_scope: row.data_scope,
         is_active: row.is_active,
         members: row.members,
         permission_group_ids: row.permission_group_ids,
@@ -63,6 +73,7 @@ pub async fn get(pool: &PgPool, id: i64) -> Result<RoleResponse, ApiError> {
 pub async fn create(
     pool: &PgPool,
     actor_user_id: Option<i64>,
+    actor_data_scope: DataScope,
     req: &CreateRoleRequest,
     can_assign_permissions: bool,
 ) -> Result<RoleResponse, ApiError> {
@@ -90,6 +101,9 @@ pub async fn create(
         .category
         .clone()
         .unwrap_or_else(|| "general".to_string());
+    let data_scope = req.data_scope.as_deref().unwrap_or("self");
+    let data_scope = validate_data_scope(data_scope)?;
+    validate_data_scope_grant(actor_data_scope, data_scope)?;
 
     let mut transaction = pool.begin().await.map_err(db_error)?;
     let id = repositories::roles::create(
@@ -100,6 +114,7 @@ pub async fn create(
         req.icon.clone(),
         Some(color),
         req.description.clone(),
+        data_scope.as_str(),
     )
     .await
     .map_err(db_error)?;
@@ -123,6 +138,7 @@ pub async fn create(
         json!({
             "code": code,
             "name": req.name.trim(),
+            "dataScope": data_scope.as_str(),
             "permissionIds": req.permission_ids.as_deref().unwrap_or_default(),
         }),
     )
@@ -135,6 +151,7 @@ pub async fn create(
 pub async fn update(
     pool: &PgPool,
     actor_user_id: Option<i64>,
+    actor_data_scope: DataScope,
     id: i64,
     req: &UpdateRoleRequest,
 ) -> Result<RoleResponse, ApiError> {
@@ -153,6 +170,19 @@ pub async fn update(
             .ok_or_else(|| ApiError::not_found("角色不存在"))?;
         if role.code == "super_admin" {
             return Err(ApiError::forbidden("内置超级管理员角色不可停用"));
+        }
+    }
+    if let Some(data_scope) = &req.data_scope {
+        let requested_scope = validate_data_scope(data_scope)?;
+        validate_data_scope_grant(actor_data_scope, requested_scope)?;
+        let role = repositories::roles::find_by_id(pool, id)
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| ApiError::not_found("角色不存在"))?;
+        if role.code == "super_admin" && data_scope != "all" {
+            return Err(ApiError::forbidden(
+                "内置超级管理员角色的数据范围必须为全部数据",
+            ));
         }
     }
     if req.is_active == Some(true) {
@@ -183,6 +213,7 @@ pub async fn update(
         req.color.clone(),
         description_is_set,
         description,
+        req.data_scope.clone(),
         req.is_active,
     )
     .await
@@ -200,6 +231,7 @@ pub async fn update(
             "name": req.name,
             "category": req.category,
             "color": req.color,
+            "dataScope": req.data_scope,
             "isActive": req.is_active,
         }),
     )
@@ -207,6 +239,26 @@ pub async fn update(
     .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
     get(pool, id).await
+}
+
+fn validate_data_scope(data_scope: &str) -> Result<DataScope, ApiError> {
+    if !DATA_SCOPES.contains(&data_scope) {
+        return Err(ApiError::validation(
+            "数据范围只能是全部、组织、部门及下级、部门或仅本人",
+        ));
+    }
+    DataScope::from_database(data_scope).ok_or_else(|| ApiError::internal("无效的数据范围配置"))
+}
+
+fn validate_data_scope_grant(
+    actor_data_scope: DataScope,
+    requested_scope: DataScope,
+) -> Result<(), ApiError> {
+    if actor_data_scope.can_grant(requested_scope) {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("不能授予超出自身范围的数据权限"))
+    }
 }
 
 pub async fn delete(pool: &PgPool, actor_user_id: Option<i64>, id: i64) -> Result<(), ApiError> {

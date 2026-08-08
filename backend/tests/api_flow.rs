@@ -498,6 +498,66 @@ async fn login_and_user_crud_flow() {
         .find(|role| role["code"] == "support_tier2")
         .and_then(|role| role["id"].as_i64())
         .expect("support role id");
+    assert_eq!(
+        roles
+            .as_array()
+            .expect("roles array")
+            .iter()
+            .find(|role| role["code"] == "super_admin")
+            .expect("super admin role")["dataScope"],
+        "all"
+    );
+    assert_eq!(viewer_role["dataScope"], "self");
+
+    let isolated_org_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO organizations (code, name) VALUES ('isolated', '隔离组织') RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("create isolated organization");
+    let isolated_department_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO departments (organization_id, code, name)
+         VALUES ($1, 'root', '隔离根部门') RETURNING id",
+    )
+    .bind(isolated_org_id)
+    .fetch_one(&pool)
+    .await
+    .expect("create isolated department");
+    let isolated_password = services::auth::hash_password("isolated-integration-pass")
+        .expect("hash isolated user password");
+    let isolated_user_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO users (
+             username, password_hash, display_name, status, organization_id, department_id
+         ) VALUES ('isolated_support', $1, '隔离支持人员', 'active', $2, $3)
+         RETURNING id",
+    )
+    .bind(isolated_password)
+    .bind(isolated_org_id)
+    .bind(isolated_department_id)
+    .fetch_one(&pool)
+    .await
+    .expect("create isolated user");
+    sqlx::query("INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)")
+        .bind(isolated_user_id)
+        .bind(support_role_id)
+        .execute(&pool)
+        .await
+        .expect("assign isolated support role");
+    let (status, _, isolated_token) =
+        login(&app, "isolated_support", "isolated-integration-pass", false).await;
+    assert_eq!(status, StatusCode::OK);
+    let isolated_token = isolated_token.expect("isolated session cookies");
+    let (status, isolated_users) = send(
+        &app,
+        Method::GET,
+        "/api/v1/users",
+        Some(&isolated_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(isolated_users["total"], 1);
+    assert_eq!(isolated_users["items"][0]["username"], "isolated_support");
 
     let (status, allocator_role) = send(
         &app,
@@ -533,6 +593,17 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::OK);
     let allocator_token = allocator_token.expect("allocator session cookies");
     let allocator_token = &allocator_token;
+    let (status, allocator_users) = send(
+        &app,
+        Method::GET,
+        "/api/v1/users",
+        Some(allocator_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(allocator_users["total"], 1);
+    assert_eq!(allocator_users["items"][0]["id"], allocator_id);
     let (status, _) = send(
         &app,
         Method::PUT,
@@ -571,6 +642,16 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::OK);
     let support_token = support_token.expect("support session cookies");
     let support_token = &support_token;
+    let (status, isolated_lookup) = send(
+        &app,
+        Method::GET,
+        "/api/v1/users?keyword=isolated_support",
+        Some(support_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(isolated_lookup["total"], 0);
     let (status, _) = send(
         &app,
         Method::PUT,
@@ -652,6 +733,20 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::OK);
     let role_writer_token = role_writer_token.expect("role writer session cookies");
     let role_writer_token = &role_writer_token;
+    let (status, error) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(role_writer_token),
+        Some(json!({
+            "code": "global_scope_attempt",
+            "name": "Global Scope Attempt",
+            "dataScope": "all"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(error["error"]["message"], "不能授予超出自身范围的数据权限");
     let (status, _) = send(
         &app,
         Method::POST,

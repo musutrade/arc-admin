@@ -1,5 +1,6 @@
 //! Opaque Cookie session authentication and typed permission extractors.
 
+use crate::access::{ActorContext, DataScope};
 use crate::error::ApiError;
 use crate::repositories;
 use crate::AppState;
@@ -10,7 +11,6 @@ use axum::http::{HeaderMap, HeaderName, Method};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use ipnet::IpNet;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::net::{IpAddr, SocketAddr};
 use subtle::ConstantTimeEq;
@@ -38,13 +38,6 @@ pub struct AuthSessionConfig {
     pub login_lockout_secs: i64,
     pub trusted_proxy_cidrs: Vec<IpNet>,
     pub secure_cookies: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct AuthUser {
-    pub user_id: i64,
-    pub session_id: i64,
-    pub permission_codes: BTreeSet<String>,
 }
 
 pub fn random_token() -> String {
@@ -162,7 +155,7 @@ pub fn clear_session_cookies(mut jar: CookieJar, secure: bool) -> CookieJar {
     jar
 }
 
-async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<AuthUser, ApiError> {
+async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<ActorContext, ApiError> {
     let jar = CookieJar::from_headers(&parts.headers);
     let session_token = jar
         .get(session_cookie_name(state.auth.secure_cookies))
@@ -175,12 +168,22 @@ async fn authenticate(parts: &mut Parts, state: &AppState) -> Result<AuthUser, A
             .map_err(crate::error::db_error)?
             .ok_or_else(ApiError::unauthorized)?;
 
-    validate_csrf(parts, &jar, &context.2, state.auth.secure_cookies)?;
-    crate::telemetry::record_authenticated_user(context.1);
-    Ok(AuthUser {
-        session_id: context.0,
-        user_id: context.1,
-        permission_codes: context.3.into_iter().collect(),
+    validate_csrf(
+        parts,
+        &jar,
+        &context.csrf_token_hash,
+        state.auth.secure_cookies,
+    )?;
+    let data_scope = DataScope::from_database(&context.data_scope)
+        .ok_or_else(|| ApiError::internal("认证上下文包含无效的数据范围"))?;
+    crate::telemetry::record_authenticated_user(context.user_id);
+    Ok(ActorContext {
+        session_id: context.session_id,
+        user_id: context.user_id,
+        organization_id: context.organization_id,
+        department_id: context.department_id,
+        data_scope,
+        permission_codes: context.permission_codes.into_iter().collect(),
     })
 }
 
@@ -244,7 +247,7 @@ fn hex(bytes: &[u8]) -> String {
     value
 }
 
-impl FromRequestParts<AppState> for AuthUser {
+impl FromRequestParts<AppState> for ActorContext {
     type Rejection = ApiError;
 
     async fn from_request_parts(
@@ -260,14 +263,13 @@ pub trait PermissionRequirement {
 }
 
 pub struct RequirePermission<P> {
-    pub user_id: i64,
-    permission_codes: BTreeSet<String>,
+    pub actor: ActorContext,
     marker: PhantomData<P>,
 }
 
 impl<P> RequirePermission<P> {
     pub fn require(&self, code: &'static str) -> Result<(), ApiError> {
-        if self.permission_codes.contains(code) {
+        if self.actor.has_permission(code) {
             Ok(())
         } else {
             Err(ApiError::forbidden(format!("缺少权限：{code}")))
@@ -275,7 +277,15 @@ impl<P> RequirePermission<P> {
     }
 
     pub fn has(&self, code: &'static str) -> bool {
-        self.permission_codes.contains(code)
+        self.actor.has_permission(code)
+    }
+}
+
+impl<P> std::ops::Deref for RequirePermission<P> {
+    type Target = ActorContext;
+
+    fn deref(&self) -> &Self::Target {
+        &self.actor
     }
 }
 
@@ -290,12 +300,11 @@ where
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let auth = authenticate(parts, state).await?;
-        if !auth.permission_codes.contains(P::CODE) {
+        if !auth.has_permission(P::CODE) {
             return Err(ApiError::forbidden(format!("缺少权限: {}", P::CODE)));
         }
         Ok(Self {
-            user_id: auth.user_id,
-            permission_codes: auth.permission_codes,
+            actor: auth,
             marker: PhantomData,
         })
     }

@@ -16,6 +16,8 @@ pub struct UserRow {
     pub display_name: String,
     pub email: Option<String>,
     pub status: String,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
     pub token_version: i64,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -42,6 +44,7 @@ pub struct RoleRow {
     pub icon: Option<String>,
     pub color: String,
     pub description: Option<String>,
+    pub data_scope: String,
     pub is_active: bool,
     pub members: i64,
 }
@@ -55,6 +58,7 @@ pub struct RoleWithPermissionsRow {
     pub icon: Option<String>,
     pub color: String,
     pub description: Option<String>,
+    pub data_scope: String,
     pub is_active: bool,
     pub members: i64,
     pub permission_group_ids: Vec<i64>,
@@ -152,6 +156,7 @@ pub struct RoleResponse {
     pub icon: Option<String>,
     pub color: String,
     pub description: Option<String>,
+    pub data_scope: String,
     pub is_active: bool,
     pub members: i64,
     pub permission_group_ids: Vec<i64>,
@@ -333,6 +338,7 @@ pub struct CreateRoleRequest {
     pub icon: Option<String>,
     pub color: Option<String>,
     pub description: Option<String>,
+    pub data_scope: Option<String>,
     pub permission_ids: Option<Vec<i64>>,
 }
 
@@ -346,6 +352,7 @@ pub struct UpdateRoleRequest {
     pub color: Option<String>,
     #[serde(default)]
     pub description: NullablePatch<String>,
+    pub data_scope: Option<String>,
     pub is_active: Option<bool>,
 }
 

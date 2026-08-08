@@ -10,6 +10,7 @@
     "backend/src",
     "backend/tests",
     "codex-audit-pipeline",
+    "deployment",
     "docs",
     "frontend/.vscode",
     "frontend/e2e",
@@ -20,6 +21,7 @@
   ],
   "managedFiles": [
     ".gitignore",
+    ".dockerignore",
     ".node-version",
     "AGENTS.md",
     "CHANGELOG.md",
@@ -27,11 +29,13 @@
     "README.md",
     "rust-toolchain.toml",
     "backend/.env.example",
+    "backend/Dockerfile",
     "backend/.gitignore",
     "backend/Cargo.lock",
     "backend/Cargo.toml",
     "backend/build.rs",
     "frontend/.editorconfig",
+    "frontend/Dockerfile",
     "frontend/.gitignore",
     "frontend/.prettierrc",
     "frontend/README.md",
@@ -43,6 +47,7 @@
     "frontend/proxy.conf.json",
     "frontend/tsconfig.app.json",
     "frontend/tsconfig.json",
-    "frontend/tsconfig.spec.json"
+    "frontend/tsconfig.spec.json",
+    "compose.production.yaml"
   ]
 }

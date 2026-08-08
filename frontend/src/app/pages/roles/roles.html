@@ -73,6 +73,7 @@
           <h3 class="role-name">{{ r.name }}</h3>
           <p class="role-desc">{{ r.description }}</p>
           <div class="role-card-foot">
+            <span class="role-category cat-neutral">{{ dataScopeLabel(r.dataScope) }}</span>
             <div class="role-members">
               <mat-icon>group</mat-icon>
               <span>{{ r.members }} 名成员</span>
@@ -113,6 +114,7 @@
               <th>角色</th>
               <th>分类</th>
               <th>成员</th>
+              <th>数据范围</th>
               <th>状态</th>
               <th>描述</th>
               <th class="th-actions">操作</th>
@@ -138,6 +140,7 @@
                 <td>
                   <span class="member-count"><mat-icon>group</mat-icon>{{ r.members }}</span>
                 </td>
+                <td>{{ dataScopeLabel(r.dataScope) }}</td>
                 <td>
                   <span class="role-status-badge" [class.st-active]="r.isActive">
                     <span class="status-dot"></span>
@@ -201,7 +204,7 @@
               </tr>
             } @empty {
               <tr>
-                <td colspan="6">
+                <td colspan="7">
                   <div class="empty-state">
                     <mat-icon>badge</mat-icon>
                     <p>暂无角色</p>

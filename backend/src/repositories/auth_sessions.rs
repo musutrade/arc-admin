@@ -1,18 +1,40 @@
 //! Authentication session Repository: server-side sessions and distributed login throttling.
 
 use chrono::{DateTime, Utc};
-use sqlx::{PgConnection, PgPool};
+use sqlx::{FromRow, PgConnection, PgPool};
 
-pub type SessionAuthContext = (i64, i64, String, Vec<String>);
+#[derive(Debug, FromRow)]
+pub struct SessionAuthContext {
+    pub session_id: i64,
+    pub user_id: i64,
+    pub csrf_token_hash: String,
+    pub organization_id: i64,
+    pub department_id: Option<i64>,
+    pub data_scope: String,
+    pub permission_codes: Vec<String>,
+}
 
 pub async fn auth_context(
     pool: &PgPool,
     session_token_hash: &str,
 ) -> Result<Option<SessionAuthContext>, sqlx::Error> {
     let context = sqlx::query_as::<_, SessionAuthContext>(
-        "SELECT s.id,
+        "SELECT s.id AS session_id,
                 s.user_id,
                 s.csrf_token_hash,
+                u.organization_id,
+                u.department_id,
+                CASE
+                    WHEN COALESCE(bool_or(r.code = 'super_admin' OR r.data_scope = 'all'), FALSE)
+                        THEN 'all'
+                    WHEN COALESCE(bool_or(r.data_scope = 'organization'), FALSE)
+                        THEN 'organization'
+                    WHEN COALESCE(bool_or(r.data_scope = 'department_and_children'), FALSE)
+                        THEN 'department_and_children'
+                    WHEN COALESCE(bool_or(r.data_scope = 'department'), FALSE)
+                        THEN 'department'
+                    ELSE 'self'
+                END AS data_scope,
                 COALESCE(
                     array_agg(DISTINCT p.code ORDER BY p.code)
                         FILTER (WHERE p.code IS NOT NULL),
@@ -31,19 +53,19 @@ pub async fn auth_context(
            AND s.token_version = u.token_version
            AND u.deleted_at IS NULL
            AND u.status = 'active'
-         GROUP BY s.id, s.user_id, s.csrf_token_hash",
+         GROUP BY s.id, s.user_id, s.csrf_token_hash, u.organization_id, u.department_id",
     )
     .bind(session_token_hash)
     .fetch_optional(pool)
     .await?;
 
-    if let Some((session_id, ..)) = context.as_ref() {
+    if let Some(context) = context.as_ref() {
         sqlx::query(
             "UPDATE auth_sessions
              SET last_seen_at = now()
              WHERE id = $1 AND last_seen_at < now() - interval '1 minute'",
         )
-        .bind(*session_id)
+        .bind(context.session_id)
         .execute(pool)
         .await?;
     }

@@ -41,10 +41,12 @@ describe('RoleEditorDialog', () => {
   });
 
   it('keeps the built-in super administrator status read-only', async () => {
-    await createDialog({ code: 'super_admin', isActive: true } as Role);
+    await createDialog({ code: 'super_admin', dataScope: 'all', isActive: true } as Role);
 
     expect(dialog.form.controls.isActive.disabled).toBe(true);
+    expect(dialog.form.controls.dataScope.disabled).toBe(true);
     expect(dialog.form.getRawValue().isActive).toBe(true);
+    expect(dialog.form.getRawValue().dataScope).toBe('all');
   });
 
   it('submits the selected icon value', async () => {
@@ -57,6 +59,8 @@ describe('RoleEditorDialog', () => {
 
     dialog.submit();
 
-    expect(dialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ icon: 'fact_check' }));
+    expect(dialogRef.close).toHaveBeenCalledWith(
+      expect.objectContaining({ icon: 'fact_check', dataScope: 'self' }),
+    );
   });
 });

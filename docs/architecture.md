@@ -22,9 +22,17 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 模块横向落到 `handlers/`、`services/`、`repositories/`，不要把整个业务塞进某一层，
 也不要在没有独立部署需求时提前拆微服务。
 
-`backend/src/lib.rs` 暴露可复用的 `build_router`，生产进程和集成测试使用同一套路由。`backend/src/main.rs` 仅负责读取配置、连接数据库、执行迁移并启动监听。
+`backend/src/lib.rs` 暴露可复用的 `build_router`，生产进程和集成测试使用同一套路由。`backend/src/main.rs` 仅负责读取配置、连接数据库并启动监听。开发环境默认自动迁移；生产环境默认关闭，由独立 `migrate` 任务在应用副本启动前完成迁移。
 
 用户-角色和角色-权限写入由 Service 开启事务并把同一个连接传给 Repository，主记录与关联表要么同时成功，要么同时回滚。内置 `super_admin` 不能被停用或清空权限，最后一个有效超级管理员不能被停用、删除或移除角色。
+
+## 组织与数据范围
+
+权限码与角色定义是平台级全局目录；用户必须归属一个 `organization`，可以归属一个层级 `department`。组织是模板中的租户边界，不允许使用部门代替租户。`super_admin` 可以跨组织管理，其余角色的数据范围为 `organization`、`department_and_children`、`department` 或 `self`。
+
+认证成功后，Repository 从会话、用户和角色实时生成 `ActorContext`，其中包含用户、会话、组织、部门、有效数据范围和权限码。权限码回答“能否执行动作”，数据范围回答“可以操作哪些行”，两项必须同时满足。内置用户目录、仪表盘和审计日志已经按该上下文过滤，越界资源统一表现为不存在。
+
+所有新增业务表必须包含 `organization_id`、可空 `department_id` 和 `owner_user_id`，外键需保证部门属于同一组织。Handler 把 `RequirePermission` 中的 Actor 传给 Service，Service 原样传给 Repository；Repository 在 SQL 中完成组织、部门树和所有者过滤。禁止先全量读取后在 Service 或前端过滤。标准实现见 `rust_handler.rs.tmpl`、`rust_service.rs.tmpl` 和 `rust_repository.rs.tmpl`。
 
 登录成功后，浏览器只持有 256-bit 随机会话标识；标识通过 HttpOnly、`SameSite=Strict` Cookie 发送，数据库仅保存其 SHA-256 哈希。每个受保护请求都会从数据库重新读取会话、账号有效状态和权限码，因此退出、密码变更、停用账号或修改角色权限会立即撤销会话或按新权限执行。所有受保护写请求还必须通过与会话绑定的 CSRF Cookie 和 `X-CSRF-Token` 双提交校验。Handler 使用类型化权限提取器声明所需权限，前端隐藏按钮仅用于交互体验，不作为安全边界。
 
@@ -52,6 +60,14 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 | 变量                                   | 说明                                            |
 | -------------------------------------- | ----------------------------------------------- |
 | `DATABASE_URL`                         | 必填 PostgreSQL 连接串                          |
+| `DB_MAX_CONNECTIONS`                   | API 单副本最大连接数，默认 10                    |
+| `DB_MIN_CONNECTIONS`                   | API 单副本预热连接数，默认 1                     |
+| `DB_ACQUIRE_TIMEOUT_SECS`              | 从连接池取连接的超时，默认 5 秒                  |
+| `DB_CONNECT_TIMEOUT_SECS`              | 应用启动建立连接池的超时，默认 10 秒             |
+| `DB_IDLE_TIMEOUT_SECS`                 | 空闲连接回收时间，默认 600 秒                    |
+| `DB_MAX_LIFETIME_SECS`                 | 单连接最长生命周期，默认 1800 秒                 |
+| `DB_STATEMENT_TIMEOUT_MS`              | PostgreSQL 单语句超时，默认 30000 毫秒           |
+| `AUTO_MIGRATE`                         | 是否随 API 启动迁移；开发默认 true，生产默认 false |
 | `PORT`                                 | 监听端口，默认 8080，范围 1-65535               |
 | `APP_ENV`                              | `development`、`test` 或 `production`           |
 | `SESSION_TTL_SECS`                     | 普通会话绝对有效期，默认 8 小时                  |

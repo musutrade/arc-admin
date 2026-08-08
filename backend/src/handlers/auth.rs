@@ -1,6 +1,7 @@
 //! 认证 Handler：登录 / 当前用户 / 权限码
 
-use crate::auth::{self, AuthUser};
+use crate::access::ActorContext;
+use crate::auth;
 use crate::error::ApiError;
 use crate::models::{ChangePasswordRequest, LoginRequest, PermissionCodes, UserResponse};
 use crate::services;
@@ -40,7 +41,7 @@ pub async fn login(
 pub async fn logout(
     State(state): State<AppState>,
     jar: CookieJar,
-    auth_user: AuthUser,
+    auth_user: ActorContext,
 ) -> Result<impl IntoResponse, ApiError> {
     services::auth::logout(&state.pool, auth_user.user_id, auth_user.session_id).await?;
     Ok((
@@ -51,7 +52,7 @@ pub async fn logout(
 
 pub async fn me(
     State(state): State<AppState>,
-    auth: AuthUser,
+    auth: ActorContext,
 ) -> Result<Json<UserResponse>, ApiError> {
     services::auth::me(&state.pool, auth.user_id)
         .await
@@ -61,7 +62,7 @@ pub async fn me(
 pub async fn change_password(
     State(state): State<AppState>,
     jar: CookieJar,
-    auth: AuthUser,
+    auth: ActorContext,
     Json(req): Json<ChangePasswordRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     services::auth::change_password(&state.pool, auth.user_id, &req).await?;
@@ -71,7 +72,7 @@ pub async fn change_password(
     ))
 }
 
-pub async fn me_permissions(auth: AuthUser) -> Result<Json<PermissionCodes>, ApiError> {
+pub async fn me_permissions(auth: ActorContext) -> Result<Json<PermissionCodes>, ApiError> {
     Ok(Json(PermissionCodes {
         codes: auth.permission_codes.into_iter().collect(),
     }))

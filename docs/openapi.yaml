@@ -758,7 +758,7 @@ components:
           items: { type: integer, format: int64 }
     Role:
       type: object
-      required: [id, code, name, category, icon, color, description, isActive, members, permissionGroupIds]
+      required: [id, code, name, category, icon, color, description, dataScope, isActive, members, permissionGroupIds]
       properties:
         id:
           type: integer
@@ -779,6 +779,8 @@ components:
         description:
           type: string
           nullable: true
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
         isActive:
           type: boolean
         members:
@@ -810,6 +812,9 @@ components:
         description:
           type: string
           nullable: true
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
+          default: self
         permissionIds:
           type: array
           items: { type: integer, format: int64 }
@@ -830,8 +835,14 @@ components:
         description:
           type: string
           nullable: true
+        dataScope:
+          $ref: '#/components/schemas/DataScope'
         isActive:
           type: boolean
+    DataScope:
+      type: string
+      enum: [all, organization, department_and_children, department, self]
+      description: Repository 行级数据范围；权限码只决定可执行动作
     RolePermissions:
       type: object
       required: [permissionIds]

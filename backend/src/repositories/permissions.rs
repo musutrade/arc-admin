@@ -1,5 +1,6 @@
 //! 权限 Repository：权限组/权限查询 + 仪表盘统计（只读查询为主）
 
+use crate::access::ActorContext;
 use crate::models::{DashboardStatsRow, PermissionGroupRow, PermissionRow};
 use sqlx::PgPool;
 
@@ -92,15 +93,43 @@ pub async fn permission_codes_by_user(
     .await
 }
 
-pub async fn stats(pool: &PgPool) -> Result<DashboardStatsRow, sqlx::Error> {
+pub async fn stats(pool: &PgPool, actor: &ActorContext) -> Result<DashboardStatsRow, sqlx::Error> {
     sqlx::query_as::<_, DashboardStatsRow>(
-        "SELECT
-            (SELECT count(*) FROM users WHERE deleted_at IS NULL) AS total_users,
-            (SELECT count(*) FROM users WHERE deleted_at IS NULL AND status = 'active') AS active_users,
+        "WITH RECURSIVE visible_departments AS (
+             SELECT d.id
+             FROM departments d
+             WHERE d.id = $4 AND d.organization_id = $2
+             UNION
+             SELECT child.id
+             FROM departments child
+             JOIN visible_departments parent ON child.parent_id = parent.id
+             WHERE child.organization_id = $2
+         ), visible_users AS (
+             SELECT u.id, u.status
+             FROM users u
+             WHERE u.deleted_at IS NULL
+               AND (
+                   $1 = 'all'
+                   OR u.organization_id = $2 AND (
+                       $1 = 'organization'
+                       OR $1 = 'self' AND u.id = $3
+                       OR $1 = 'department' AND u.department_id = $4
+                       OR $1 = 'department_and_children'
+                          AND u.department_id IN (SELECT id FROM visible_departments)
+                   )
+               )
+         )
+         SELECT
+            (SELECT count(*) FROM visible_users) AS total_users,
+            (SELECT count(*) FROM visible_users WHERE status = 'active') AS active_users,
             (SELECT count(*) FROM roles) AS total_roles,
             (SELECT count(*) FROM permissions) AS total_permissions,
-            (SELECT count(*) FROM users WHERE deleted_at IS NULL AND status = 'suspended') AS suspended_users",
+            (SELECT count(*) FROM visible_users WHERE status = 'suspended') AS suspended_users",
     )
+    .bind(actor.data_scope.as_str())
+    .bind(actor.organization_id)
+    .bind(actor.user_id)
+    .bind(actor.department_id)
     .fetch_one(pool)
     .await
 }

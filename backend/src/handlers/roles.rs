@@ -43,6 +43,7 @@ pub async fn create(
     services::roles::create(
         &state.pool,
         Some(auth.user_id),
+        auth.data_scope,
         &req,
         auth.has("role:permissions:write"),
     )
@@ -56,7 +57,7 @@ pub async fn update(
     Path(id): Path<i64>,
     Json(req): Json<UpdateRoleRequest>,
 ) -> Result<Json<RoleResponse>, ApiError> {
-    services::roles::update(&state.pool, Some(auth.user_id), id, &req)
+    services::roles::update(&state.pool, Some(auth.user_id), auth.data_scope, id, &req)
         .await
         .map(Json)
 }
