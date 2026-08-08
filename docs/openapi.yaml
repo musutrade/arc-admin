@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: arc-admin RBAC API
-  version: 0.1.0
+  version: 2.0.0
   description: |
     RBAC 管理后台 API 契约（Angular 前端 + Rust/Axum/SQLX 后端共同遵守）。
     本文件是前后端联调的唯一事实来源：后端按此实现路由与 DTO，前端各资源 API Service 按此映射 HTTP 响应。
@@ -15,6 +15,10 @@ info:
     - RolePermissionRow    → 前端由 Role[] 派生，不再单独接口
     - StatCard             → 前端由 GET /dashboard/stats 映射
     - API id 使用 BIGINT 数值，前端视图模型按需转换为字符串
+
+    ## 浏览器会话
+    登录成功后服务端设置 HttpOnly 会话 Cookie 和同站 CSRF Cookie，响应体不返回任何凭据。
+    所有受保护的写操作必须把 CSRF Cookie 的值原样放入 `X-CSRF-Token` 请求头。
 servers:
   - url: http://localhost:8080/api/v1
     description: 本地开发
@@ -96,18 +100,39 @@ paths:
       responses:
         '200':
           description: 登录成功
+          headers:
+            Set-Cookie:
+              description: 同时设置 HttpOnly 会话 Cookie 与会话绑定的 CSRF Cookie
+              schema: { type: string }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: 退出当前会话
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: 当前服务端会话已撤销，认证 Cookie 已清除
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /auth/me:
     get:
       tags: [auth]
       summary: 当前登录用户信息
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 当前用户
@@ -122,7 +147,9 @@ paths:
       tags: [auth]
       summary: 修改当前用户密码
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -141,7 +168,7 @@ paths:
       tags: [auth]
       summary: 当前用户权限码（前端路由/按钮级控制）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 权限码列表
@@ -163,7 +190,7 @@ paths:
       tags: [users]
       summary: 用户分页列表（支持关键字/状态筛选）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -189,7 +216,9 @@ paths:
       tags: [users]
       summary: 创建用户
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -214,7 +243,7 @@ paths:
       tags: [users]
       summary: 用户详情
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 用户详情
@@ -228,7 +257,9 @@ paths:
       tags: [users]
       summary: 更新用户（资料与状态）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -248,7 +279,9 @@ paths:
       tags: [users]
       summary: 删除用户（软删除，deleted_at 置位）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '204':
           description: 删除成功
@@ -259,9 +292,10 @@ paths:
       tags: [users]
       summary: 分配用户角色（整体覆盖）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -278,7 +312,7 @@ paths:
       tags: [roles]
       summary: 角色列表（含成员数与权限组聚合）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 角色列表
@@ -292,7 +326,9 @@ paths:
       tags: [roles]
       summary: 创建角色
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -315,7 +351,7 @@ paths:
       tags: [roles]
       summary: 角色详情
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 角色详情
@@ -329,7 +365,9 @@ paths:
       tags: [roles]
       summary: 更新角色
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -349,7 +387,9 @@ paths:
       tags: [roles]
       summary: 删除无成员角色
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       responses:
         '204':
           description: 删除成功
@@ -364,7 +404,7 @@ paths:
       tags: [roles]
       summary: 角色已分配的权限 id 列表（分配模态框回显用）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 权限 id 列表
@@ -378,7 +418,9 @@ paths:
       tags: [roles]
       summary: 覆盖分配角色权限
       security:
-        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -395,7 +437,7 @@ paths:
       tags: [permissions]
       summary: 权限组（含组内权限，权限管理页/分配模态框共用）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 权限组列表
@@ -410,7 +452,7 @@ paths:
       tags: [dashboard]
       summary: 仪表盘统计（前端映射为 StatCard）
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: 统计指标
@@ -423,7 +465,7 @@ paths:
       tags: [audit]
       summary: 安全审计日志分页列表
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -446,11 +488,21 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: arc_session
+      description: 生产环境 Cookie 名为 `__Host-arc_session`，仅通过 HTTPS 设置且不可被 JavaScript 读取
   parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: 受保护写操作必须回传当前会话的 CSRF Cookie 值
+      schema:
+        type: string
+        minLength: 64
+        maxLength: 64
     Page:
       name: page
       in: query
@@ -481,7 +533,7 @@ components:
         maxLength: 64
   responses:
     Unauthorized:
-      description: 未认证或 token 失效
+      description: 未认证或会话失效
       headers:
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
@@ -519,6 +571,18 @@ components:
     ValidationError:
       description: 请求参数校验失败
       headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    RateLimited:
+      description: 登录失败次数超过限制
+      headers:
+        Retry-After:
+          description: 再次尝试前需要等待的秒数
+          schema: { type: integer, minimum: 1 }
         X-Request-ID:
           $ref: '#/components/headers/RequestId'
       content:
@@ -609,8 +673,15 @@ components:
       type: object
       required: [username, password]
       properties:
-        username: { type: string }
-        password: { type: string, format: password }
+        username: { type: string, maxLength: 64 }
+        password:
+          type: string
+          format: password
+          maxLength: 128
+        remember:
+          type: boolean
+          default: false
+          description: 是否创建可跨浏览器重启保留的长期会话
     ChangePasswordRequest:
       type: object
       required: [currentPassword, newPassword]
@@ -621,19 +692,16 @@ components:
         newPassword:
           type: string
           format: password
-          minLength: 8
+          minLength: 12
+          maxLength: 128
     LoginResponse:
       type: object
-      required: [accessToken, tokenType, expiresIn, user]
+      required: [expiresAt, user]
       properties:
-        accessToken:
+        expiresAt:
           type: string
-        tokenType:
-          type: string
-          example: Bearer
-        expiresIn:
-          type: integer
-          description: 有效期（秒）
+          format: date-time
+          description: 服务端会话的绝对过期时间
         user:
           $ref: '#/components/schemas/User'
     CreateUserRequest:
@@ -647,7 +715,8 @@ components:
         password:
           type: string
           format: password
-          minLength: 8
+          minLength: 12
+          maxLength: 128
         displayName:
           type: string
           maxLength: 128
@@ -677,7 +746,8 @@ components:
         password:
           type: string
           format: password
-          minLength: 8
+          minLength: 12
+          maxLength: 128
           description: 可选，重置密码
     AssignRolesRequest:
       type: object

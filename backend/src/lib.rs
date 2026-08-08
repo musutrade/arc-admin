@@ -26,6 +26,7 @@ pub const API_PREFIX: &str = "/api/v1";
 const HEALTHZ_PATH: &str = "/api/v1/healthz";
 const READYZ_PATH: &str = "/api/v1/readyz";
 const LOGIN_PATH: &str = "/api/v1/auth/login";
+const LOGOUT_PATH: &str = "/api/v1/auth/logout";
 const CURRENT_USER_PATH: &str = "/api/v1/auth/me";
 const CURRENT_USER_PASSWORD_PATH: &str = "/api/v1/auth/me/password";
 const CURRENT_USER_PERMISSIONS_PATH: &str = "/api/v1/auth/me/permissions";
@@ -44,6 +45,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (HEALTHZ_PATH, &["get"]),
     (READYZ_PATH, &["get"]),
     (LOGIN_PATH, &["post"]),
+    (LOGOUT_PATH, &["post"]),
     (CURRENT_USER_PATH, &["get"]),
     (CURRENT_USER_PASSWORD_PATH, &["put"]),
     (CURRENT_USER_PERMISSIONS_PATH, &["get"]),
@@ -74,10 +76,7 @@ pub const API_SCHEMA_REQUIRED_FIELDS: &[(&str, &[&str])] = &[
         ],
     ),
     ("PageUser", &["items", "total", "page", "pageSize"]),
-    (
-        "LoginResponse",
-        &["accessToken", "tokenType", "expiresIn", "user"],
-    ),
+    ("LoginResponse", &["expiresAt", "user"]),
     (
         "Role",
         &[
@@ -129,8 +128,7 @@ pub const API_SCHEMA_REQUIRED_FIELDS: &[(&str, &[&str])] = &[
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
-    pub jwt_secret: Arc<String>,
-    pub token_ttl_secs: i64,
+    pub auth: Arc<auth::AuthSessionConfig>,
 }
 
 async fn healthz() -> Json<Value> {
@@ -158,6 +156,7 @@ fn base_router(state: AppState) -> Router {
         .route(HEALTHZ_PATH, get(healthz))
         .route(READYZ_PATH, get(readyz))
         .route(LOGIN_PATH, post(handlers::auth::login))
+        .route(LOGOUT_PATH, post(handlers::auth::logout))
         .route(CURRENT_USER_PATH, get(handlers::auth::me))
         .route(
             CURRENT_USER_PASSWORD_PATH,

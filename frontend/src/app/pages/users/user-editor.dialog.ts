@@ -40,7 +40,9 @@ export class UserEditorDialog {
     ],
     password: [
       '',
-      this.data.user ? [Validators.minLength(8)] : [Validators.required, Validators.minLength(8)],
+      this.data.user
+        ? [Validators.minLength(12), Validators.maxLength(128)]
+        : [Validators.required, Validators.minLength(12), Validators.maxLength(128)],
     ],
     displayName: [this.data.user?.name ?? '', [Validators.required, Validators.maxLength(128)]],
     email: [this.data.user?.email ?? '', [Validators.email]],

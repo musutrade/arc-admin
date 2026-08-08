@@ -44,7 +44,7 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
   --permission-prefix stock
 ```
 
-命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成唯一的本地开发 JWT 密钥、`backend/.env` 和带随机 Grafana 管理密码的 `observability/.env`，更新运行时产品配置与 README，并写入 `.arc-project.json`。本地 `.env` 受 `.gitignore` 保护，不会进入版本库。
+命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成 `backend/.env` 和带随机 Grafana 管理密码的 `observability/.env`，更新运行时产品配置与 README，并写入 `.arc-project.json`。本地 `.env` 受 `.gitignore` 保护，不会进入版本库。
 
 查看所有参数：
 
@@ -148,7 +148,7 @@ cargo flow verify --all
 [docs/openapi.yaml](docs/openapi.yaml) 是前后端联调的唯一事实来源：
 
 - 后端按契约实现路由与 DTO（`/api/v1/...`，服务端口由 `backend/.env` 的 `PORT` 控制，默认 8080）；
-- 前端通过 `HttpClient`、Bearer interceptor 和 DTO 映射直接调用契约接口；开发服务器把 `/api/v1` 代理到后端；
+- 前端通过 `HttpClient`、HttpOnly Cookie 会话、CSRF interceptor 和 DTO 映射直接调用契约接口；开发服务器把 `/api/v1` 代理到后端；
 - 数据库 schema 与基础 RBAC 数据由 `backend/migrations/` 管理；历史演示管理员会被迁移禁用，真实管理员必须显式初始化；
 - `backend/tests/openapi_contract.rs` 会在 CI 中校验 OpenAPI 路径、HTTP 方法及关键响应必填字段没有漂移。
 
@@ -166,4 +166,4 @@ window.__ARC_ADMIN_CONFIG__ = {
 };
 ```
 
-配置会同步控制浏览器标题、登录页、侧栏、顶栏、API 地址和主题存储键。该文件会被浏览器直接读取，禁止写入 API 密钥、JWT 密钥、数据库凭据或其他秘密。
+配置会同步控制浏览器标题、登录页、侧栏、顶栏、API 地址和主题存储键。该文件会被浏览器直接读取，禁止写入 API 密钥、会话凭据、数据库凭据或其他秘密。

@@ -1,6 +1,6 @@
 # RBAC Control Center — Angular 22 + Angular Material
 
-面向 RBAC 管理的 Angular 前端，使用真实后端 API、JWT 会话和权限感知路由。
+面向 RBAC 管理的 Angular 前端，使用真实后端 API、HttpOnly Cookie 会话、CSRF 防护和权限感知路由。
 
 ## 技术栈
 
@@ -29,7 +29,7 @@ npm run build         # 输出到 dist/arc-admin
 
 ## API 与认证
 
-- `AuthService` 登录后保存 Bearer token，并从 `/auth/me/permissions` 获取权限码；权限加载失败会清除整个部分会话。
+- `AuthService` 使用服务端 HttpOnly Cookie 会话，并从 `/auth/me/permissions` 获取权限码；写请求由拦截器自动附加会话绑定的 CSRF 请求头，权限加载失败会主动撤销部分会话。
 - `authInterceptor` 为 API 请求附加 token，收到 401 后清理会话并跳转登录页。
 - 路由守卫会向服务端复核现有 token；页面和按钮按权限码显示，但后端授权始终是最终安全边界。
 - `core/api` 下按资源拆分的 API Service 将 OpenAPI 的数值 ID、nullable 字段和分页响应映射到视图模型。

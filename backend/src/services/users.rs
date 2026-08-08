@@ -64,9 +64,7 @@ pub async fn create(
             "用户名仅允许字母、数字、下划线或连字符",
         ));
     }
-    if req.password.len() < 8 {
-        return Err(ApiError::validation("密码长度不能少于 8 位"));
-    }
+    auth::validate_password(&req.password)?;
     let display_name = req.display_name.trim();
     if display_name.is_empty() || display_name.len() > 128 {
         return Err(ApiError::validation("显示名称长度需在 1-128 个字符之间"));
@@ -150,9 +148,7 @@ pub async fn update(
         }
     }
     let password_hash = if let Some(password) = &req.password {
-        if password.len() < 8 {
-            return Err(ApiError::validation("密码长度不能少于 8 位"));
-        }
+        auth::validate_password(password)?;
         Some(auth::hash_password(password)?)
     } else {
         None
@@ -176,6 +172,9 @@ pub async fn update(
             .await
             .map_err(db_error)?
             .ok_or_else(|| ApiError::not_found("用户不存在"))?;
+        repositories::auth_sessions::revoke_all_for_user(&mut transaction, id)
+            .await
+            .map_err(db_error)?;
     }
     let row = repositories::users::update_profile(
         &mut transaction,
@@ -188,6 +187,15 @@ pub async fn update(
     .await
     .map_err(db_error)?
     .ok_or_else(|| ApiError::not_found("用户不存在"))?;
+    if req
+        .status
+        .as_deref()
+        .is_some_and(|status| status != "active")
+    {
+        repositories::auth_sessions::revoke_all_for_user(&mut transaction, id)
+            .await
+            .map_err(db_error)?;
+    }
     repositories::audit_logs::record(
         &mut transaction,
         actor_user_id,

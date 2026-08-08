@@ -23,6 +23,7 @@
 | `0007_localize_default_copy_zh_cn.sql` | 将仍为原始英文值的内置角色、权限组和权限文案更新为简体中文 |
 | `0008_harden_rbac_and_add_audit.sql` | 拆分高风险授权权限、增加 JWT 版本撤销、清理历史角色绑定并创建审计日志 |
 | `0009_add_trace_id_to_audit_logs.sql` | 为审计日志增加请求追踪号及精确查询索引 |
+| `20260808065904_harden_auth_sessions.sql` | 增加服务端会话与登录失败节流表，替代浏览器可读 JWT |
 
 迁移文件通过 `sqlx::migrate!` 宏在**编译时**嵌入二进制。`backend/build.rs` 已声明
 `migrations` 为构建输入，新增或修改迁移后，下一次 `cargo build` 会自动重新编译：

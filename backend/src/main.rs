@@ -1,6 +1,7 @@
 //! arc-admin backend server entry point.
 
-use arc_admin_backend::config::{AppConfig, LogFormat};
+use arc_admin_backend::auth::AuthSessionConfig;
+use arc_admin_backend::config::{AppConfig, AppEnvironment, LogFormat};
 use arc_admin_backend::telemetry::{self, TelemetryMetadata};
 use arc_admin_backend::{build_router_with_metadata_and_cors, db, AppState};
 use std::process::ExitCode;
@@ -66,10 +67,6 @@ async fn main() -> ExitCode {
 }
 
 async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<()> {
-    if config.uses_development_jwt {
-        tracing::warn!("JWT_SECRET is not set; using the development-only default");
-    }
-
     let pool = db::init_pool(&config.database_url).await?;
     let migrations = db::run_migrations(&pool).await?;
     tracing::info!(
@@ -80,8 +77,17 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
 
     let state = AppState {
         pool,
-        jwt_secret: Arc::new(config.jwt_secret.clone()),
-        token_ttl_secs: config.token_ttl_secs,
+        auth: Arc::new(AuthSessionConfig {
+            session_ttl_secs: config.session_ttl_secs,
+            session_idle_timeout_secs: config.session_idle_timeout_secs,
+            persistent_session_ttl_secs: config.persistent_session_ttl_secs,
+            persistent_session_idle_timeout_secs: config.persistent_session_idle_timeout_secs,
+            max_sessions_per_user: config.max_sessions_per_user,
+            login_max_failures: config.login_max_failures,
+            login_failure_window_secs: config.login_failure_window_secs,
+            login_lockout_secs: config.login_lockout_secs,
+            secure_cookies: config.environment == AppEnvironment::Production,
+        }),
     };
     let app = build_router_with_metadata_and_cors(state, metadata, config.cors_layer());
 

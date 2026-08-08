@@ -19,6 +19,10 @@ pub enum ApiError {
     Conflict(String),
     #[error("{0}")]
     Validation(String),
+    #[error("CSRF 校验失败，请刷新页面后重试")]
+    CsrfInvalid,
+    #[error("登录尝试过于频繁，请稍后再试")]
+    RateLimited { retry_after_secs: u64 },
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -44,6 +48,14 @@ impl ApiError {
         Self::Validation(message.into())
     }
 
+    pub fn csrf_invalid() -> Self {
+        Self::CsrfInvalid
+    }
+
+    pub fn rate_limited(retry_after_secs: u64) -> Self {
+        Self::RateLimited { retry_after_secs }
+    }
+
     pub fn internal(error: impl std::fmt::Display) -> Self {
         Self::Internal(anyhow::anyhow!("{error}"))
     }
@@ -57,6 +69,8 @@ impl IntoResponse for ApiError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::CsrfInvalid => StatusCode::FORBIDDEN,
+            Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let code = match &self {
@@ -65,6 +79,8 @@ impl IntoResponse for ApiError {
             Self::NotFound(_) => "NOT_FOUND",
             Self::Conflict(_) => "CONFLICT",
             Self::Validation(_) => "VALIDATION_ERROR",
+            Self::CsrfInvalid => "CSRF_INVALID",
+            Self::RateLimited { .. } => "RATE_LIMITED",
             Self::Internal(_) => "INTERNAL_ERROR",
         };
         let trace_id =
@@ -82,7 +98,15 @@ impl IntoResponse for ApiError {
             }
             other => other.to_string(),
         };
-        error_response(status, code, message, trace_id)
+        let mut response = error_response(status, code, message, trace_id);
+        if let Self::RateLimited { retry_after_secs } = self {
+            if let Ok(value) = retry_after_secs.to_string().parse() {
+                response
+                    .headers_mut()
+                    .insert(axum::http::header::RETRY_AFTER, value);
+            }
+        }
+        response
     }
 }
 

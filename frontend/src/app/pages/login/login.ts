@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/auth.service';
+import { apiErrorMessage } from '../../core/api-error';
 import { APP_CONFIG } from '../../core/runtime-config';
 
 @Component({
@@ -52,7 +53,7 @@ export class LoginPage {
       this.error.set(
         error instanceof HttpErrorResponse && error.status === 401
           ? '用户名、密码或账号状态无效'
-          : '登录服务暂时不可用，请稍后重试',
+          : apiErrorMessage(error, '登录服务暂时不可用，请稍后重试'),
       );
       this.loading.set(false);
     }

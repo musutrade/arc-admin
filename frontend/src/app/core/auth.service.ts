@@ -3,13 +3,11 @@ import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL } from './runtime-config';
 import { ApiUser, ChangePasswordRequest, LoginResponse, PermissionCodes } from './api.models';
-import { AuthTokenStore } from './auth-token.store';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly apiBaseUrl = inject(API_BASE_URL);
-  private readonly tokenStore = inject(AuthTokenStore);
   private readonly userState = signal<ApiUser | null>(null);
   private readonly permissionState = signal<ReadonlySet<string>>(new Set());
   private sessionCheck: Promise<boolean> | null = null;
@@ -19,22 +17,22 @@ export class AuthService {
 
   async login(username: string, password: string, remember: boolean): Promise<void> {
     const response = await firstValueFrom(
-      this.http.post<LoginResponse>(`${this.apiBaseUrl}/auth/login`, { username, password }),
+      this.http.post<LoginResponse>(`${this.apiBaseUrl}/auth/login`, {
+        username,
+        password,
+        remember,
+      }),
     );
-    this.tokenStore.set(response.accessToken, remember);
     this.userState.set(response.user);
     try {
       await this.loadPermissions();
     } catch (error) {
-      this.clearSession();
+      await this.logout().catch(() => undefined);
       throw error;
     }
   }
 
   ensureSession(): Promise<boolean> {
-    if (!this.tokenStore.token()) {
-      return Promise.resolve(false);
-    }
     if (this.userState()) {
       return this.refreshPermissions()
         .then(() => true)
@@ -86,8 +84,12 @@ export class AuthService {
     this.permissionState.set(new Set(permissions.codes));
   }
 
-  logout(): void {
-    this.clearSession();
+  async logout(): Promise<void> {
+    try {
+      await firstValueFrom(this.http.post<void>(`${this.apiBaseUrl}/auth/logout`, null));
+    } finally {
+      this.clearSession();
+    }
   }
 
   handleUnauthorized(): void {
@@ -106,7 +108,6 @@ export class AuthService {
   }
 
   private clearSession(): void {
-    this.tokenStore.clear();
     this.userState.set(null);
     this.permissionState.set(new Set());
   }

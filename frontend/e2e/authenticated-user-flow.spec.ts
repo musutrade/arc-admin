@@ -89,9 +89,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     if (path === '/api/v1/auth/login') {
       await route.fulfill({
         json: {
-          accessToken: 'e2e-token',
-          tokenType: 'Bearer',
-          expiresIn: 3600,
+          expiresAt: '2026-08-01T08:00:00Z',
           user: administrator,
         },
       });
@@ -99,6 +97,8 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       await route.fulfill({ json: administrator });
     } else if (path === '/api/v1/auth/me/permissions') {
       await route.fulfill({ json: { codes: permissions } });
+    } else if (path === '/api/v1/auth/logout') {
+      await route.fulfill({ status: 204 });
     } else if (path === '/api/v1/auth/me/password' && request.method() === 'PUT') {
       passwordChangeRequest = request.postDataJSON() as ChangePasswordRequest;
       await route.fulfill({ status: 204 });

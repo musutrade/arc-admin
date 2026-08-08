@@ -1,5 +1,13 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormField, form, minLength, required, submit, validate } from '@angular/forms/signals';
+import {
+  FormField,
+  form,
+  maxLength,
+  minLength,
+  required,
+  submit,
+  validate,
+} from '@angular/forms/signals';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -143,7 +151,8 @@ export class ChangePasswordDialog {
   readonly passwordForm = form(this.passwordModel, (path) => {
     required(path.currentPassword, { message: '请输入当前密码' });
     required(path.newPassword, { message: '请输入新密码' });
-    minLength(path.newPassword, 8, { message: '新密码至少需要 8 个字符' });
+    minLength(path.newPassword, 12, { message: '新密码至少需要 12 个字符' });
+    maxLength(path.newPassword, 128, { message: '新密码不能超过 128 个字符' });
     validate(path.newPassword, ({ value, valueOf }) =>
       value().length > 0 && value() === valueOf(path.currentPassword)
         ? { kind: 'samePassword', message: '新密码不能与当前密码相同' }

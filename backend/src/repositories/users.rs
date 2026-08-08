@@ -217,10 +217,10 @@ pub async fn super_admin_guard_state(
     .await
 }
 
-pub async fn update_last_login(pool: &PgPool, id: i64) -> Result<(), sqlx::Error> {
+pub async fn update_last_login(connection: &mut PgConnection, id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE users SET last_login_at = now() WHERE id = $1")
         .bind(id)
-        .execute(pool)
+        .execute(connection)
         .await?;
     Ok(())
 }

@@ -243,6 +243,8 @@ pub fn nullable_patch<T: Clone>(patch: &NullablePatch<T>) -> (bool, Option<T>) {
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+    #[serde(default)]
+    pub remember: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -255,9 +257,7 @@ pub struct ChangePasswordRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
-    pub access_token: String,
-    pub token_type: String,
-    pub expires_in: i64,
+    pub expires_at: DateTime<Utc>,
     pub user: UserResponse,
 }
 

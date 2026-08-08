@@ -103,9 +103,14 @@ export class LayoutComponent {
       });
   }
 
-  logout(): void {
-    this.auth.logout();
-    this.router.navigate(['/login']);
+  async logout(): Promise<void> {
+    try {
+      await this.auth.logout();
+    } catch {
+      this.snackBar.open('退出请求未完成，请稍后重试', '关闭', { duration: 3000 });
+    } finally {
+      await this.router.navigate(['/login']);
+    }
   }
 
   private syncNavigation(url: string): void {

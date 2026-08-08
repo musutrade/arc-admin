@@ -1,12 +1,11 @@
 //! Runtime configuration and production safety checks.
 
+use crate::auth::CSRF_HEADER;
 use crate::telemetry::REQUEST_ID_HEADER;
 use anyhow::{bail, Context};
-use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
+use axum::http::header::CONTENT_TYPE;
 use axum::http::{HeaderValue, Method};
 use tower_http::cors::{AllowOrigin, CorsLayer};
-
-const DEVELOPMENT_JWT_SECRET: &str = "dev-jwt-secret-change-me";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppEnvironment {
@@ -51,21 +50,32 @@ impl LogFormat {
 pub struct AppConfig {
     pub database_url: String,
     pub port: u16,
-    pub jwt_secret: String,
-    pub token_ttl_secs: i64,
+    pub session_ttl_secs: i64,
+    pub session_idle_timeout_secs: i64,
+    pub persistent_session_ttl_secs: i64,
+    pub persistent_session_idle_timeout_secs: i64,
+    pub max_sessions_per_user: i64,
+    pub login_max_failures: i32,
+    pub login_failure_window_secs: i64,
+    pub login_lockout_secs: i64,
     pub environment: AppEnvironment,
     pub log_format: LogFormat,
     pub service_name: String,
     allowed_origins: Vec<HeaderValue>,
-    pub uses_development_jwt: bool,
 }
 
 #[derive(Default)]
 struct ConfigValues {
     database_url: Option<String>,
     port: Option<String>,
-    jwt_secret: Option<String>,
-    token_ttl_secs: Option<String>,
+    session_ttl_secs: Option<String>,
+    session_idle_timeout_secs: Option<String>,
+    persistent_session_ttl_secs: Option<String>,
+    persistent_session_idle_timeout_secs: Option<String>,
+    max_sessions_per_user: Option<String>,
+    login_max_failures: Option<String>,
+    login_failure_window_secs: Option<String>,
+    login_lockout_secs: Option<String>,
     app_env: Option<String>,
     cors_allowed_origins: Option<String>,
     log_format: Option<String>,
@@ -77,8 +87,17 @@ impl AppConfig {
         Self::from_values(ConfigValues {
             database_url: std::env::var("DATABASE_URL").ok(),
             port: std::env::var("PORT").ok(),
-            jwt_secret: std::env::var("JWT_SECRET").ok(),
-            token_ttl_secs: std::env::var("TOKEN_TTL_SECS").ok(),
+            session_ttl_secs: std::env::var("SESSION_TTL_SECS").ok(),
+            session_idle_timeout_secs: std::env::var("SESSION_IDLE_TIMEOUT_SECS").ok(),
+            persistent_session_ttl_secs: std::env::var("PERSISTENT_SESSION_TTL_SECS").ok(),
+            persistent_session_idle_timeout_secs: std::env::var(
+                "PERSISTENT_SESSION_IDLE_TIMEOUT_SECS",
+            )
+            .ok(),
+            max_sessions_per_user: std::env::var("MAX_SESSIONS_PER_USER").ok(),
+            login_max_failures: std::env::var("LOGIN_MAX_FAILURES").ok(),
+            login_failure_window_secs: std::env::var("LOGIN_FAILURE_WINDOW_SECS").ok(),
+            login_lockout_secs: std::env::var("LOGIN_LOCKOUT_SECS").ok(),
             app_env: std::env::var("APP_ENV").ok(),
             cors_allowed_origins: std::env::var("CORS_ALLOWED_ORIGINS").ok(),
             log_format: std::env::var("LOG_FORMAT").ok(),
@@ -90,8 +109,14 @@ impl AppConfig {
         let ConfigValues {
             database_url,
             port,
-            jwt_secret,
-            token_ttl_secs,
+            session_ttl_secs,
+            session_idle_timeout_secs,
+            persistent_session_ttl_secs,
+            persistent_session_idle_timeout_secs,
+            max_sessions_per_user,
+            login_max_failures,
+            login_failure_window_secs,
+            login_lockout_secs,
             app_env,
             cors_allowed_origins,
             log_format,
@@ -114,21 +139,33 @@ impl AppConfig {
         if port == 0 {
             bail!("PORT must be an integer between 1 and 65535");
         }
-        let token_ttl_secs = token_ttl_secs
-            .as_deref()
-            .unwrap_or("3600")
-            .parse::<i64>()
-            .context("TOKEN_TTL_SECS must be a positive integer")?;
-        if token_ttl_secs <= 0 {
-            bail!("TOKEN_TTL_SECS must be a positive integer");
+        let session_ttl_secs = positive_i64("SESSION_TTL_SECS", session_ttl_secs, 28_800)?;
+        let session_idle_timeout_secs = positive_i64(
+            "SESSION_IDLE_TIMEOUT_SECS",
+            session_idle_timeout_secs,
+            1_800,
+        )?;
+        let persistent_session_ttl_secs = positive_i64(
+            "PERSISTENT_SESSION_TTL_SECS",
+            persistent_session_ttl_secs,
+            2_592_000,
+        )?;
+        let persistent_session_idle_timeout_secs = positive_i64(
+            "PERSISTENT_SESSION_IDLE_TIMEOUT_SECS",
+            persistent_session_idle_timeout_secs,
+            604_800,
+        )?;
+        let max_sessions_per_user =
+            positive_i64("MAX_SESSIONS_PER_USER", max_sessions_per_user, 10)?;
+        let login_max_failures = positive_i32("LOGIN_MAX_FAILURES", login_max_failures, 5)?;
+        let login_failure_window_secs =
+            positive_i64("LOGIN_FAILURE_WINDOW_SECS", login_failure_window_secs, 900)?;
+        let login_lockout_secs = positive_i64("LOGIN_LOCKOUT_SECS", login_lockout_secs, 900)?;
+        if session_idle_timeout_secs > session_ttl_secs {
+            bail!("SESSION_IDLE_TIMEOUT_SECS cannot exceed SESSION_TTL_SECS");
         }
-
-        let uses_development_jwt = jwt_secret.is_none();
-        let jwt_secret = jwt_secret.unwrap_or_else(|| DEVELOPMENT_JWT_SECRET.to_string());
-        if environment == AppEnvironment::Production
-            && (jwt_secret == DEVELOPMENT_JWT_SECRET || jwt_secret.len() < 32)
-        {
-            bail!("production requires JWT_SECRET with at least 32 characters");
+        if persistent_session_idle_timeout_secs > persistent_session_ttl_secs {
+            bail!("PERSISTENT_SESSION_IDLE_TIMEOUT_SECS cannot exceed PERSISTENT_SESSION_TTL_SECS");
         }
 
         let allowed_origins = parse_origins(cors_allowed_origins)?;
@@ -155,13 +192,18 @@ impl AppConfig {
         Ok(Self {
             database_url,
             port,
-            jwt_secret,
-            token_ttl_secs,
+            session_ttl_secs,
+            session_idle_timeout_secs,
+            persistent_session_ttl_secs,
+            persistent_session_idle_timeout_secs,
+            max_sessions_per_user,
+            login_max_failures,
+            login_failure_window_secs,
+            login_lockout_secs,
             environment,
             log_format,
             service_name,
             allowed_origins,
-            uses_development_jwt,
         })
     }
 
@@ -179,9 +221,36 @@ impl AppConfig {
                 Method::DELETE,
                 Method::OPTIONS,
             ])
-            .allow_headers([AUTHORIZATION, CONTENT_TYPE, REQUEST_ID_HEADER])
+            .allow_headers([CONTENT_TYPE, CSRF_HEADER, REQUEST_ID_HEADER])
             .expose_headers([REQUEST_ID_HEADER])
+            .allow_credentials(true)
     }
+}
+
+fn positive_i64(name: &str, value: Option<String>, default: i64) -> anyhow::Result<i64> {
+    let value = value
+        .as_deref()
+        .map(str::parse::<i64>)
+        .transpose()
+        .with_context(|| format!("{name} must be a positive integer"))?
+        .unwrap_or(default);
+    if value <= 0 {
+        bail!("{name} must be a positive integer");
+    }
+    Ok(value)
+}
+
+fn positive_i32(name: &str, value: Option<String>, default: i32) -> anyhow::Result<i32> {
+    let value = value
+        .as_deref()
+        .map(str::parse::<i32>)
+        .transpose()
+        .with_context(|| format!("{name} must be a positive integer"))?
+        .unwrap_or(default);
+    if value <= 0 {
+        bail!("{name} must be a positive integer");
+    }
+    Ok(value)
 }
 
 fn parse_origins(value: Option<String>) -> anyhow::Result<Vec<HeaderValue>> {
@@ -205,14 +274,9 @@ fn parse_origins(value: Option<String>) -> anyhow::Result<Vec<HeaderValue>> {
 mod tests {
     use super::*;
 
-    fn config(
-        environment: &str,
-        jwt_secret: Option<&str>,
-        origins: Option<&str>,
-    ) -> anyhow::Result<AppConfig> {
+    fn config(environment: &str, origins: Option<&str>) -> anyhow::Result<AppConfig> {
         AppConfig::from_values(ConfigValues {
             database_url: Some("postgres://localhost/test".to_string()),
-            jwt_secret: jwt_secret.map(str::to_string),
             app_env: Some(environment.to_string()),
             cors_allowed_origins: origins.map(str::to_string),
             ..ConfigValues::default()
@@ -221,48 +285,42 @@ mod tests {
 
     #[test]
     fn development_has_safe_local_defaults() {
-        let config = config("development", None, None).expect("development config");
+        let config = config("development", None).expect("development config");
 
         assert_eq!(config.environment, AppEnvironment::Development);
         assert_eq!(config.log_format, LogFormat::Pretty);
-        assert!(config.uses_development_jwt);
-    }
-
-    #[test]
-    fn production_requires_a_strong_jwt_secret() {
-        let error = config(
-            "production",
-            Some("short"),
-            Some("https://admin.example.com"),
-        )
-        .err()
-        .expect("weak secret must fail");
-
-        assert!(error.to_string().contains("at least 32 characters"));
+        assert_eq!(config.session_ttl_secs, 28_800);
+        assert_eq!(config.login_max_failures, 5);
     }
 
     #[test]
     fn production_requires_explicit_cors_origins() {
-        let error = config(
-            "production",
-            Some("this-secret-is-at-least-thirty-two-characters"),
-            None,
-        )
-        .err()
-        .expect("missing origins must fail");
+        let error = config("production", None)
+            .err()
+            .expect("missing origins must fail");
 
         assert!(error.to_string().contains("CORS_ALLOWED_ORIGINS"));
     }
 
     #[test]
     fn production_uses_json_logs_by_default() {
-        let config = config(
-            "production",
-            Some("this-secret-is-at-least-thirty-two-characters"),
-            Some("https://admin.example.com"),
-        )
-        .expect("production config");
+        let config =
+            config("production", Some("https://admin.example.com")).expect("production config");
 
         assert_eq!(config.log_format, LogFormat::Json);
+    }
+
+    #[test]
+    fn idle_timeout_cannot_exceed_absolute_session_ttl() {
+        let error = AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            session_ttl_secs: Some("60".to_string()),
+            session_idle_timeout_secs: Some("61".to_string()),
+            ..ConfigValues::default()
+        })
+        .err()
+        .expect("invalid session timeouts must fail");
+
+        assert!(error.to_string().contains("SESSION_IDLE_TIMEOUT_SECS"));
     }
 }

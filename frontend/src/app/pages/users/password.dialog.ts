@@ -22,7 +22,7 @@ import { MatIconModule } from '@angular/material/icon';
           autocomplete="new-password"
         />
         @if (form.controls.password.touched && form.controls.password.invalid) {
-          <small>密码至少需要 8 个字符。</small>
+          <small>密码长度需在 12-128 个字符之间。</small>
         }
       </div>
       <div class="dialog-actions">
@@ -39,7 +39,7 @@ export class PasswordDialog {
   private readonly dialogRef = inject(MatDialogRef<PasswordDialog>);
   private readonly fb = inject(FormBuilder);
   readonly form = this.fb.nonNullable.group({
-    password: ['', [Validators.required, Validators.minLength(8)]],
+    password: ['', [Validators.required, Validators.minLength(12), Validators.maxLength(128)]],
   });
 
   submit(): void {

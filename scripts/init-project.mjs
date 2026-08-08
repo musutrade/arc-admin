@@ -207,7 +207,7 @@ function unquote(value) {
   return value;
 }
 
-function buildEnvironment(example, options, jwtSecret) {
+function buildEnvironment(example, options) {
   const withDatabase = replaceEnvValue(example, "DATABASE_URL", (value) => {
     let databaseUrl;
     try {
@@ -219,12 +219,11 @@ function buildEnvironment(example, options, jwtSecret) {
     return JSON.stringify(databaseUrl.toString());
   });
 
-  const withServiceName = replaceEnvValue(
+  return replaceEnvValue(
     withDatabase,
     "SERVICE_NAME",
     () => `${options.slug}-backend`,
   );
-  return replaceEnvValue(withServiceName, "JWT_SECRET", () => jwtSecret);
 }
 
 function buildObservabilityEnvironment(example, options, grafanaPassword) {
@@ -321,7 +320,6 @@ export function initializeProject(
   options,
   {
     doctorMode = "auto",
-    secretFactory = () => randomBytes(32).toString("hex"),
     grafanaSecretFactory = () => randomBytes(24).toString("base64url"),
   } = {},
 ) {
@@ -353,11 +351,9 @@ export function initializeProject(
     fail("只能从正式版本初始化项目，FRAMEWORK_VERSION 必须是 vX.Y.Z");
   }
 
-  const jwtSecret = secretFactory();
   const environment = buildEnvironment(
     readFileSync(environmentExamplePath, "utf8"),
     options,
-    jwtSecret,
   );
   const observabilityEnvironment = buildObservabilityEnvironment(
     readFileSync(observabilityExamplePath, "utf8"),

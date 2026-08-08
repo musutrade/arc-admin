@@ -2,6 +2,30 @@
 
 本项目遵循语义化版本。每个发布版本必须对应一个不可移动的同名 Git 标签，派生项目升级时使用标签内容作为三方合并基线。
 
+## [v2.0.0] - 2026-08-08
+
+### 安全
+
+- 使用数据库持久化的 256-bit 随机会话替代浏览器可读 JWT，数据库仅保存会话与 CSRF Token 的 SHA-256 哈希；
+- 会话 Cookie 启用 HttpOnly、`SameSite=Strict`，生产环境额外启用 `Secure` 与 `__Host-` 前缀；
+- 所有受保护写请求增加会话绑定的双提交 CSRF 校验；
+- 增加多实例共享的登录失败窗口与账号锁定、单用户会话上限、空闲/绝对过期和过期数据清理；
+- 登录成功、登录失败和退出登录写入结构化安全审计，密码变更与管理员重置会撤销已有会话；
+- 用户密码策略统一为 12-128 个字符，引导超级管理员仍要求至少 16 个字符。
+
+### 变更
+
+- 登录响应删除 `accessToken`、`tokenType` 和 `expiresIn`，改为返回 `expiresAt` 与用户信息；
+- Angular 删除 Web Storage 认证凭据，改用 Cookie 凭据与 CSRF 拦截器，并增加服务端退出接口；
+- 删除 `JWT_SECRET`、`TOKEN_TTL_SECS`，增加会话寿命、会话上限和登录锁定配置。
+
+### 升级说明
+
+- 前后端必须同时升级，旧 Bearer 客户端与新 Cookie 会话接口不兼容；升级后需清理浏览器中的 `arc-auth` Local/Session Storage；
+- 生产环境前后端必须处于同一站点并使用 HTTPS；跨 origin 部署需明确配置 `CORS_ALLOWED_ORIGINS`，不能使用 `*`；
+- 部署前检查并按 `backend/.env.example` 补齐新的会话配置，旧 JWT 环境变量不再读取；
+- 数据库启动迁移会新增 `auth_sessions` 与 `auth_login_attempts`，不会迁移或继续接受旧 JWT，所有用户需要重新登录。
+
 ## [v1.1.0] - 2026-08-08
 
 ### 新增

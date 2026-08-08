@@ -43,7 +43,7 @@ function createFixture() {
   );
   writeFileSync(
     join(root, "backend/.env.example"),
-    'DATABASE_URL="postgres://arc_admin:change-me@localhost:5432/arc_admin"\nJWT_SECRET=change-me\nSERVICE_NAME=arc-admin-backend\n',
+    'DATABASE_URL="postgres://arc_admin:change-me@localhost:5432/arc_admin"\nSESSION_TTL_SECS=28800\nSERVICE_NAME=arc-admin-backend\n',
   );
   writeFileSync(
     join(root, "observability/.env.example"),
@@ -84,7 +84,6 @@ test("initializes a clean template without tracking the local environment", () =
 
   const result = initializeProject(root, projectOptions(), {
     doctorMode: "never",
-    secretFactory: () => "a".repeat(64),
     grafanaSecretFactory: () => "g".repeat(32),
   });
 
@@ -98,7 +97,7 @@ test("initializes a clean template without tracking the local environment", () =
   );
   const environment = readFileSync(join(root, "backend/.env"), "utf8");
   assert.match(environment, /\/stock_analysis"/);
-  assert.match(environment, new RegExp(`JWT_SECRET=${"a".repeat(64)}`));
+  assert.match(environment, /SESSION_TTL_SECS=28800/);
   assert.match(environment, /SERVICE_NAME=stock-analysis-backend/);
   const observabilityEnvironment = readFileSync(
     join(root, "observability/.env"),

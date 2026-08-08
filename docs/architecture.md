@@ -26,7 +26,9 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 
 用户-角色和角色-权限写入由 Service 开启事务并把同一个连接传给 Repository，主记录与关联表要么同时成功，要么同时回滚。内置 `super_admin` 不能被停用或清空权限，最后一个有效超级管理员不能被停用、删除或移除角色。
 
-每个受保护请求都会从数据库重新读取账号有效状态和权限码，因此停用账号或修改角色权限后，旧 JWT 会立即失效或按新权限执行。Handler 使用类型化权限提取器声明所需权限，前端隐藏按钮仅用于交互体验，不作为安全边界。
+登录成功后，浏览器只持有 256-bit 随机会话标识；标识通过 HttpOnly、`SameSite=Strict` Cookie 发送，数据库仅保存其 SHA-256 哈希。每个受保护请求都会从数据库重新读取会话、账号有效状态和权限码，因此退出、密码变更、停用账号或修改角色权限会立即撤销会话或按新权限执行。所有受保护写请求还必须通过与会话绑定的 CSRF Cookie 和 `X-CSRF-Token` 双提交校验。Handler 使用类型化权限提取器声明所需权限，前端隐藏按钮仅用于交互体验，不作为安全边界。
+
+登录失败按规范化用户名的哈希在 PostgreSQL 中计数，默认 15 分钟内失败 5 次后锁定 15 分钟，多实例共享同一限制。登录成功、失败、退出和密码变更都会写入审计日志；会话表不保存原始 Cookie、密码、CSRF Token、IP 或完整 User-Agent。每个用户默认最多保留 10 个有效会话，超出后撤销最早会话。
 
 认证与业务权限标记分离：`backend/src/auth.rs` 只实现认证和通用 `RequirePermission` 提取器，`backend/src/permissions.rs` 保存平台权限，新增业务权限按模块放入 `backend/src/permissions/`。数据库、Rust 与 Angular 的权限码从[业务权限模板](business-permissions.md)同步创建。
 
@@ -45,17 +47,23 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 
 ## 配置与安全
 
-| 变量                   | 说明                                       |
-| ---------------------- | ------------------------------------------ |
-| `DATABASE_URL`         | 必填 PostgreSQL 连接串                     |
-| `PORT`                 | 监听端口，默认 8080，范围 1-65535          |
-| `APP_ENV`              | `development`、`test` 或 `production`      |
-| `JWT_SECRET`           | 生产环境必填且至少 32 字符                 |
-| `TOKEN_TTL_SECS`       | 正整数，默认 86400                         |
-| `CORS_ALLOWED_ORIGINS` | 逗号分隔 origin；生产环境必填且禁止 `*`    |
-| `LOG_FORMAT`           | `pretty` 或 `json`；生产环境默认 `json`    |
-| `RUST_LOG`             | Rust 日志过滤规则                          |
-| `SERVICE_NAME`         | 日志中的服务标识，默认 `arc-admin-backend` |
+| 变量                                   | 说明                                            |
+| -------------------------------------- | ----------------------------------------------- |
+| `DATABASE_URL`                         | 必填 PostgreSQL 连接串                          |
+| `PORT`                                 | 监听端口，默认 8080，范围 1-65535               |
+| `APP_ENV`                              | `development`、`test` 或 `production`           |
+| `SESSION_TTL_SECS`                     | 普通会话绝对有效期，默认 8 小时                  |
+| `SESSION_IDLE_TIMEOUT_SECS`            | 普通会话空闲有效期，默认 30 分钟                 |
+| `PERSISTENT_SESSION_TTL_SECS`          | “记住我”会话绝对有效期，默认 30 天               |
+| `PERSISTENT_SESSION_IDLE_TIMEOUT_SECS` | “记住我”会话空闲有效期，默认 7 天                |
+| `MAX_SESSIONS_PER_USER`                | 每个用户最多有效会话数，默认 10                  |
+| `LOGIN_MAX_FAILURES`                   | 登录失败锁定阈值，默认 5                         |
+| `LOGIN_FAILURE_WINDOW_SECS`            | 登录失败统计窗口，默认 900 秒                    |
+| `LOGIN_LOCKOUT_SECS`                   | 达到阈值后的锁定时长，默认 900 秒                |
+| `CORS_ALLOWED_ORIGINS`                 | 逗号分隔 origin；生产环境必填且禁止 `*`         |
+| `LOG_FORMAT`                           | `pretty` 或 `json`；生产环境默认 `json`         |
+| `RUST_LOG`                             | Rust 日志过滤规则                               |
+| `SERVICE_NAME`                         | 日志中的服务标识，默认 `arc-admin-backend`      |
 
 管理员账号不再由固定密码迁移创建。`bootstrap_admin` 使用进程环境传入的至少 16 字符密码，并在事务中创建或激活账号及绑定 `super_admin`。
 
@@ -64,7 +72,7 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 ## 契约与测试
 
 - `API_ROUTE_CONTRACT`、`API_SCHEMA_REQUIRED_FIELDS` 和 `backend/tests/openapi_contract.rs` 校验 OpenAPI 的路径、HTTP 方法及关键响应必填字段。
-- `backend/tests/api_flow.rs` 使用真实迁移和 PostgreSQL，覆盖安全初始化、默认密码失效、权限拒绝、旧 token 失效、事务回滚和超级管理员保护。
+- `backend/tests/api_flow.rs` 使用真实迁移和 PostgreSQL，覆盖安全初始化、默认密码失效、Cookie/CSRF、登录限流、会话撤销、权限拒绝、事务回滚和超级管理员保护。
 - `/healthz` 仅表示进程存活；`/readyz` 检查 PostgreSQL，可用于负载均衡就绪探针。服务收到 Ctrl+C 或 SIGTERM 后执行优雅停机。
 - Angular 单测使用 Vitest/jsdom；Playwright 使用拦截 API 的确定性数据，在桌面 Chromium 和 Pixel 7 视口覆盖登录、权限导航、用户创建及未认证重定向。
 - arc-flow 对 SQL 写入位置、分层依赖和旧模板模式做确定性扫描，并管理外部命令超时与一次性 PostgreSQL 生命周期。

@@ -1,8 +1,9 @@
+use arc_admin_backend::auth::{self, AuthSessionConfig};
 use arc_admin_backend::models::{NullablePatch, UpdateUserRequest};
 use arc_admin_backend::{build_router, db, services, AppState};
 use axum::body::Body;
-use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
-use axum::http::{Method, Request, StatusCode};
+use axum::http::header::{CONTENT_TYPE, COOKIE, SET_COOKIE};
+use axum::http::{Method, Request, Response, StatusCode};
 use axum::Router;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
@@ -10,16 +11,29 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use tower::ServiceExt;
 
-async fn send(
+#[derive(Debug)]
+struct TestSession {
+    cookie_header: String,
+    csrf_token: String,
+    session_token: String,
+    session_set_cookie: String,
+    csrf_set_cookie: String,
+}
+
+async fn request(
     app: &Router,
     method: Method,
     uri: &str,
-    token: Option<&str>,
+    session: Option<&TestSession>,
     body: Option<Value>,
-) -> (StatusCode, Value) {
-    let mut builder = Request::builder().method(method).uri(uri);
-    if let Some(token) = token {
-        builder = builder.header(AUTHORIZATION, format!("Bearer {token}"));
+    include_csrf: bool,
+) -> Response<Body> {
+    let mut builder = Request::builder().method(method.clone()).uri(uri);
+    if let Some(session) = session {
+        builder = builder.header(COOKIE, &session.cookie_header);
+        if include_csrf && !matches!(method, Method::GET | Method::HEAD | Method::OPTIONS) {
+            builder = builder.header("x-csrf-token", &session.csrf_token);
+        }
     }
     let body = match body {
         Some(value) => {
@@ -28,11 +42,13 @@ async fn send(
         }
         None => Body::empty(),
     };
-    let response = app
-        .clone()
+    app.clone()
         .oneshot(builder.body(body).expect("build request"))
         .await
-        .expect("router response");
+        .expect("router response")
+}
+
+async fn response_json(response: Response<Body>) -> (StatusCode, Value) {
     let status = response.status();
     let bytes = response
         .into_body()
@@ -48,6 +64,81 @@ async fn send(
     (status, value)
 }
 
+async fn send(
+    app: &Router,
+    method: Method,
+    uri: &str,
+    session: Option<&TestSession>,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
+    response_json(request(app, method, uri, session, body, true).await).await
+}
+
+async fn login(
+    app: &Router,
+    username: &str,
+    password: &str,
+    remember: bool,
+) -> (StatusCode, Value, Option<TestSession>) {
+    let response = request(
+        app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": username,
+            "password": password,
+            "remember": remember,
+        })),
+        false,
+    )
+    .await;
+    let cookies = response
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let session_set_cookie = cookies
+        .iter()
+        .find(|cookie| cookie.starts_with("arc_session="))
+        .cloned();
+    let csrf_set_cookie = cookies
+        .iter()
+        .find(|cookie| cookie.starts_with("arc_csrf="))
+        .cloned();
+    let test_session =
+        session_set_cookie
+            .zip(csrf_set_cookie)
+            .map(|(session_set_cookie, csrf_set_cookie)| {
+                let session_cookie = session_set_cookie
+                    .split(';')
+                    .next()
+                    .expect("session cookie pair");
+                let csrf_cookie = csrf_set_cookie.split(';').next().expect("CSRF cookie pair");
+                let session_token = session_cookie
+                    .split_once('=')
+                    .expect("session cookie value")
+                    .1
+                    .to_string();
+                let csrf_token = csrf_cookie
+                    .split_once('=')
+                    .expect("CSRF cookie value")
+                    .1
+                    .to_string();
+                TestSession {
+                    cookie_header: format!("{session_cookie}; {csrf_cookie}"),
+                    csrf_token,
+                    session_token,
+                    session_set_cookie,
+                    csrf_set_cookie,
+                }
+            });
+    let (status, body) = response_json(response).await;
+    (status, body, test_session)
+}
+
 #[tokio::test]
 async fn login_and_user_crud_flow() {
     let database_url = std::env::var("TEST_DATABASE_URL")
@@ -57,8 +148,17 @@ async fn login_and_user_crud_flow() {
 
     let app = build_router(AppState {
         pool: pool.clone(),
-        jwt_secret: Arc::new("integration-test-jwt-secret-at-least-32-chars".to_string()),
-        token_ttl_secs: 3600,
+        auth: Arc::new(AuthSessionConfig {
+            session_ttl_secs: 3_600,
+            session_idle_timeout_secs: 1_800,
+            persistent_session_ttl_secs: 86_400,
+            persistent_session_idle_timeout_secs: 3_600,
+            max_sessions_per_user: 10,
+            login_max_failures: 5,
+            login_failure_window_secs: 900,
+            login_lockout_secs: 900,
+            secure_cookies: false,
+        }),
     });
 
     let (status, health) = send(&app, Method::GET, "/api/v1/healthz", None, None).await;
@@ -71,6 +171,26 @@ async fn login_and_user_crud_flow() {
 
     let (status, _) = send(&app, Method::GET, "/api/v1/users", None, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    for attempt in 1..=5 {
+        let (status, _) = send(
+            &app,
+            Method::POST,
+            "/api/v1/auth/login",
+            None,
+            Some(json!({
+                "username": "rate_limited_missing_user",
+                "password": "incorrect-password"
+            })),
+        )
+        .await;
+        let expected = if attempt < 5 {
+            StatusCode::UNAUTHORIZED
+        } else {
+            StatusCode::TOO_MANY_REQUESTS
+        };
+        assert_eq!(status, expected);
+    }
 
     let (status, _) = send(
         &app,
@@ -92,19 +212,45 @@ async fn login_and_user_crud_flow() {
     .await
     .expect("bootstrap test administrator");
 
-    let (status, login) = send(
-        &app,
-        Method::POST,
-        "/api/v1/auth/login",
-        None,
-        Some(json!({
-            "username": "admin",
-            "password": "integration-admin-password"
-        })),
+    let (status, admin_login, token) =
+        login(&app, "admin", "integration-admin-password", false).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(admin_login.get("accessToken").is_none());
+    let token = token.expect("session cookies");
+    assert!(token.session_set_cookie.contains("HttpOnly"));
+    assert!(token.session_set_cookie.contains("SameSite=Strict"));
+    assert!(!token.csrf_set_cookie.contains("HttpOnly"));
+    assert!(token.csrf_set_cookie.contains("SameSite=Strict"));
+    let stored_session_hash = sqlx::query_scalar::<_, String>(
+        "SELECT session_token_hash FROM auth_sessions ORDER BY id DESC LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("stored session hash");
+    assert_eq!(
+        stored_session_hash.trim(),
+        auth::token_hash(&token.session_token)
+    );
+    assert_ne!(stored_session_hash.trim(), token.session_token);
+    let token = &token;
+
+    let (status, csrf_error) = response_json(
+        request(
+            &app,
+            Method::PUT,
+            "/api/v1/auth/me/password",
+            Some(token),
+            Some(json!({
+                "currentPassword": "integration-admin-password",
+                "newPassword": "updated-integration-admin-password"
+            })),
+            false,
+        )
+        .await,
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
-    let token = login["accessToken"].as_str().expect("access token");
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(csrf_error["error"]["code"], "CSRF_INVALID");
 
     let (status, _) = send(
         &app,
@@ -131,7 +277,7 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(error["error"]["message"], "新密码长度不能少于 8 位");
+    assert_eq!(error["error"]["message"], "密码长度需在 12-128 个字符之间");
 
     let (status, error) = send(
         &app,
@@ -190,21 +336,35 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
-    let (status, refreshed_login) = send(
+    let (status, _refreshed_login, token) =
+        login(&app, "admin", "updated-integration-admin-password", false).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = token.expect("refreshed session cookies");
+    let token = &token;
+
+    let (status, _, logout_session) =
+        login(&app, "admin", "updated-integration-admin-password", true).await;
+    assert_eq!(status, StatusCode::OK);
+    let logout_session = logout_session.expect("persistent session cookies");
+    assert!(logout_session.session_set_cookie.contains("Max-Age="));
+    let (status, _) = send(
         &app,
         Method::POST,
-        "/api/v1/auth/login",
+        "/api/v1/auth/logout",
+        Some(&logout_session),
         None,
-        Some(json!({
-            "username": "admin",
-            "password": "updated-integration-admin-password"
-        })),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
-    let token = refreshed_login["accessToken"]
-        .as_str()
-        .expect("refreshed access token");
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = send(
+        &app,
+        Method::GET,
+        "/api/v1/auth/me",
+        Some(&logout_session),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 
     let (status, permission_groups) = send(
         &app,
@@ -328,18 +488,11 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::CREATED);
     let allocator_id = allocator["id"].as_i64().expect("allocator user id");
-    let (status, allocator_login) = send(
-        &app,
-        Method::POST,
-        "/api/v1/auth/login",
-        None,
-        Some(json!({"username": "role_allocator", "password": "integration-pass"})),
-    )
-    .await;
+    let (status, _, allocator_token) =
+        login(&app, "role_allocator", "integration-pass", false).await;
     assert_eq!(status, StatusCode::OK);
-    let allocator_token = allocator_login["accessToken"]
-        .as_str()
-        .expect("allocator token");
+    let allocator_token = allocator_token.expect("allocator session cookies");
+    let allocator_token = &allocator_token;
     let (status, _) = send(
         &app,
         Method::PUT,
@@ -374,18 +527,10 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
-    let (status, support_login) = send(
-        &app,
-        Method::POST,
-        "/api/v1/auth/login",
-        None,
-        Some(json!({"username": "support_actor", "password": "integration-pass"})),
-    )
-    .await;
+    let (status, _, support_token) = login(&app, "support_actor", "integration-pass", false).await;
     assert_eq!(status, StatusCode::OK);
-    let support_token = support_login["accessToken"]
-        .as_str()
-        .expect("support token");
+    let support_token = support_token.expect("support session cookies");
+    let support_token = &support_token;
     let (status, _) = send(
         &app,
         Method::PUT,
@@ -462,18 +607,11 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
-    let (status, role_writer_login) = send(
-        &app,
-        Method::POST,
-        "/api/v1/auth/login",
-        None,
-        Some(json!({"username": "role_writer", "password": "integration-pass"})),
-    )
-    .await;
+    let (status, _, role_writer_token) =
+        login(&app, "role_writer", "integration-pass", false).await;
     assert_eq!(status, StatusCode::OK);
-    let role_writer_token = role_writer_login["accessToken"]
-        .as_str()
-        .expect("role writer token");
+    let role_writer_token = role_writer_token.expect("role writer session cookies");
+    let role_writer_token = &role_writer_token;
     let (status, _) = send(
         &app,
         Method::POST,
@@ -518,20 +656,16 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
-    let (status, permission_manager_login) = send(
-        &app,
-        Method::POST,
-        "/api/v1/auth/login",
-        None,
-        Some(json!({"username": "permission_manager", "password": "integration-pass"})),
-    )
-    .await;
+    let (status, _, permission_manager_token) =
+        login(&app, "permission_manager", "integration-pass", false).await;
     assert_eq!(status, StatusCode::OK);
-    let permission_manager_token = permission_manager_login["accessToken"]
-        .as_str()
-        .expect("permission manager token");
+    let permission_manager_token =
+        permission_manager_token.expect("permission manager session cookies");
+    let permission_manager_token = &permission_manager_token;
 
-    let admin_id = login["user"]["id"].as_i64().expect("administrator id");
+    let admin_id = admin_login["user"]["id"]
+        .as_i64()
+        .expect("administrator id");
     let (status, _) = send(
         &app,
         Method::PUT,
@@ -707,21 +841,11 @@ async fn login_and_user_crud_flow() {
     assert!(clearable_role["icon"].is_null());
     assert!(clearable_role["description"].is_null());
 
-    let (status, viewer_login) = send(
-        &app,
-        Method::POST,
-        "/api/v1/auth/login",
-        None,
-        Some(json!({
-            "username": "integration_user",
-            "password": "integration-pass"
-        })),
-    )
-    .await;
+    let (status, _, viewer_token) =
+        login(&app, "integration_user", "integration-pass", false).await;
     assert_eq!(status, StatusCode::OK);
-    let viewer_token = viewer_login["accessToken"]
-        .as_str()
-        .expect("viewer access token");
+    let viewer_token = viewer_token.expect("viewer session cookies");
+    let viewer_token = &viewer_token;
 
     let (status, deactivated_role) = send(
         &app,

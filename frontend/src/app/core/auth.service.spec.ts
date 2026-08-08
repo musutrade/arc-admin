@@ -3,7 +3,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from './runtime-config';
 import { ApiUser, LoginResponse } from './api.models';
-import { AuthTokenStore } from './auth-token.store';
 import { AuthService } from './auth.service';
 
 const user: ApiUser = {
@@ -18,33 +17,20 @@ const user: ApiUser = {
 };
 
 const loginResponse: LoginResponse = {
-  accessToken: 'access-token',
-  tokenType: 'Bearer',
-  expiresIn: 3600,
+  expiresAt: '2026-08-01T08:00:00Z',
   user,
 };
 
 describe('AuthService', () => {
   let service: AuthService;
   let http: HttpTestingController;
-  let tokenStore: {
-    token: ReturnType<typeof vi.fn>;
-    set: ReturnType<typeof vi.fn>;
-    clear: ReturnType<typeof vi.fn>;
-  };
 
   beforeEach(() => {
-    tokenStore = {
-      token: vi.fn(() => null),
-      set: vi.fn(),
-      clear: vi.fn(),
-    };
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: API_BASE_URL, useValue: '/api/v1' },
-        { provide: AuthTokenStore, useValue: tokenStore },
       ],
     });
     service = TestBed.inject(AuthService);
@@ -53,33 +39,53 @@ describe('AuthService', () => {
 
   afterEach(() => http.verify());
 
-  it('stores the token and loads permissions after login', async () => {
+  it('creates a server session and loads permissions after login', async () => {
     const result = service.login('admin', 'secure-password', true);
-    http.expectOne('/api/v1/auth/login').flush(loginResponse);
+    const loginRequest = http.expectOne('/api/v1/auth/login');
+    expect(loginRequest.request.body).toEqual({
+      username: 'admin',
+      password: 'secure-password',
+      remember: true,
+    });
+    loginRequest.flush(loginResponse);
     await Promise.resolve();
     http.expectOne('/api/v1/auth/me/permissions').flush({ codes: ['user:directory:read'] });
     await result;
 
-    expect(tokenStore.set).toHaveBeenCalledWith('access-token', true);
     expect(service.currentUser()).toEqual(user);
     expect(service.hasPermission('user:directory:read')).toBe(true);
   });
 
-  it('clears the partial session when permission loading fails', async () => {
+  it('revokes a partial server session when permission loading fails', async () => {
     const result = service.login('admin', 'secure-password', false);
     http.expectOne('/api/v1/auth/login').flush(loginResponse);
     await Promise.resolve();
     http
       .expectOne('/api/v1/auth/me/permissions')
       .flush({ message: 'failed' }, { status: 500, statusText: 'Server Error' });
+    let logoutRequest: ReturnType<HttpTestingController['expectOne']> | undefined;
+    await vi.waitFor(() => {
+      const requests = http.match('/api/v1/auth/logout');
+      expect(requests).toHaveLength(1);
+      logoutRequest = requests[0];
+    });
+    logoutRequest?.flush(null, { status: 204, statusText: 'No Content' });
 
     await expect(result).rejects.toBeTruthy();
-    expect(tokenStore.clear).toHaveBeenCalledOnce();
     expect(service.currentUser()).toBeNull();
     expect(service.permissions().size).toBe(0);
   });
 
-  it('changes the current user password', async () => {
+  it('checks an existing HttpOnly Cookie session on application startup', async () => {
+    const result = service.ensureSession();
+    http.expectOne('/api/v1/auth/me').flush(user);
+    http.expectOne('/api/v1/auth/me/permissions').flush({ codes: ['dashboard:analytics:read'] });
+
+    await expect(result).resolves.toBe(true);
+    expect(service.currentUser()).toEqual(user);
+  });
+
+  it('changes the password and clears in-memory session state', async () => {
     const request = {
       currentPassword: 'current-password',
       newPassword: 'updated-password',
@@ -91,6 +97,6 @@ describe('AuthService', () => {
     expect(apiRequest.request.body).toEqual(request);
     apiRequest.flush(null, { status: 204, statusText: 'No Content' });
     await result;
-    expect(tokenStore.clear).toHaveBeenCalledOnce();
+    expect(service.currentUser()).toBeNull();
   });
 });

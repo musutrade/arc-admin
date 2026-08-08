@@ -12,8 +12,8 @@
 | 后端数据 | 用户-角色、角色-权限写入使用事务；用户和角色列表已改为聚合查询，避免 N+1 |
 | 后端测试 | 临时 PostgreSQL 集成测试覆盖默认密码拒绝、RBAC 403、旧 token 失效、事务回滚、超级管理员保护和 CRUD |
 | 契约 | OpenAPI 路由、HTTP 方法和关键响应必填字段由 Rust 契约测试自动比对 |
-| 运行安全 | 生产环境强制 JWT/CORS；内部错误不返回客户端；提供 liveness/readiness 和 SIGTERM 优雅停机 |
-| 前端 | mock 已移除；真实 HttpClient、JWT interceptor、会话/权限守卫、用户/角色 CRUD 和角色授权已接通 |
+| 运行安全 | 生产环境强制 Secure Cookie/CORS；服务端会话、CSRF、登录限流和认证审计已接通；内部错误不返回客户端；提供 liveness/readiness 和 SIGTERM 优雅停机 |
+| 前端 | mock 已移除；真实 HttpClient、Cookie/CSRF interceptor、会话/权限守卫、用户/角色 CRUD 和角色授权已接通 |
 | 前端测试 | ESLint、Prettier、Vitest、production build，以及桌面/Pixel 7 Playwright E2E 纳入统一门禁 |
 | CI | GitHub Actions 安装 Playwright Chromium，拆分 quality/backend/frontend/dependency review，并上传 14 天测试报告 |
 | 供应链 | Node/Rust 工具链固定，Dependabot 覆盖 npm、Cargo 和 GitHub Actions |
