@@ -361,11 +361,123 @@ pub struct ChangePasswordRequest {
     pub new_password: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum LoginStatusSchema {
+    Authenticated,
+    MfaRequired,
+    MfaEnrollmentRequired,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum MfaMethodSchema {
+    Totp,
+    Passkey,
+    RecoveryCode,
+}
+
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginResponse {
-    pub expires_at: DateTime<Utc>,
-    pub user: UserResponse,
+    pub status: LoginStatusSchema,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub user: Option<UserResponse>,
+    pub challenge_token: Option<String>,
+    pub methods: Vec<MfaMethodSchema>,
+    pub totp_secret: Option<String>,
+    pub totp_uri: Option<String>,
+    pub totp_qr_code: Option<String>,
+    pub recovery_codes: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaCodeRequest {
+    pub challenge_token: String,
+    pub code: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaPasskeyAuthenticationStartRequest {
+    pub challenge_token: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaPasskeyAuthenticationFinishRequest {
+    pub challenge_token: String,
+    pub credential: Value,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaTotpEnrollmentStartRequest {
+    pub current_password: String,
+    pub current_totp_code: Option<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaPasskeyRegistrationStartRequest {
+    pub current_password: String,
+    pub totp_code: String,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaPasskeyRegistrationFinishRequest {
+    pub challenge_token: String,
+    pub credential: Value,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaFactorRevokeRequest {
+    pub current_password: String,
+    pub totp_code: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaEnrollmentResponse {
+    pub challenge_token: String,
+    pub totp_secret: String,
+    pub totp_uri: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaWebauthnChallengeResponse {
+    pub challenge_token: String,
+    #[schema(value_type = Object)]
+    pub public_key: Value,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaPasskeyResponse {
+    pub id: i64,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MfaStatusResponse {
+    pub required: bool,
+    pub totp_enabled: bool,
+    pub recovery_codes_remaining: i64,
+    pub passkeys: Vec<MfaPasskeyResponse>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryCodesResponse {
+    pub codes: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]

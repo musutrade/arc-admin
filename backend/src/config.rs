@@ -6,7 +6,9 @@ use crate::telemetry::REQUEST_ID_HEADER;
 use anyhow::{bail, Context};
 use axum::http::header::CONTENT_TYPE;
 use axum::http::{HeaderValue, Method};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ipnet::IpNet;
+use sha2::{Digest, Sha256};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +70,10 @@ pub struct AppConfig {
     pub environment: AppEnvironment,
     pub log_format: LogFormat,
     pub service_name: String,
+    pub mfa_encryption_key: Vec<u8>,
+    pub webauthn_rp_id: String,
+    pub webauthn_rp_origin: String,
+    pub webauthn_rp_name: String,
     allowed_origins: Vec<HeaderValue>,
 }
 
@@ -98,6 +104,10 @@ struct ConfigValues {
     cors_allowed_origins: Option<String>,
     log_format: Option<String>,
     service_name: Option<String>,
+    mfa_encryption_key: Option<String>,
+    webauthn_rp_id: Option<String>,
+    webauthn_rp_origin: Option<String>,
+    webauthn_rp_name: Option<String>,
 }
 
 impl AppConfig {
@@ -131,6 +141,10 @@ impl AppConfig {
             cors_allowed_origins: std::env::var("CORS_ALLOWED_ORIGINS").ok(),
             log_format: std::env::var("LOG_FORMAT").ok(),
             service_name: std::env::var("SERVICE_NAME").ok(),
+            mfa_encryption_key: std::env::var("MFA_ENCRYPTION_KEY").ok(),
+            webauthn_rp_id: std::env::var("WEBAUTHN_RP_ID").ok(),
+            webauthn_rp_origin: std::env::var("WEBAUTHN_RP_ORIGIN").ok(),
+            webauthn_rp_name: std::env::var("WEBAUTHN_RP_NAME").ok(),
         })
     }
 
@@ -161,6 +175,10 @@ impl AppConfig {
             cors_allowed_origins,
             log_format,
             service_name,
+            mfa_encryption_key,
+            webauthn_rp_id,
+            webauthn_rp_origin,
+            webauthn_rp_name,
         } = values;
         let database_url = database_url.context(
             "DATABASE_URL is required; configure it in backend/.env or the process environment",
@@ -251,6 +269,27 @@ impl AppConfig {
             bail!("SERVICE_NAME must be 1-64 ASCII letters, digits, '.', '_' or '-'");
         }
 
+        let mfa_encryption_key = match mfa_encryption_key {
+            Some(value) => STANDARD
+                .decode(value)
+                .context("MFA_ENCRYPTION_KEY must be base64 encoded")?,
+            None if environment == AppEnvironment::Production => {
+                bail!("production requires MFA_ENCRYPTION_KEY from the secret manager")
+            }
+            None => Sha256::digest(b"arc-admin-development-only-mfa-key").to_vec(),
+        };
+        if mfa_encryption_key.len() != 32 {
+            bail!("MFA_ENCRYPTION_KEY must decode to exactly 32 bytes");
+        }
+        let webauthn_rp_id = webauthn_rp_id.unwrap_or_else(|| "localhost".to_string());
+        let webauthn_rp_origin =
+            webauthn_rp_origin.unwrap_or_else(|| "http://localhost:4200".to_string());
+        let webauthn_rp_name = webauthn_rp_name.unwrap_or_else(|| "Arc Admin".to_string());
+        if webauthn_rp_id.is_empty() || webauthn_rp_origin.is_empty() || webauthn_rp_name.is_empty()
+        {
+            bail!("WEBAUTHN_RP_ID, WEBAUTHN_RP_ORIGIN and WEBAUTHN_RP_NAME must not be empty");
+        }
+
         Ok(Self {
             database_url,
             database_pool,
@@ -270,6 +309,10 @@ impl AppConfig {
             environment,
             log_format,
             service_name,
+            mfa_encryption_key,
+            webauthn_rp_id,
+            webauthn_rp_origin,
+            webauthn_rp_name,
             allowed_origins,
         })
     }
@@ -368,6 +411,7 @@ mod tests {
             database_url: Some("postgres://localhost/test".to_string()),
             app_env: Some(environment.to_string()),
             cors_allowed_origins: origins.map(str::to_string),
+            mfa_encryption_key: Some(STANDARD.encode([0_u8; 32])),
             ..ConfigValues::default()
         })
     }

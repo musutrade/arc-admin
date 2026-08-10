@@ -9,7 +9,7 @@ export default defineConfig({
   retries: process.env['CI'] ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report-fullstack' }]],
   use: {
-    baseURL: 'http://127.0.0.1:4300',
+    baseURL: 'http://localhost:4300',
     trace: 'on-first-retry',
   },
   projects: [{ name: 'fullstack-chromium', use: { ...devices['Desktop Chrome'] } }],
@@ -19,12 +19,14 @@ export default defineConfig({
       url: 'http://127.0.0.1:18081/api/v1/readyz',
       reuseExistingServer: false,
       timeout: 180_000,
+      stdout: 'pipe',
     },
     {
       command: 'npm start -- --host 127.0.0.1 --port 4300 --proxy-config proxy.fullstack.conf.json',
-      url: 'http://127.0.0.1:4300',
+      url: 'http://localhost:4300',
       reuseExistingServer: false,
       timeout: 120_000,
+      stdout: 'pipe',
     },
   ],
 });

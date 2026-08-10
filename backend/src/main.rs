@@ -2,6 +2,7 @@
 
 use arc_admin_backend::auth::AuthSessionConfig;
 use arc_admin_backend::config::{AppConfig, AppEnvironment, LogFormat};
+use arc_admin_backend::mfa::MfaConfig;
 use arc_admin_backend::telemetry::{self, TelemetryMetadata};
 use arc_admin_backend::{build_router_with_metadata_and_cors, db, AppState};
 use std::process::ExitCode;
@@ -98,6 +99,12 @@ async fn run(config: AppConfig, metadata: TelemetryMetadata) -> anyhow::Result<(
             trusted_proxy_cidrs: config.trusted_proxy_cidrs.clone(),
             secure_cookies: config.environment == AppEnvironment::Production,
         }),
+        mfa: Arc::new(MfaConfig::new(
+            &config.mfa_encryption_key,
+            &config.webauthn_rp_id,
+            &config.webauthn_rp_origin,
+            &config.webauthn_rp_name,
+        )?),
     };
     let app = build_router_with_metadata_and_cors(state, metadata, config.cors_layer());
 

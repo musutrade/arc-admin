@@ -1,4 +1,5 @@
 use arc_admin_backend::auth::{self, AuthSessionConfig};
+use arc_admin_backend::mfa::MfaConfig;
 use arc_admin_backend::models::{NullablePatch, UpdateUserRequest};
 use arc_admin_backend::{build_router, db, repositories, services, AppState};
 use axum::body::Body;
@@ -9,9 +10,10 @@ use axum::Router;
 use chrono::{Duration, Utc};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
+use totp_rs::{Algorithm, Secret, TOTP};
 use tower::ServiceExt;
 
 #[derive(Debug)]
@@ -111,6 +113,66 @@ async fn login(
         None,
     )
     .await;
+    let (status, body, session) = decode_login_response(response).await;
+    if status != StatusCode::OK || session.is_some() || body["status"] == "authenticated" {
+        return (status, body, session);
+    }
+
+    let secret = if body["status"] == "mfaEnrollmentRequired" {
+        let secret = body["totpSecret"]
+            .as_str()
+            .expect("TOTP enrollment secret")
+            .to_string();
+        MFA_TEST_SECRETS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .expect("MFA test secrets")
+            .insert(username.to_string(), secret.clone());
+        secret
+    } else {
+        MFA_TEST_SECRETS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .expect("MFA test secrets")
+            .get(username)
+            .cloned()
+            .expect("enrolled TOTP test secret")
+    };
+    let code = TOTP::new(
+        Algorithm::SHA1,
+        6,
+        1,
+        30,
+        Secret::Encoded(secret)
+            .to_bytes()
+            .expect("TOTP secret bytes"),
+        None,
+        username.to_string(),
+    )
+    .expect("test TOTP")
+    .generate_current()
+    .expect("current TOTP code");
+    let response = request(
+        app,
+        Method::POST,
+        "/api/v1/auth/mfa/totp/verify",
+        None,
+        Some(json!({
+            "challengeToken": body["challengeToken"],
+            "code": code,
+        })),
+        false,
+        None,
+    )
+    .await;
+    decode_login_response(response).await
+}
+
+static MFA_TEST_SECRETS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+async fn decode_login_response(
+    response: Response<Body>,
+) -> (StatusCode, Value, Option<TestSession>) {
     let cookies = response
         .headers()
         .get_all(SET_COOKIE)
@@ -180,6 +242,15 @@ async fn login_and_user_crud_flow() {
             trusted_proxy_cidrs: vec!["10.0.0.0/8".parse().expect("trusted proxy CIDR")],
             secure_cookies: false,
         }),
+        mfa: Arc::new(
+            MfaConfig::new(
+                &[7_u8; 32],
+                "localhost",
+                "http://localhost:4200",
+                "Arc Admin",
+            )
+            .expect("MFA config"),
+        ),
     })
     .layer(MockConnectInfo(
         "10.2.0.5:4567"
@@ -270,15 +341,99 @@ async fn login_and_user_crud_flow() {
     .await
     .expect("bootstrap test administrator");
 
+    let password_stage = request(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": "admin",
+            "password": "integration-admin-password",
+            "remember": false,
+        })),
+        false,
+        None,
+    )
+    .await;
+    assert!(password_stage
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .all(|cookie| !cookie.starts_with("arc_session=")));
+    let (status, password_stage_body) = response_json(password_stage).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(password_stage_body["status"], "mfaEnrollmentRequired");
+
     let (status, admin_login, token) =
         login(&app, "admin", "integration-admin-password", false).await;
     assert_eq!(status, StatusCode::OK);
     assert!(admin_login.get("accessToken").is_none());
+    assert_eq!(admin_login["status"], "authenticated");
+    assert_eq!(
+        admin_login["recoveryCodes"]
+            .as_array()
+            .expect("new recovery codes")
+            .len(),
+        10
+    );
+    let first_recovery_code = admin_login["recoveryCodes"][0]
+        .as_str()
+        .expect("recovery code");
+    let stored_recovery_hash = sqlx::query_scalar::<_, String>(
+        "SELECT code_hash FROM user_mfa_recovery_codes ORDER BY id LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("stored recovery code hash");
+    assert_ne!(stored_recovery_hash, first_recovery_code);
     let token = token.expect("session cookies");
     assert!(token.session_set_cookie.contains("HttpOnly"));
     assert!(token.session_set_cookie.contains("SameSite=Strict"));
     assert!(!token.csrf_set_cookie.contains("HttpOnly"));
     assert!(token.csrf_set_cookie.contains("SameSite=Strict"));
+    let (status, mfa_status) =
+        send(&app, Method::GET, "/api/v1/auth/me/mfa", Some(&token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(mfa_status["required"], true);
+    assert_eq!(mfa_status["totpEnabled"], true);
+    assert_eq!(mfa_status["recoveryCodesRemaining"], 10);
+
+    let (status, mfa_challenge) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": "admin",
+            "password": "integration-admin-password",
+            "remember": false,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(mfa_challenge["status"], "mfaRequired");
+    for attempt in 1..=5 {
+        let (status, _) = send(
+            &app,
+            Method::POST,
+            "/api/v1/auth/mfa/totp/verify",
+            None,
+            Some(json!({
+                "challengeToken": mfa_challenge["challengeToken"],
+                "code": "无效验证码",
+            })),
+        )
+        .await;
+        assert_eq!(
+            status,
+            if attempt < 5 {
+                StatusCode::UNAUTHORIZED
+            } else {
+                StatusCode::TOO_MANY_REQUESTS
+            }
+        );
+    }
     let stored_session_hash = sqlx::query_scalar::<_, String>(
         "SELECT session_token_hash FROM auth_sessions ORDER BY id DESC LIMIT 1",
     )
@@ -1263,6 +1418,75 @@ async fn login_and_user_crud_flow() {
         .all(|entry| entry["details"]["sourceIpFingerprint"]
             .as_str()
             .is_some_and(|fingerprint| fingerprint.len() == 12)));
+
+    let (status, recovery_challenge) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": "admin",
+            "password": "updated-integration-admin-password",
+            "remember": false,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let recovery_login = request(
+        &app,
+        Method::POST,
+        "/api/v1/auth/mfa/recovery/verify",
+        None,
+        Some(json!({
+            "challengeToken": recovery_challenge["challengeToken"],
+            "code": first_recovery_code,
+        })),
+        false,
+        None,
+    )
+    .await;
+    assert!(recovery_login
+        .headers()
+        .get_all(SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .any(|cookie| cookie.starts_with("arc_session=")));
+    let (status, recovery_login_body) = response_json(recovery_login).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(recovery_login_body["status"], "authenticated");
+
+    let (status, replay_challenge) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/login",
+        None,
+        Some(json!({
+            "username": "admin",
+            "password": "updated-integration-admin-password",
+            "remember": false,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/mfa/recovery/verify",
+        None,
+        Some(json!({
+            "challengeToken": replay_challenge["challengeToken"],
+            "code": first_recovery_code,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let used_recovery_codes = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM user_mfa_recovery_codes WHERE used_at IS NOT NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("used recovery code count");
+    assert_eq!(used_recovery_codes, 1);
 
     let deactivate = || UpdateUserRequest {
         display_name: None,

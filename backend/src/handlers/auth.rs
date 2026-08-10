@@ -3,7 +3,12 @@
 use crate::access::ActorContext;
 use crate::auth;
 use crate::error::ApiError;
-use crate::models::{ChangePasswordRequest, LoginRequest, PermissionCodes, UserResponse};
+use crate::models::{
+    ChangePasswordRequest, LoginRequest, LoginResponse, MfaCodeRequest, MfaFactorRevokeRequest,
+    MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
+    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, PermissionCodes,
+    RecoveryCodesResponse, UserResponse,
+};
 use crate::services;
 use crate::AppState;
 use axum::extract::{ConnectInfo, State};
@@ -22,20 +27,26 @@ pub async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     let client_ip = auth::resolve_client_ip(peer.ip(), &headers, &state.auth.trusted_proxy_cidrs);
-    let outcome = services::auth::login(&state.pool, &state.auth, &req, client_ip).await?;
-    let jar = auth::set_session_cookies(
-        jar,
-        outcome.session_token,
-        outcome.csrf_token,
-        outcome.persistent,
-        outcome.ttl_secs,
-        state.auth.secure_cookies,
-    );
+    let outcome =
+        services::auth::login(&state.pool, &state.auth, &state.mfa, &req, client_ip).await?;
     let no_store = [
         (CACHE_CONTROL, HeaderValue::from_static("no-store")),
         (PRAGMA, HeaderValue::from_static("no-cache")),
     ];
-    Ok((jar, no_store, Json(outcome.response)))
+    match outcome {
+        services::auth::LoginOutcome::Authenticated(outcome) => {
+            let jar = auth::set_session_cookies(
+                jar,
+                outcome.session_token,
+                outcome.csrf_token,
+                outcome.persistent,
+                outcome.ttl_secs,
+                state.auth.secure_cookies,
+            );
+            Ok((jar, no_store, Json(outcome.response)))
+        }
+        services::auth::LoginOutcome::MfaRequired(response) => Ok((jar, no_store, Json(response))),
+    }
 }
 
 pub async fn logout(
@@ -76,4 +87,154 @@ pub async fn me_permissions(auth: ActorContext) -> Result<Json<PermissionCodes>,
     Ok(Json(PermissionCodes {
         codes: auth.permission_codes.into_iter().collect(),
     }))
+}
+
+pub async fn verify_totp(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Json(req): Json<MfaCodeRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let outcome = services::mfa::verify_totp(
+        &state.pool,
+        &state.auth,
+        &state.mfa,
+        &req.challenge_token,
+        &req.code,
+    )
+    .await?;
+    Ok(set_login_response(jar, state, outcome))
+}
+
+pub async fn verify_recovery_code(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Json(req): Json<MfaCodeRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let outcome = services::mfa::verify_recovery_login(
+        &state.pool,
+        &state.auth,
+        &req.challenge_token,
+        &req.code,
+    )
+    .await?;
+    Ok(set_login_response(jar, state, outcome))
+}
+
+pub async fn start_passkey_authentication(
+    State(state): State<AppState>,
+    Json(req): Json<MfaPasskeyAuthenticationStartRequest>,
+) -> Result<Json<crate::models::MfaWebauthnChallengeResponse>, ApiError> {
+    services::mfa::start_passkey_authentication(&state.pool, &state.mfa, &req.challenge_token)
+        .await
+        .map(Json)
+}
+
+pub async fn finish_passkey_authentication(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Json(req): Json<MfaPasskeyAuthenticationFinishRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let outcome = services::mfa::finish_passkey_authentication(
+        &state.pool,
+        &state.auth,
+        &state.mfa,
+        &req.challenge_token,
+        req.credential,
+    )
+    .await?;
+    Ok(set_login_response(jar, state, outcome))
+}
+
+pub async fn mfa_status(
+    State(state): State<AppState>,
+    auth: ActorContext,
+) -> Result<Json<crate::models::MfaStatusResponse>, ApiError> {
+    services::mfa::status(&state.pool, auth.user_id)
+        .await
+        .map(Json)
+}
+
+pub async fn start_passkey_registration(
+    State(state): State<AppState>,
+    auth: ActorContext,
+    Json(req): Json<MfaPasskeyRegistrationStartRequest>,
+) -> Result<Json<crate::models::MfaWebauthnChallengeResponse>, ApiError> {
+    let user = services::auth::me(&state.pool, auth.user_id).await?;
+    services::mfa::start_passkey_registration(&state.pool, &state.mfa, &user, &req)
+        .await
+        .map(Json)
+}
+
+pub async fn finish_passkey_registration(
+    State(state): State<AppState>,
+    auth: ActorContext,
+    Json(req): Json<MfaPasskeyRegistrationFinishRequest>,
+) -> Result<Json<crate::models::MfaStatusResponse>, ApiError> {
+    services::mfa::finish_passkey_registration(
+        &state.pool,
+        &state.mfa,
+        auth.user_id,
+        &req.challenge_token,
+        req.credential,
+    )
+    .await
+    .map(Json)
+}
+
+pub async fn revoke_passkey(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    auth: ActorContext,
+    axum::extract::Path(passkey_id): axum::extract::Path<i64>,
+    Json(req): Json<MfaFactorRevokeRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    services::mfa::revoke_passkey(&state.pool, &state.mfa, auth.user_id, passkey_id, &req).await?;
+    Ok((
+        auth::clear_session_cookies(jar, state.auth.secure_cookies),
+        StatusCode::NO_CONTENT,
+    ))
+}
+
+pub async fn regenerate_recovery_codes(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    auth: ActorContext,
+    Json(req): Json<MfaFactorRevokeRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let response =
+        services::mfa::regenerate_recovery_codes(&state.pool, &state.mfa, auth.user_id, &req)
+            .await?;
+    let no_store = [
+        (CACHE_CONTROL, HeaderValue::from_static("no-store")),
+        (PRAGMA, HeaderValue::from_static("no-cache")),
+    ];
+    Ok((
+        auth::clear_session_cookies(jar, state.auth.secure_cookies),
+        no_store,
+        Json::<RecoveryCodesResponse>(response),
+    ))
+}
+
+fn set_login_response(
+    jar: CookieJar,
+    state: AppState,
+    outcome: crate::services::auth::LoginSessionOutcome,
+) -> (
+    CookieJar,
+    [(axum::http::HeaderName, HeaderValue); 2],
+    Json<LoginResponse>,
+) {
+    let jar = auth::set_session_cookies(
+        jar,
+        outcome.session_token,
+        outcome.csrf_token,
+        outcome.persistent,
+        outcome.ttl_secs,
+        state.auth.secure_cookies,
+    );
+    let no_store = [
+        (CACHE_CONTROL, HeaderValue::from_static("no-store")),
+        (PRAGMA, HeaderValue::from_static("no-cache")),
+    ];
+    (jar, no_store, Json(outcome.response))
 }

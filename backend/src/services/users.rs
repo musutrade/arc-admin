@@ -357,6 +357,22 @@ pub async fn assign_roles(
     repositories::users::assign_roles(&mut transaction, user_id, &req.role_ids)
         .await
         .map_err(db_error)?;
+    if let Some(super_admin_role_id) = super_admin_role_id {
+        let was_required = previous_role_ids.contains(&super_admin_role_id);
+        let is_required = req.role_ids.contains(&super_admin_role_id);
+        if was_required != is_required {
+            repositories::audit_logs::record(
+                &mut transaction,
+                actor_user_id,
+                "auth.mfa.policy.changed",
+                "user",
+                Some(user_id),
+                json!({"required": is_required}),
+            )
+            .await
+            .map_err(db_error)?;
+        }
+    }
     repositories::audit_logs::record(
         &mut transaction,
         actor_user_id,

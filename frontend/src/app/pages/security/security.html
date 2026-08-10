@@ -1,0 +1,201 @@
+<section class="page-header">
+  <div>
+    <h1>账号安全</h1>
+    <p>管理二次验证、通行密钥和恢复码</p>
+  </div>
+</section>
+
+@if (loading()) {
+  <div class="loading-state"><mat-progress-spinner diameter="28" mode="indeterminate" /></div>
+} @else if (recoveryCodes().length > 0) {
+  <section class="recovery-result" aria-live="polite">
+    <div class="section-heading">
+      <mat-icon>key</mat-icon>
+      <div>
+        <h2>新恢复码</h2>
+        <p>旧恢复码和现有会话已失效</p>
+      </div>
+    </div>
+    <div class="warning">
+      <mat-icon>warning</mat-icon><span>恢复码只显示一次，请立即安全保存。</span>
+    </div>
+    <div class="recovery-grid">
+      @for (code of recoveryCodes(); track code) {
+        <code>{{ code }}</code>
+      }
+    </div>
+    <div class="actions">
+      <button type="button" class="secondary-btn" (click)="downloadRecoveryCodes()">
+        <mat-icon>download</mat-icon><span>下载恢复码</span>
+      </button>
+      <button type="button" class="primary-btn" (click)="returnToLogin()">
+        <mat-icon>login</mat-icon><span>重新登录</span>
+      </button>
+    </div>
+  </section>
+} @else if (status(); as mfa) {
+  @if (error()) {
+    <div class="feedback error">
+      <mat-icon>error</mat-icon><span>{{ error() }}</span>
+    </div>
+  }
+  @if (message()) {
+    <div class="feedback success">
+      <mat-icon>check_circle</mat-icon><span>{{ message() }}</span>
+    </div>
+  }
+
+  <section class="status-band">
+    <div class="status-icon active"><mat-icon>verified_user</mat-icon></div>
+    <div>
+      <h2>身份验证器已启用</h2>
+      <p>
+        @if (mfa.required) {
+          超级管理员账号强制启用
+        } @else {
+          当前账号已启用
+        }
+      </p>
+    </div>
+    <span class="status-label">已保护</span>
+  </section>
+
+  <section class="settings-section">
+    <div class="section-heading">
+      <mat-icon>passkey</mat-icon>
+      <div>
+        <h2>通行密钥</h2>
+        <p>{{ mfa.passkeys.length }} 个已注册凭据</p>
+      </div>
+    </div>
+
+    <div class="passkey-list">
+      @for (passkey of mfa.passkeys; track passkey.id) {
+        <article class="passkey-item">
+          <div class="passkey-main">
+            <mat-icon>fingerprint</mat-icon>
+            <div>
+              <strong>{{ passkey.name }}</strong
+              ><span>最近使用：{{ formatDate(passkey.lastUsedAt) }}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="icon-btn danger"
+            (click)="confirmRevoke(passkey.id)"
+            aria-label="撤销通行密钥"
+          >
+            <mat-icon>delete</mat-icon>
+          </button>
+        </article>
+      } @empty {
+        <div class="empty-state"><mat-icon>key_off</mat-icon><span>尚未添加通行密钥</span></div>
+      }
+    </div>
+
+    @if (auth.supportsPasskeys()) {
+      <form class="reauth-form" (submit)="registerPasskey(); $event.preventDefault()">
+        <h3>添加通行密钥</h3>
+        <div class="form-grid three">
+          <label
+            >名称<input
+              [formField]="registrationForm.name"
+              autocomplete="off"
+              placeholder="办公电脑"
+          /></label>
+          <label
+            >当前密码<input
+              type="password"
+              [formField]="registrationForm.currentPassword"
+              autocomplete="current-password"
+          /></label>
+          <label
+            >验证码<input
+              [formField]="registrationForm.totpCode"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+          /></label>
+        </div>
+        @if (registrationForm().touched() && registrationForm().invalid()) {
+          <p class="form-error">请完整填写名称、当前密码和验证码</p>
+        }
+        <button type="submit" class="primary-btn" [disabled]="submitting()">
+          <mat-icon>add</mat-icon><span>添加</span>
+        </button>
+      </form>
+    }
+  </section>
+
+  <section class="settings-section">
+    <div class="section-heading">
+      <mat-icon>vpn_key</mat-icon>
+      <div>
+        <h2>恢复码</h2>
+        <p>剩余 {{ mfa.recoveryCodesRemaining }} 个</p>
+      </div>
+    </div>
+    <form class="reauth-form" (submit)="regenerateRecoveryCodes(); $event.preventDefault()">
+      <h3>重新生成</h3>
+      <div class="form-grid">
+        <label
+          >当前密码<input
+            type="password"
+            [formField]="recoveryForm.currentPassword"
+            autocomplete="current-password"
+        /></label>
+        <label
+          >验证码<input
+            [formField]="recoveryForm.totpCode"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+        /></label>
+      </div>
+      @if (recoveryForm().touched() && recoveryForm().invalid()) {
+        <p class="form-error">请填写当前密码和验证码</p>
+      }
+      <button type="submit" class="secondary-btn" [disabled]="submitting()">
+        <mat-icon>refresh</mat-icon><span>生成新恢复码</span>
+      </button>
+    </form>
+  </section>
+
+  @if (revokePasskeyId() !== null) {
+    <div class="modal-backdrop">
+      <section
+        class="confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="revoke-title"
+      >
+        <div class="section-heading">
+          <mat-icon>warning</mat-icon>
+          <div>
+            <h2 id="revoke-title">撤销通行密钥</h2>
+            <p>撤销后全部会话将立即失效</p>
+          </div>
+        </div>
+        <form (submit)="revokePasskey(); $event.preventDefault()">
+          <label
+            >当前密码<input
+              type="password"
+              [formField]="revokeForm.currentPassword"
+              autocomplete="current-password"
+          /></label>
+          <label
+            >验证码<input
+              [formField]="revokeForm.totpCode"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+          /></label>
+          @if (revokeForm().touched() && revokeForm().invalid()) {
+            <p class="form-error">请填写当前密码和验证码</p>
+          }
+          <div class="actions">
+            <button type="button" class="secondary-btn" (click)="cancelRevoke()">取消</button>
+            <button type="submit" class="danger-btn" [disabled]="submitting()">撤销</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+}

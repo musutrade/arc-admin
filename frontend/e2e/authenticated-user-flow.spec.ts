@@ -91,8 +91,11 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     if (path === '/api/v1/auth/login') {
       await route.fulfill({
         json: {
+          status: 'authenticated',
           expiresAt: '2026-08-01T08:00:00Z',
           user: administrator,
+          methods: [],
+          recoveryCodes: [],
         },
       });
     } else if (path === '/api/v1/auth/me') {

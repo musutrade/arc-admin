@@ -7,9 +7,13 @@
 use crate::error::ErrorEnvelope;
 use crate::models::{
     AssignRolesRequest, AuditLogQuery, ChangePasswordRequest, CreateRoleRequest, CreateUserRequest,
-    DashboardStats, DataScopeSchema, HealthResponse, LoginRequest, LoginResponse, PageAuditLog,
-    PageQuery, PageUser, PermissionCodes, PermissionGroupResponse, PermissionResponse,
-    PermissionTypeSchema, ReadinessResponse, RoleColorSchema, RolePermissions, RoleResponse,
+    DashboardStats, DataScopeSchema, HealthResponse, LoginRequest, LoginResponse,
+    LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
+    MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
+    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
+    MfaStatusResponse, MfaWebauthnChallengeResponse, PageAuditLog, PageQuery, PageUser,
+    PermissionCodes, PermissionGroupResponse, PermissionResponse, PermissionTypeSchema,
+    ReadinessResponse, RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse,
     SortDirectionSchema, UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest,
     UserResponse, UserSortBySchema, UserStatusSchema,
 };
@@ -110,6 +114,136 @@ fn change_current_user_password() {}
     )
 )]
 fn current_user_permissions() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/mfa/totp/verify",
+    operation_id = "verifyMfaTotp",
+    tag = "auth",
+    request_body = MfaCodeRequest,
+    responses(
+        (status = 200, description = "TOTP 验证成功并创建完整会话", body = LoginResponse),
+        (status = 401, description = "验证码无效", body = ErrorEnvelope),
+        (status = 429, description = "二次验证尝试过于频繁", body = ErrorEnvelope)
+    )
+)]
+fn verify_mfa_totp() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/mfa/recovery/verify",
+    operation_id = "verifyMfaRecoveryCode",
+    tag = "auth",
+    request_body = MfaCodeRequest,
+    responses(
+        (status = 200, description = "恢复码验证成功并创建完整会话", body = LoginResponse),
+        (status = 401, description = "恢复码无效", body = ErrorEnvelope),
+        (status = 429, description = "二次验证尝试过于频繁", body = ErrorEnvelope)
+    )
+)]
+fn verify_mfa_recovery_code() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/mfa/passkey/authenticate/start",
+    operation_id = "startMfaPasskeyAuthentication",
+    tag = "auth",
+    request_body = MfaPasskeyAuthenticationStartRequest,
+    responses(
+        (status = 200, description = "通行密钥认证挑战", body = MfaWebauthnChallengeResponse),
+        (status = 401, description = "挑战无效", body = ErrorEnvelope)
+    )
+)]
+fn start_mfa_passkey_authentication() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/mfa/passkey/authenticate/finish",
+    operation_id = "finishMfaPasskeyAuthentication",
+    tag = "auth",
+    request_body = MfaPasskeyAuthenticationFinishRequest,
+    responses(
+        (status = 200, description = "通行密钥验证成功并创建完整会话", body = LoginResponse),
+        (status = 401, description = "通行密钥验证失败", body = ErrorEnvelope)
+    )
+)]
+fn finish_mfa_passkey_authentication() {}
+
+#[utoipa::path(
+    get,
+    path = "/auth/me/mfa",
+    operation_id = "getCurrentUserMfaStatus",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "当前用户 MFA 状态", body = MfaStatusResponse),
+        (status = 401, description = "未认证", body = ErrorEnvelope)
+    )
+)]
+fn current_user_mfa_status() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/me/mfa/passkey/register/start",
+    operation_id = "startCurrentUserPasskeyRegistration",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    request_body = MfaPasskeyRegistrationStartRequest,
+    responses(
+        (status = 200, description = "通行密钥注册挑战", body = MfaWebauthnChallengeResponse),
+        (status = 401, description = "重新认证失败", body = ErrorEnvelope)
+    )
+)]
+fn start_current_user_passkey_registration() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/me/mfa/passkey/register/finish",
+    operation_id = "finishCurrentUserPasskeyRegistration",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    request_body = MfaPasskeyRegistrationFinishRequest,
+    responses(
+        (status = 200, description = "通行密钥已注册", body = MfaStatusResponse),
+        (status = 422, description = "通行密钥响应无效", body = ErrorEnvelope)
+    )
+)]
+fn finish_current_user_passkey_registration() {}
+
+#[utoipa::path(
+    delete,
+    path = "/auth/me/mfa/passkey/{id}",
+    operation_id = "revokeCurrentUserPasskey",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "通行密钥 ID"),
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")
+    ),
+    request_body = MfaFactorRevokeRequest,
+    responses(
+        (status = 204, description = "通行密钥已撤销，全部会话已撤销"),
+        (status = 401, description = "重新认证失败", body = ErrorEnvelope)
+    )
+)]
+fn revoke_current_user_passkey() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/me/mfa/recovery-codes",
+    operation_id = "regenerateCurrentUserRecoveryCodes",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    request_body = MfaFactorRevokeRequest,
+    responses(
+        (status = 200, description = "恢复码已重新生成，全部会话已撤销", body = RecoveryCodesResponse),
+        (status = 401, description = "重新认证失败", body = ErrorEnvelope)
+    )
+)]
+fn regenerate_current_user_recovery_codes() {}
 
 #[utoipa::path(
     get,
@@ -379,6 +513,15 @@ fn list_audit_logs() {}
         current_user,
         change_current_user_password,
         current_user_permissions,
+        verify_mfa_totp,
+        verify_mfa_recovery_code,
+        start_mfa_passkey_authentication,
+        finish_mfa_passkey_authentication,
+        current_user_mfa_status,
+        start_current_user_passkey_registration,
+        finish_current_user_passkey_registration,
+        revoke_current_user_passkey,
+        regenerate_current_user_recovery_codes,
         list_users,
         create_user,
         get_user,
@@ -412,7 +555,19 @@ fn list_audit_logs() {}
         PermissionGroupResponse,
         LoginRequest,
         ChangePasswordRequest,
+        LoginStatusSchema,
+        MfaMethodSchema,
         LoginResponse,
+        MfaCodeRequest,
+        MfaPasskeyAuthenticationStartRequest,
+        MfaPasskeyAuthenticationFinishRequest,
+        MfaPasskeyRegistrationStartRequest,
+        MfaPasskeyRegistrationFinishRequest,
+        MfaFactorRevokeRequest,
+        MfaWebauthnChallengeResponse,
+        MfaPasskeyResponse,
+        MfaStatusResponse,
+        RecoveryCodesResponse,
         PageUser,
         PageAuditLog,
         CreateUserRequest,

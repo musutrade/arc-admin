@@ -2,14 +2,16 @@
 
 use crate::auth::{self, AuthSessionConfig};
 use crate::error::{db_error, ApiError};
+use crate::mfa::MfaConfig;
 use crate::models::{
-    user_response, ChangePasswordRequest, LoginRequest, LoginResponse, PermissionCodes,
-    UserResponse, UserRow,
+    user_response, ChangePasswordRequest, LoginRequest, LoginResponse, LoginStatusSchema,
+    PermissionCodes, UserResponse, UserRow,
 };
 use crate::repositories;
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use chrono::{Duration, Utc};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgConnection, PgPool};
 use std::net::IpAddr;
@@ -20,7 +22,12 @@ const BOOTSTRAP_PASSWORD_LENGTH: usize = 16;
 const DUMMY_PASSWORD_HASH: &str =
     "$argon2id$v=19$m=19456,t=2,p=1$pDDhKh46fVQNqRy3OeXTTw$+5qvGkvmKsilvsRWsskXT4k6fmmE4q35ntz6ME1UNBE";
 
-pub struct LoginOutcome {
+pub enum LoginOutcome {
+    Authenticated(LoginSessionOutcome),
+    MfaRequired(LoginResponse),
+}
+
+pub struct LoginSessionOutcome {
     pub response: LoginResponse,
     pub session_token: String,
     pub csrf_token: String,
@@ -28,10 +35,17 @@ pub struct LoginOutcome {
     pub ttl_secs: i64,
 }
 
-struct LoginThrottleKeys {
-    account: String,
-    source_ip: String,
-    account_ip: String,
+pub(crate) struct LoginThrottleKeys {
+    pub(crate) account: String,
+    pub(crate) source_ip: String,
+    pub(crate) account_ip: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LoginContext {
+    pub account: String,
+    pub source_ip: String,
+    pub account_ip: String,
 }
 
 impl LoginThrottleKeys {
@@ -52,6 +66,7 @@ impl LoginThrottleKeys {
 pub async fn login(
     pool: &PgPool,
     config: &AuthSessionConfig,
+    mfa: &MfaConfig,
     req: &LoginRequest,
     client_ip: IpAddr,
 ) -> Result<LoginOutcome, ApiError> {
@@ -94,16 +109,34 @@ pub async fn login(
     }
     let row = row.expect("authenticated login always has a user row");
 
-    create_login_session(pool, config, req.remember, throttle_keys, row).await
+    if let Some(response) = crate::services::mfa::begin_login(
+        pool,
+        mfa,
+        &row,
+        req.remember,
+        LoginContext {
+            account: throttle_keys.account.clone(),
+            source_ip: throttle_keys.source_ip.clone(),
+            account_ip: throttle_keys.account_ip.clone(),
+        },
+    )
+    .await?
+    {
+        return Ok(LoginOutcome::MfaRequired(response));
+    }
+
+    Ok(LoginOutcome::Authenticated(
+        create_login_session(pool, config, req.remember, throttle_keys, row).await?,
+    ))
 }
 
-async fn create_login_session(
+pub(crate) async fn create_login_session(
     pool: &PgPool,
     config: &AuthSessionConfig,
     persistent: bool,
     throttle_keys: LoginThrottleKeys,
     row: UserRow,
-) -> Result<LoginOutcome, ApiError> {
+) -> Result<LoginSessionOutcome, ApiError> {
     let (ttl_secs, idle_timeout_secs) = if persistent {
         (
             config.persistent_session_ttl_secs,
@@ -175,10 +208,17 @@ async fn create_login_session(
     let roles = repositories::users::role_names_by_user(pool, row.id)
         .await
         .map_err(db_error)?;
-    Ok(LoginOutcome {
+    Ok(LoginSessionOutcome {
         response: LoginResponse {
-            expires_at,
-            user: user_response(row, roles),
+            status: LoginStatusSchema::Authenticated,
+            expires_at: Some(expires_at),
+            user: Some(user_response(row, roles)),
+            challenge_token: None,
+            methods: Vec::new(),
+            totp_secret: None,
+            totp_uri: None,
+            totp_qr_code: None,
+            recovery_codes: Vec::new(),
         },
         session_token,
         csrf_token,

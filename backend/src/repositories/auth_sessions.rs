@@ -63,6 +63,19 @@ pub async fn auth_context(
            AND s.token_version = u.token_version
            AND u.deleted_at IS NULL
            AND u.status = 'active'
+           AND (
+               NOT EXISTS (
+                   SELECT 1 FROM user_roles required_ur
+                   JOIN roles required_role ON required_role.id = required_ur.role_id
+                   WHERE required_ur.user_id = u.id
+                     AND required_role.code = 'super_admin'
+                     AND required_role.is_active = TRUE
+               )
+               OR EXISTS (
+                   SELECT 1 FROM user_mfa_settings mfa
+                   WHERE mfa.user_id = u.id AND mfa.totp_enabled_at IS NOT NULL
+               )
+           )
          GROUP BY s.id, s.user_id, s.csrf_token_hash, u.organization_id, u.department_id",
     )
     .bind(session_token_hash)

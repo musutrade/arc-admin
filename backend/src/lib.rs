@@ -2,7 +2,7 @@
 
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -15,6 +15,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod handlers;
+pub mod mfa;
 pub mod models;
 pub mod openapi;
 pub mod permissions;
@@ -32,6 +33,15 @@ const LOGOUT_PATH: &str = "/api/v1/auth/logout";
 const CURRENT_USER_PATH: &str = "/api/v1/auth/me";
 const CURRENT_USER_PASSWORD_PATH: &str = "/api/v1/auth/me/password";
 const CURRENT_USER_PERMISSIONS_PATH: &str = "/api/v1/auth/me/permissions";
+const MFA_TOTP_VERIFY_PATH: &str = "/api/v1/auth/mfa/totp/verify";
+const MFA_RECOVERY_VERIFY_PATH: &str = "/api/v1/auth/mfa/recovery/verify";
+const MFA_PASSKEY_AUTH_START_PATH: &str = "/api/v1/auth/mfa/passkey/authenticate/start";
+const MFA_PASSKEY_AUTH_FINISH_PATH: &str = "/api/v1/auth/mfa/passkey/authenticate/finish";
+const MFA_STATUS_PATH: &str = "/api/v1/auth/me/mfa";
+const MFA_PASSKEY_REGISTRATION_START_PATH: &str = "/api/v1/auth/me/mfa/passkey/register/start";
+const MFA_PASSKEY_REGISTRATION_FINISH_PATH: &str = "/api/v1/auth/me/mfa/passkey/register/finish";
+const MFA_PASSKEY_PATH: &str = "/api/v1/auth/me/mfa/passkey/{id}";
+const MFA_RECOVERY_CODES_PATH: &str = "/api/v1/auth/me/mfa/recovery-codes";
 const USERS_PATH: &str = "/api/v1/users";
 const USER_PATH: &str = "/api/v1/users/{id}";
 const USER_ROLES_PATH: &str = "/api/v1/users/{id}/roles";
@@ -52,6 +62,15 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (CURRENT_USER_PATH, &["get"]),
     (CURRENT_USER_PASSWORD_PATH, &["put"]),
     (CURRENT_USER_PERMISSIONS_PATH, &["get"]),
+    (MFA_TOTP_VERIFY_PATH, &["post"]),
+    (MFA_RECOVERY_VERIFY_PATH, &["post"]),
+    (MFA_PASSKEY_AUTH_START_PATH, &["post"]),
+    (MFA_PASSKEY_AUTH_FINISH_PATH, &["post"]),
+    (MFA_STATUS_PATH, &["get"]),
+    (MFA_PASSKEY_REGISTRATION_START_PATH, &["post"]),
+    (MFA_PASSKEY_REGISTRATION_FINISH_PATH, &["post"]),
+    (MFA_PASSKEY_PATH, &["delete"]),
+    (MFA_RECOVERY_CODES_PATH, &["post"]),
     (USERS_PATH, &["get", "post"]),
     (USER_PATH, &["get", "put", "delete"]),
     (USER_ROLES_PATH, &["put"]),
@@ -67,6 +86,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
 pub struct AppState {
     pub pool: PgPool,
     pub auth: Arc<auth::AuthSessionConfig>,
+    pub mfa: Arc<mfa::MfaConfig>,
 }
 
 async fn healthz() -> Json<models::HealthResponse> {
@@ -107,6 +127,33 @@ fn base_router(state: AppState) -> Router {
         .route(
             CURRENT_USER_PERMISSIONS_PATH,
             get(handlers::auth::me_permissions),
+        )
+        .route(MFA_TOTP_VERIFY_PATH, post(handlers::auth::verify_totp))
+        .route(
+            MFA_RECOVERY_VERIFY_PATH,
+            post(handlers::auth::verify_recovery_code),
+        )
+        .route(
+            MFA_PASSKEY_AUTH_START_PATH,
+            post(handlers::auth::start_passkey_authentication),
+        )
+        .route(
+            MFA_PASSKEY_AUTH_FINISH_PATH,
+            post(handlers::auth::finish_passkey_authentication),
+        )
+        .route(MFA_STATUS_PATH, get(handlers::auth::mfa_status))
+        .route(
+            MFA_PASSKEY_REGISTRATION_START_PATH,
+            post(handlers::auth::start_passkey_registration),
+        )
+        .route(
+            MFA_PASSKEY_REGISTRATION_FINISH_PATH,
+            post(handlers::auth::finish_passkey_registration),
+        )
+        .route(MFA_PASSKEY_PATH, delete(handlers::auth::revoke_passkey))
+        .route(
+            MFA_RECOVERY_CODES_PATH,
+            post(handlers::auth::regenerate_recovery_codes),
         )
         .route(
             USERS_PATH,

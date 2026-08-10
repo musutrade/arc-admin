@@ -220,6 +220,268 @@
         ]
       }
     },
+    "/auth/me/mfa": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "getCurrentUserMfaStatus",
+        "responses": {
+          "200": {
+            "description": "当前用户 MFA 状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/me/mfa/passkey/register/finish": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "finishCurrentUserPasskeyRegistration",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaPasskeyRegistrationFinishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "通行密钥已注册",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "通行密钥响应无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/me/mfa/passkey/register/start": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "startCurrentUserPasskeyRegistration",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaPasskeyRegistrationStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "通行密钥注册挑战",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaWebauthnChallengeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "重新认证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/me/mfa/passkey/{id}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "revokeCurrentUserPasskey",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "通行密钥 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaFactorRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "通行密钥已撤销，全部会话已撤销"
+          },
+          "401": {
+            "description": "重新认证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/me/mfa/recovery-codes": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "regenerateCurrentUserRecoveryCodes",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaFactorRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "恢复码已重新生成，全部会话已撤销",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "重新认证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/auth/me/password": {
       "put": {
         "tags": [
@@ -312,6 +574,186 @@
             "cookieAuth": []
           }
         ]
+      }
+    },
+    "/auth/mfa/passkey/authenticate/finish": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "finishMfaPasskeyAuthentication",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaPasskeyAuthenticationFinishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "通行密钥验证成功并创建完整会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "通行密钥验证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/mfa/passkey/authenticate/start": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "startMfaPasskeyAuthentication",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaPasskeyAuthenticationStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "通行密钥认证挑战",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaWebauthnChallengeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "挑战无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/mfa/recovery/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "verifyMfaRecoveryCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "恢复码验证成功并创建完整会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "恢复码无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "二次验证尝试过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/mfa/totp/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "verifyMfaTotp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "TOTP 验证成功并创建完整会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "验证码无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "二次验证尝试过于频繁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/dashboard/stats": {
@@ -1601,16 +2043,238 @@
       "LoginResponse": {
         "type": "object",
         "required": [
-          "expiresAt",
-          "user"
+          "status",
+          "methods",
+          "recoveryCodes"
         ],
         "properties": {
+          "challengeToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MfaMethodSchema"
+            }
+          },
+          "recoveryCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/LoginStatusSchema"
+          },
+          "totpQrCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totpSecret": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "totpUri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserResponse"
+              }
+            ]
+          }
+        }
+      },
+      "LoginStatusSchema": {
+        "type": "string",
+        "enum": [
+          "authenticated",
+          "mfaRequired",
+          "mfaEnrollmentRequired"
+        ]
+      },
+      "MfaCodeRequest": {
+        "type": "object",
+        "required": [
+          "challengeToken",
+          "code"
+        ],
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "MfaFactorRevokeRequest": {
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "totpCode"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "totpCode": {
+            "type": "string"
+          }
+        }
+      },
+      "MfaMethodSchema": {
+        "type": "string",
+        "enum": [
+          "totp",
+          "passkey",
+          "recoveryCode"
+        ]
+      },
+      "MfaPasskeyAuthenticationFinishRequest": {
+        "type": "object",
+        "required": [
+          "challengeToken",
+          "credential"
+        ],
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          },
+          "credential": {}
+        }
+      },
+      "MfaPasskeyAuthenticationStartRequest": {
+        "type": "object",
+        "required": [
+          "challengeToken"
+        ],
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          }
+        }
+      },
+      "MfaPasskeyRegistrationFinishRequest": {
+        "type": "object",
+        "required": [
+          "challengeToken",
+          "credential"
+        ],
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          },
+          "credential": {}
+        }
+      },
+      "MfaPasskeyRegistrationStartRequest": {
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "totpCode",
+          "name"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "totpCode": {
+            "type": "string"
+          }
+        }
+      },
+      "MfaPasskeyResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           },
-          "user": {
-            "$ref": "#/components/schemas/UserResponse"
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "MfaStatusResponse": {
+        "type": "object",
+        "required": [
+          "required",
+          "totpEnabled",
+          "recoveryCodesRemaining",
+          "passkeys"
+        ],
+        "properties": {
+          "passkeys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MfaPasskeyResponse"
+            }
+          },
+          "recoveryCodesRemaining": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "totpEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MfaWebauthnChallengeResponse": {
+        "type": "object",
+        "required": [
+          "challengeToken",
+          "publicKey"
+        ],
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          },
+          "publicKey": {
+            "type": "object"
           }
         }
       },
@@ -1778,6 +2442,20 @@
           },
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "RecoveryCodesResponse": {
+        "type": "object",
+        "required": [
+          "codes"
+        ],
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

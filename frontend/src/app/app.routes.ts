@@ -75,6 +75,11 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/audit-logs/audit-logs').then((m) => m.AuditLogs),
       },
       {
+        path: 'security',
+        canActivate: [authGuard],
+        loadComponent: () => import('./pages/security/security').then((m) => m.SecurityPage),
+      },
+      {
         path: '403',
         loadComponent: () => import('./pages/errors/error-403').then((m) => m.Error403Page),
       },

@@ -10,7 +10,7 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  overflow: hidden;
+  overflow: auto;
   background: var(--ui-color-surface-page);
 }
 
@@ -182,24 +182,19 @@
   }
 }
 
-.login-options {
+.remember-option {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 4px;
+  gap: 8px;
+  width: fit-content;
+  font-size: 13px;
+  color: var(--ui-color-text-secondary);
+  cursor: pointer;
 
-  .forgot-link {
-    padding: 0;
-    border: none;
-    background: none;
-    font-size: 13px;
-    font-family: inherit;
-    color: var(--ui-color-link);
-    text-decoration: none;
-    cursor: pointer;
-    &:hover {
-      text-decoration: underline;
-    }
+  input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--ui-color-primary);
   }
 }
 
@@ -243,8 +238,128 @@
   }
 }
 
-/* Material checkbox 颜色跟随主题 */
-::ng-deep .mat-mdc-checkbox.mat-accent {
-  --mdc-checkbox-selected-checkmark-color: var(--ui-color-on-solid);
-  --mdc-checkbox-selected-icon-color: var(--mat-sys-primary);
+.secondary-btn,
+.text-btn {
+  min-height: 42px;
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-lg);
+  background: transparent;
+  color: var(--ui-color-text-primary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.secondary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+
+  &:hover {
+    background: var(--ui-color-hover);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.text-btn {
+  min-height: 32px;
+  border-color: transparent;
+  color: var(--ui-color-link);
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.alternative-actions,
+.recovery-codes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.enrollment-block {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+}
+
+.totp-qr {
+  width: 180px;
+  height: 180px;
+  border: 8px solid white;
+  border-radius: var(--ui-radius-md);
+  image-rendering: pixelated;
+}
+
+.secret-value {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  color: var(--ui-color-text-secondary);
+  font-size: 12px;
+
+  code {
+    overflow-wrap: anywhere;
+    padding: 10px 12px;
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-subtle);
+    color: var(--ui-color-text-primary);
+    font-size: 13px;
+  }
+}
+
+.recovery-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-color-warning-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-warning-soft);
+  color: var(--ui-color-text-primary);
+  font-size: 13px;
+  line-height: 20px;
+
+  mat-icon {
+    flex: 0 0 auto;
+    color: var(--ui-color-warning);
+  }
+}
+
+.recovery-code-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  code {
+    padding: 8px;
+    border: 1px solid var(--ui-color-border);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-color-surface-subtle);
+    text-align: center;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-panel {
+    padding: 24px 20px;
+  }
+
+  .login-header {
+    margin-bottom: 24px;
+  }
+
+  .recovery-code-grid {
+    grid-template-columns: 1fr;
+  }
 }

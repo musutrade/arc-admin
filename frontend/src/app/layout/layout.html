@@ -123,6 +123,9 @@
         </span>
       </button>
       <mat-menu #userMenu="matMenu" xPosition="before" class="user-menu">
+        <button mat-menu-item [routerLink]="['/security']">
+          <mat-icon>security</mat-icon><span>账号安全</span>
+        </button>
         <button mat-menu-item (click)="openChangePassword()">
           <mat-icon>password</mat-icon><span>修改密码</span>
         </button>

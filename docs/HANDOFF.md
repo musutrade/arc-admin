@@ -34,10 +34,10 @@ cargo flow verify --all
 1. 在每个生产环境配置 Grafana 联系点、通知策略并执行真实告警送达演练，密钥不进入模板。
 2. 在应用故障域之外配置独立 HTTP 心跳，并验证整个入口、TLS、代理和应用链路。
 3. GitHub 仓库设置中启用 `main` 分支保护、required checks、secret scanning 与 push protection；私有仓库还需启用 GitHub Code Security 才能运行 CodeQL。
-4. 高合规项目上线前完成 `super_admin` MFA，并把审计归档、SBOM 和备份放入权限独立的不可变存储。
+4. 高合规项目上线前把审计归档、SBOM 和备份放入权限独立的不可变存储。
 
 ## 已知残余风险
 
 - 漏洞数据库和镜像漏洞结果会随时间变化，本地全量门禁只校验安全工作流配置；真实结果由 GitHub Actions 的 PR 与每周任务给出。
 - 模板内的 Blackbox 探测与 Tempo 都在同一 Docker 环境中，不能替代跨故障域的外部监控或独立证据存储。
-- `super_admin` MFA 仍是明确待办；在完成前不能把高合规示例视为认证能力。
+- `super_admin` MFA 已实现，但生产环境仍必须按 `docs/mfa-operations.md` 注入密钥并在实际域名完成演练。

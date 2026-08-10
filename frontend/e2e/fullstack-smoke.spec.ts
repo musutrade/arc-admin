@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import * as OTPAuth from 'otpauth';
 import type { RoleResponse } from '../src/app/generated/api/models/role-response';
 
 test('通过真实 Angular、Axum 和 PostgreSQL 完成登录与用户创建', async ({ page }) => {
@@ -7,9 +8,22 @@ test('通过真实 Angular、Axum 和 PostgreSQL 完成登录与用户创建', a
   const displayName = `全栈测试用户 ${suffix}`;
 
   await page.goto('/login');
-  await page.getByLabel('用户名').fill('admin');
+  await page.getByLabel('用户名').fill('fullstack_admin');
   await page.getByLabel('密码', { exact: true }).fill('Fullstack-Smoke-Password-2026!');
   await page.getByRole('button', { name: '登录' }).click();
+  await expect(page.getByRole('heading', { name: '安全验证' })).toBeVisible();
+  const secret = (await page.locator('.secret-value code').textContent())?.trim();
+  expect(secret).toBeTruthy();
+  const totp = new OTPAuth.TOTP({
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    secret: OTPAuth.Secret.fromBase32(secret!),
+  });
+  await page.getByLabel('身份验证器验证码').fill(totp.generate());
+  await page.getByRole('button', { name: '验证', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '保存恢复码' })).toBeVisible();
+  await page.getByRole('button', { name: '进入系统' }).click();
   await expect(page.getByRole('heading', { name: '权限目录' })).toBeVisible();
 
   await page.getByRole('button', { name: '用户管理' }).click();

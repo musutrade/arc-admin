@@ -82,6 +82,10 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 | `LOGIN_LOCKOUT_SECS`                   | 达到阈值后的锁定时长，默认 900 秒                |
 | `TRUSTED_PROXY_CIDRS`                  | 逗号分隔的受信反向代理网段，默认空               |
 | `CORS_ALLOWED_ORIGINS`                 | 逗号分隔 origin；生产环境必填且禁止 `*`         |
+| `MFA_ENCRYPTION_KEY`                   | 生产必填；Base64 编码的 32 字节 TOTP 加密密钥   |
+| `WEBAUTHN_RP_ID`                       | Passkey 绑定的 relying party 域名               |
+| `WEBAUTHN_RP_ORIGIN`                   | Passkey 页面实际使用的 HTTPS origin             |
+| `WEBAUTHN_RP_NAME`                     | 身份验证器显示的站点名称                         |
 | `LOG_FORMAT`                           | `pretty` 或 `json`；生产环境默认 `json`         |
 | `RUST_LOG`                             | Rust 日志过滤规则                               |
 | `SERVICE_NAME`                         | 日志中的服务标识，默认 `arc-admin-backend`      |
@@ -99,3 +103,5 @@ Service；这些规则与 SQL 写入位置一起由 auditor 强制检查。新�
 - arc-flow 对 SQL 写入位置、分层依赖和旧模板模式做确定性扫描，并管理外部命令超时与一次性 PostgreSQL 生命周期。
 
 所有请求、响应、枚举和参数由 `utoipa` 从 Rust 类型生成 OpenAPI 3.1，再由 `ng-openapi-gen` 生成 Angular DTO 和调用函数。禁止手改 `docs/openapi.json` 或 `frontend/src/app/generated/api/`。
+
+`super_admin` 在密码通过后只得到五分钟的一次性 MFA 挑战，完成 TOTP、通行密钥或恢复码验证后才创建服务端会话。挑战和 WebAuthn ceremony 状态只保存在 PostgreSQL；TOTP 密钥使用用户 ID 作为附加认证数据进行 AES-256-GCM 加密，恢复码只保存 Argon2 哈希。角色被提升为 `super_admin` 后，未完成 TOTP 注册的既有会话会在下一次请求时失效。生产配置和恢复要求见 [多因素认证运维](mfa-operations.md)。

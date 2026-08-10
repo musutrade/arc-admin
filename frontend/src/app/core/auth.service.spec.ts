@@ -18,8 +18,11 @@ const user: ApiUser = {
 };
 
 const loginResponse: LoginResponse = {
+  status: 'authenticated',
   expiresAt: '2026-08-01T08:00:00Z',
   user,
+  methods: [],
+  recoveryCodes: [],
 };
 
 describe('AuthService', () => {
@@ -60,6 +63,20 @@ describe('AuthService', () => {
 
     expect(service.currentUser()).toEqual(user);
     expect(service.hasPermission('user:directory:read')).toBe(true);
+  });
+
+  it('does not create in-memory session state before MFA succeeds', async () => {
+    const result = service.login('admin', 'secure-password', false);
+    http.expectOne('/api/v1/auth/login').flush({
+      status: 'mfaRequired',
+      challengeToken: 'challenge-token',
+      methods: ['totp', 'recoveryCode'],
+      recoveryCodes: [],
+    } satisfies LoginResponse);
+
+    await expect(result).resolves.toMatchObject({ status: 'mfaRequired' });
+    http.expectNone('/api/v1/auth/me/permissions');
+    expect(service.currentUser()).toBeNull();
   });
 
   it('revokes a partial server session when permission loading fails', async () => {
