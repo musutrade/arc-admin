@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormField, form, maxLength, required, submit } from '@angular/forms/signals';
+import { FormField, form, maxLength, minLength, required, submit } from '@angular/forms/signals';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -34,12 +34,16 @@ export class SecurityPage {
     required(path.name, { message: '请输入通行密钥名称' });
     maxLength(path.name, 80, { message: '名称不能超过 80 个字符' });
     required(path.currentPassword, { message: '请输入当前密码' });
-    required(path.totpCode, { message: '请输入身份验证器验证码' });
+    required(path.totpCode, { message: '请输入 6 位验证码' });
+    minLength(path.totpCode, 6, { message: '验证码应为 6 位' });
+    maxLength(path.totpCode, 6, { message: '验证码应为 6 位' });
   });
   readonly recoveryModel = signal({ currentPassword: '', totpCode: '' });
   readonly recoveryForm = form(this.recoveryModel, (path) => {
     required(path.currentPassword, { message: '请输入当前密码' });
-    required(path.totpCode, { message: '请输入身份验证器验证码' });
+    required(path.totpCode, { message: '请输入 6 位验证码' });
+    minLength(path.totpCode, 6, { message: '验证码应为 6 位' });
+    maxLength(path.totpCode, 6, { message: '验证码应为 6 位' });
   });
 
   constructor() {

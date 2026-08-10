@@ -115,9 +115,9 @@ fn change_current_user_password() {}
     request_body = StepUpRequest,
     responses(
         (status = 200, description = "再认证凭据已签发", body = StepUpResponse),
-        (status = 401, description = "当前密码或验证码无效", body = ErrorEnvelope),
+        (status = 401, description = "未认证", body = ErrorEnvelope),
         (status = 403, description = "该操作需要身份验证器验证码", body = ErrorEnvelope),
-        (status = 422, description = "操作范围无效", body = ErrorEnvelope)
+        (status = 422, description = "当前密码、验证码或操作范围无效", body = ErrorEnvelope)
     )
 )]
 fn issue_step_up_token() {}
@@ -212,7 +212,8 @@ fn current_user_mfa_status() {}
     request_body = MfaPasskeyRegistrationStartRequest,
     responses(
         (status = 200, description = "通行密钥注册挑战", body = MfaWebauthnChallengeResponse),
-        (status = 401, description = "重新认证失败", body = ErrorEnvelope)
+        (status = 401, description = "未认证", body = ErrorEnvelope),
+        (status = 422, description = "重新认证失败", body = ErrorEnvelope)
     )
 )]
 fn start_current_user_passkey_registration() {}
@@ -245,7 +246,8 @@ fn finish_current_user_passkey_registration() {}
     request_body = MfaFactorRevokeRequest,
     responses(
         (status = 204, description = "通行密钥已撤销，全部会话已撤销"),
-        (status = 401, description = "重新认证失败", body = ErrorEnvelope)
+        (status = 401, description = "未认证", body = ErrorEnvelope),
+        (status = 422, description = "重新认证失败", body = ErrorEnvelope)
     )
 )]
 fn revoke_current_user_passkey() {}
@@ -260,7 +262,8 @@ fn revoke_current_user_passkey() {}
     request_body = MfaFactorRevokeRequest,
     responses(
         (status = 200, description = "恢复码已重新生成，全部会话已撤销", body = RecoveryCodesResponse),
-        (status = 401, description = "重新认证失败", body = ErrorEnvelope)
+        (status = 401, description = "未认证", body = ErrorEnvelope),
+        (status = 422, description = "重新认证失败", body = ErrorEnvelope)
     )
 )]
 fn regenerate_current_user_recovery_codes() {}

@@ -116,11 +116,24 @@
                   autocomplete="current-password"
               /></label>
               <label
-                >验证码<input
-                  [formField]="registrationForm.totpCode"
-                  inputmode="numeric"
-                  autocomplete="one-time-code"
-              /></label>
+                >身份验证器验证码
+                <div
+                  class="verification-input"
+                  [class.input-error]="
+                    registrationForm.totpCode().touched() && registrationForm.totpCode().invalid()
+                  "
+                >
+                  <mat-icon>verified_user</mat-icon>
+                  <input
+                    id="registration-totp-code"
+                    type="text"
+                    [formField]="registrationForm.totpCode"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    placeholder="000000"
+                  />
+                </div>
+              </label>
             </div>
             @if (registrationForm().touched() && registrationForm().invalid()) {
               <p class="form-error">请完整填写名称、当前密码和验证码</p>
@@ -150,11 +163,24 @@
                 autocomplete="current-password"
             /></label>
             <label
-              >验证码<input
-                [formField]="recoveryForm.totpCode"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-            /></label>
+              >身份验证器验证码
+              <div
+                class="verification-input"
+                [class.input-error]="
+                  recoveryForm.totpCode().touched() && recoveryForm.totpCode().invalid()
+                "
+              >
+                <mat-icon>verified_user</mat-icon>
+                <input
+                  id="recovery-totp-code"
+                  type="text"
+                  [formField]="recoveryForm.totpCode"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  placeholder="000000"
+                />
+              </div>
+            </label>
           </div>
           @if (recoveryForm().touched() && recoveryForm().invalid()) {
             <p class="form-error">请填写当前密码和验证码</p>

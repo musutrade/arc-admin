@@ -41,6 +41,19 @@ describe('ChangePasswordDialog', () => {
     );
   });
 
+  it('requires the same six-digit authenticator code as the login flow', async () => {
+    component.passwordModel.set({
+      currentPassword: 'current-password',
+      newPassword: 'updated-password',
+      confirmPassword: 'updated-password',
+      totpCode: '12345',
+    });
+    await fixture.whenStable();
+
+    expect(component.passwordForm.totpCode().invalid()).toBe(true);
+    expect(component.passwordForm.totpCode().errors()[0].message).toBe('验证码应为 6 位');
+  });
+
   it('submits valid passwords and closes the dialog', async () => {
     auth.changePassword.mockResolvedValue(undefined);
     auth.issueStepUp.mockResolvedValue({ token: 'step-up-token' });
@@ -71,26 +84,26 @@ describe('ChangePasswordDialog', () => {
   });
 
   it('shows the API error and keeps the dialog open', async () => {
-    auth.changePassword.mockRejectedValue(
+    auth.issueStepUp.mockRejectedValue(
       new HttpErrorResponse({
         status: 422,
-        error: { error: { message: '当前密码不正确' } },
+        error: { error: { message: '身份验证器验证码不正确' } },
       }),
     );
-    auth.issueStepUp.mockResolvedValue({ token: 'step-up-token' });
     component.passwordModel.set({
-      currentPassword: 'incorrect-password',
+      currentPassword: 'current-password',
       newPassword: 'updated-password',
       confirmPassword: 'updated-password',
-      totpCode: '123456',
+      totpCode: '000000',
     });
 
     component.submitPassword();
 
     await vi.waitFor(() => {
-      expect(component.errorMessage()).toBe('当前密码不正确');
+      expect(component.errorMessage()).toBe('身份验证器验证码不正确');
       expect(component.submitting()).toBe(false);
     });
+    expect(auth.changePassword).not.toHaveBeenCalled();
     expect(dialogRef.close).not.toHaveBeenCalled();
   });
 });

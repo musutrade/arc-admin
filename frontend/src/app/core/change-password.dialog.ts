@@ -110,13 +110,22 @@ import { AuthService } from './auth.service';
 
         <div class="form-field">
           <label for="totp-code">身份验证器验证码</label>
-          <input
-            id="totp-code"
-            [formField]="passwordForm.totpCode"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            placeholder="已启用时填写"
-          />
+          <div
+            class="verification-input"
+            [class.input-error]="
+              passwordForm.totpCode().touched() && passwordForm.totpCode().invalid()
+            "
+          >
+            <mat-icon>verified_user</mat-icon>
+            <input
+              id="totp-code"
+              type="text"
+              inputmode="numeric"
+              [formField]="passwordForm.totpCode"
+              placeholder="000000"
+              autocomplete="one-time-code"
+            />
+          </div>
           @if (passwordForm.totpCode().touched() && passwordForm.totpCode().errors().length) {
             <small>{{ passwordForm.totpCode().errors()[0].message }}</small>
           }
@@ -174,7 +183,11 @@ export class ChangePasswordDialog {
         : undefined,
     );
     required(path.confirmPassword, { message: '请再次输入新密码' });
-    maxLength(path.totpCode, 12, { message: '验证码不能超过 12 位' });
+    validate(path.totpCode, ({ value }) =>
+      value().length > 0 && value().length !== 6
+        ? { kind: 'totpLength', message: '验证码应为 6 位' }
+        : undefined,
+    );
     validate(path.confirmPassword, ({ value, valueOf }) =>
       value().length > 0 && value() !== valueOf(path.newPassword)
         ? { kind: 'passwordMismatch', message: '两次输入的新密码不一致' }
@@ -192,8 +205,7 @@ export class ChangePasswordDialog {
       this.submitting.set(true);
       this.errorMessage.set('');
       try {
-        const { currentPassword, newPassword } = this.passwordModel();
-        const { totpCode } = this.passwordModel();
+        const { currentPassword, newPassword, totpCode } = this.passwordModel();
         const stepUp = await this.auth.issueStepUp(
           'auth.password.change',
           currentPassword,

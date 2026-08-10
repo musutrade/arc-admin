@@ -107,10 +107,24 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     } else if (path === '/api/v1/auth/logout') {
       await route.fulfill({ status: 204 });
     } else if (path === '/api/v1/auth/me/step-up' && request.method() === 'POST') {
-      stepUpRequests.push(request.postDataJSON() as StepUpRequest);
-      await route.fulfill({
-        json: { token: 'step-up-token', expiresAt: '2026-08-01T00:05:00Z' },
-      });
+      const payload = request.postDataJSON() as StepUpRequest;
+      stepUpRequests.push(payload);
+      if (payload.totpCode === '000000') {
+        await route.fulfill({
+          status: 422,
+          json: {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: '身份验证器验证码不正确',
+              traceId: 'step-up-validation',
+            },
+          },
+        });
+      } else {
+        await route.fulfill({
+          json: { token: 'step-up-token', expiresAt: '2026-08-01T00:05:00Z' },
+        });
+      }
     } else if (path === '/api/v1/auth/me/password' && request.method() === 'PUT') {
       passwordChangeRequest = request.postDataJSON() as ChangePasswordRequest;
       await route.fulfill({ status: 204 });
@@ -246,15 +260,25 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeVisible();
   await confirmPassword.fill('updated-safe-password');
   await confirmPassword.blur();
-  await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeHidden();
-  await totpCode.fill('123456');
+  await totpCode.fill('000000');
   const savePassword = changePasswordDialog.getByRole('button', { name: '保存修改' });
-  await expect(savePassword).toBeEnabled();
+  await expect(savePassword).toBeEnabled({ timeout: 10_000 });
 
   if (process.env['VISUAL_REVIEW']) {
     await page.screenshot({ path: testInfo.outputPath('change-password-dialog.png') });
   }
 
+  const rejectedStepUp = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/v1/auth/me/step-up' && response.status() === 422,
+  );
+  await savePassword.click();
+  await rejectedStepUp;
+  await expect(changePasswordDialog.getByText('身份验证器验证码不正确')).toBeVisible();
+  await expect(changePasswordDialog).toBeVisible();
+  await expect(page).not.toHaveURL(/\/login$/);
+  expect(passwordChangeRequest).toBeNull();
+  await totpCode.fill('123456');
   await savePassword.click();
   await expect(changePasswordDialog).toBeHidden();
   expect(passwordChangeRequest).toEqual({

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormField, form, maxLength, required, submit } from '@angular/forms/signals';
+import { FormField, form, required, submit, validate } from '@angular/forms/signals';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -46,13 +46,20 @@ export interface StepUpCredentials {
         </div>
         <div class="form-field">
           <label for="step-up-totp">身份验证器验证码</label>
-          <input
-            id="step-up-totp"
-            [formField]="stepUpForm.totpCode"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            placeholder="已启用时填写"
-          />
+          <div
+            class="verification-input"
+            [class.input-error]="stepUpForm.totpCode().touched() && stepUpForm.totpCode().invalid()"
+          >
+            <mat-icon>verified_user</mat-icon>
+            <input
+              id="step-up-totp"
+              type="text"
+              [formField]="stepUpForm.totpCode"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              placeholder="000000"
+            />
+          </div>
           @if (stepUpForm.totpCode().touched() && stepUpForm.totpCode().errors().length) {
             <small>{{ stepUpForm.totpCode().errors()[0].message }}</small>
           }
@@ -87,7 +94,11 @@ export class StepUpDialog {
   readonly stepUpModel = signal({ currentPassword: '', totpCode: '' });
   readonly stepUpForm = form(this.stepUpModel, (path) => {
     required(path.currentPassword, { message: '请输入当前密码' });
-    maxLength(path.totpCode, 12, { message: '验证码不能超过 12 位' });
+    validate(path.totpCode, ({ value }) =>
+      value().length > 0 && value().length !== 6
+        ? { kind: 'totpLength', message: '验证码应为 6 位' }
+        : undefined,
+    );
   });
 
   confirm(): void {

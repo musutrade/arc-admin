@@ -45,12 +45,7 @@ pub async fn issue(
     if !is_valid_scope(&req.scope) {
         return Err(ApiError::validation("无效的再认证操作范围"));
     }
-    auth_service::verify_current_password(pool, user_id, &req.current_password)
-        .await
-        .map_err(|error| match error {
-            ApiError::Validation(_) => ApiError::unauthorized(),
-            other => other,
-        })?;
+    auth_service::verify_current_password(pool, user_id, &req.current_password).await?;
     let summary = repositories::mfa::summary(pool, user_id)
         .await
         .map_err(db_error)?;

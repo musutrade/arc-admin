@@ -350,6 +350,16 @@
             }
           },
           "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "重新认证失败",
             "content": {
               "application/json": {
@@ -409,6 +419,16 @@
             "description": "通行密钥已撤销，全部会话已撤销"
           },
           "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "重新认证失败",
             "content": {
               "application/json": {
@@ -465,6 +485,16 @@
             }
           },
           "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "重新认证失败",
             "content": {
               "application/json": {
@@ -624,7 +654,7 @@
             }
           },
           "401": {
-            "description": "当前密码或验证码无效",
+            "description": "未认证",
             "content": {
               "application/json": {
                 "schema": {
@@ -644,7 +674,7 @@
             }
           },
           "422": {
-            "description": "操作范围无效",
+            "description": "当前密码、验证码或操作范围无效",
             "content": {
               "application/json": {
                 "schema": {

@@ -631,6 +631,38 @@ async fn login_and_user_crud_flow() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(error["error"]["message"], "需要先完成身份再认证");
 
+    let (status, error) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/me/step-up",
+        Some(token),
+        Some(json!({
+            "currentPassword": "incorrect-password",
+            "totpCode": "invalid",
+            "scope": "auth.password.change"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(error["error"]["message"], "当前密码不正确");
+
+    let (status, error) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/me/step-up",
+        Some(token),
+        Some(json!({
+            "currentPassword": "integration-admin-password",
+            "totpCode": "invalid",
+            "scope": "auth.password.change"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(error["error"]["message"], "身份验证器验证码不正确");
+    let (status, _) = send(&app, Method::GET, "/api/v1/auth/me", Some(token), None).await;
+    assert_eq!(status, StatusCode::OK);
+
     let replay_token = issue_step_up(&app, token, "auth.password.change").await;
     let (status, _) = response_json(
         request_with_step_up(

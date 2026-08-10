@@ -845,7 +845,7 @@ pub(crate) async fn verify_totp_code(
         .check_current(code.trim())
         .map_err(ApiError::internal)?;
     if !valid {
-        return Err(ApiError::unauthorized());
+        return Err(ApiError::validation("身份验证器验证码不正确"));
     }
     Ok(())
 }
@@ -857,12 +857,7 @@ pub(crate) async fn verify_password_and_totp(
     password: &str,
     code: &str,
 ) -> Result<(), ApiError> {
-    auth_service::verify_current_password(pool, user_id, password)
-        .await
-        .map_err(|error| match error {
-            ApiError::Validation(_) => ApiError::unauthorized(),
-            other => other,
-        })?;
+    auth_service::verify_current_password(pool, user_id, password).await?;
     verify_totp_code(pool, mfa, user_id, code).await
 }
 
