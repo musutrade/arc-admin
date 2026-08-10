@@ -7,7 +7,7 @@ use crate::models::{
     ChangePasswordRequest, LoginRequest, LoginResponse, MfaCodeRequest, MfaFactorRevokeRequest,
     MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, PermissionCodes,
-    RecoveryCodesResponse, UserResponse,
+    RecoveryCodesResponse, StepUpRequest, StepUpResponse, UserResponse,
 };
 use crate::services;
 use crate::AppState;
@@ -74,13 +74,32 @@ pub async fn change_password(
     State(state): State<AppState>,
     jar: CookieJar,
     auth: ActorContext,
+    headers: HeaderMap,
     Json(req): Json<ChangePasswordRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    services::step_up::consume(
+        &state.pool,
+        auth.session_id,
+        auth.user_id,
+        &headers,
+        services::step_up::PASSWORD_CHANGE_SCOPE,
+    )
+    .await?;
     services::auth::change_password(&state.pool, auth.user_id, &req).await?;
     Ok((
         auth::clear_session_cookies(jar, state.auth.secure_cookies),
         StatusCode::NO_CONTENT,
     ))
+}
+
+pub async fn step_up(
+    State(state): State<AppState>,
+    auth: ActorContext,
+    Json(req): Json<StepUpRequest>,
+) -> Result<Json<StepUpResponse>, ApiError> {
+    services::step_up::issue(&state.pool, &state.mfa, auth.session_id, auth.user_id, &req)
+        .await
+        .map(Json)
 }
 
 pub async fn me_permissions(auth: ActorContext) -> Result<Json<PermissionCodes>, ApiError> {

@@ -9,7 +9,7 @@ use crate::permissions::{UserDeactivate, UserRead, UserRoleWrite, UserWrite};
 use crate::services;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 
 pub async fn list(
@@ -33,6 +33,7 @@ pub async fn get(
 pub async fn create(
     State(state): State<AppState>,
     auth: RequirePermission<UserWrite>,
+    headers: HeaderMap,
     Json(req): Json<CreateUserRequest>,
 ) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
     if req
@@ -49,6 +50,21 @@ pub async fn create(
     {
         auth.require("user:admin:deactivate")?;
     }
+    if req.role_ids.as_ref().is_some_and(|ids| !ids.is_empty())
+        || req
+            .status
+            .as_deref()
+            .is_some_and(|status| status != "active")
+    {
+        services::step_up::consume(
+            &state.pool,
+            auth.session_id,
+            auth.user_id,
+            &headers,
+            services::step_up::USERS_SENSITIVE_SCOPE,
+        )
+        .await?;
+    }
     services::users::create(&state.pool, &auth, &req, auth.has("user:super_admin:grant"))
         .await
         .map(|user| (StatusCode::CREATED, Json(user)))
@@ -57,6 +73,7 @@ pub async fn create(
 pub async fn update(
     State(state): State<AppState>,
     auth: RequirePermission<UserWrite>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
     Json(req): Json<UpdateUserRequest>,
 ) -> Result<Json<UserResponse>, ApiError> {
@@ -65,6 +82,16 @@ pub async fn update(
     }
     if req.status.is_some() {
         auth.require("user:admin:deactivate")?;
+    }
+    if req.password.is_some() || req.status.is_some() {
+        services::step_up::consume(
+            &state.pool,
+            auth.session_id,
+            auth.user_id,
+            &headers,
+            services::step_up::USERS_SENSITIVE_SCOPE,
+        )
+        .await?;
     }
     services::users::update(
         &state.pool,
@@ -80,8 +107,17 @@ pub async fn update(
 pub async fn delete(
     State(state): State<AppState>,
     auth: RequirePermission<UserDeactivate>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
 ) -> Result<StatusCode, ApiError> {
+    services::step_up::consume(
+        &state.pool,
+        auth.session_id,
+        auth.user_id,
+        &headers,
+        services::step_up::USERS_DELETE_SCOPE,
+    )
+    .await?;
     services::users::delete(&state.pool, id, Some(&auth)).await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -89,9 +125,18 @@ pub async fn delete(
 pub async fn assign_roles(
     State(state): State<AppState>,
     auth: RequirePermission<UserRoleWrite>,
+    headers: HeaderMap,
     Path(id): Path<i64>,
     Json(req): Json<AssignRolesRequest>,
 ) -> Result<StatusCode, ApiError> {
+    services::step_up::consume(
+        &state.pool,
+        auth.session_id,
+        auth.user_id,
+        &headers,
+        services::step_up::USERS_ROLES_SCOPE,
+    )
+    .await?;
     services::users::assign_roles(
         &state.pool,
         Some(&auth),

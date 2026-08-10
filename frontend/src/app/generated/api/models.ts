@@ -36,6 +36,8 @@ export type { RoleColor } from './models/role-color';
 export type { RolePermissions } from './models/role-permissions';
 export type { RoleResponse } from './models/role-response';
 export type { SortDirection } from './models/sort-direction';
+export type { StepUpRequest } from './models/step-up-request';
+export type { StepUpResponse } from './models/step-up-response';
 export type { UpdateRolePermissionsRequest } from './models/update-role-permissions-request';
 export type { UpdateRoleRequest } from './models/update-role-request';
 export type { UpdateUserRequest } from './models/update-user-request';

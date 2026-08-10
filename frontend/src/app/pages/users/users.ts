@@ -21,6 +21,7 @@ import { Role, StatCard, User, UserStatus } from '../../core/models';
 import { AuthService } from '../../core/auth.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { ConfirmDialog } from '../../core/confirm.dialog';
+import { StepUpCredentials, StepUpDialog } from '../../core/step-up.dialog';
 import { PasswordDialog } from './password.dialog';
 import { RoleSelectionDialog } from './role-selection.dialog';
 import { UserEditorDialog, UserEditorResult } from './user-editor.dialog';
@@ -245,8 +246,16 @@ export class UsersPage implements OnInit, OnDestroy {
     if (!password) {
       return;
     }
+    const stepUpToken = await this.stepUp(
+      'users.sensitive',
+      '敏感操作需要再认证',
+      '重置用户密码前，请验证当前管理员密码和身份验证器验证码。',
+    );
+    if (!stepUpToken) {
+      return;
+    }
     await this.runMutation(
-      () => this.userApi.updateUser(user.id, { password }),
+      () => this.userApi.updateUser(user.id, { password }, stepUpToken),
       `已重置 ${user.name} 的密码`,
     );
   }
@@ -265,8 +274,21 @@ export class UsersPage implements OnInit, OnDestroy {
     if (!confirmed) {
       return;
     }
+    const stepUpToken = await this.stepUp(
+      'users.sensitive',
+      '敏感操作需要再认证',
+      `${action}用户前，请验证当前管理员密码和身份验证器验证码。`,
+    );
+    if (!stepUpToken) {
+      return;
+    }
     await this.runMutation(
-      () => this.userApi.updateUser(user.id, { status: activating ? 'active' : 'inactive' }),
+      () =>
+        this.userApi.updateUser(
+          user.id,
+          { status: activating ? 'active' : 'inactive' },
+          stepUpToken,
+        ),
       `已${action} ${user.name}`,
     );
   }
@@ -284,7 +306,18 @@ export class UsersPage implements OnInit, OnDestroy {
     if (!confirmed) {
       return;
     }
-    await this.runMutation(() => this.userApi.deleteUser(user.id), `已删除 ${user.name}`);
+    const stepUpToken = await this.stepUp(
+      'users.delete',
+      '删除用户需要再认证',
+      '删除后账号将立即停用，请验证当前管理员密码和身份验证器验证码。',
+    );
+    if (!stepUpToken) {
+      return;
+    }
+    await this.runMutation(
+      () => this.userApi.deleteUser(user.id, stepUpToken),
+      `已删除 ${user.name}`,
+    );
   }
 
   async deleteSelected(): Promise<void> {
@@ -295,10 +328,23 @@ export class UsersPage implements OnInit, OnDestroy {
     ) {
       return;
     }
-    await this.runMutation(
-      () => Promise.all(ids.map((id) => this.userApi.deleteUser(id))).then(() => undefined),
-      `已删除 ${ids.length} 个用户`,
+    const credentials = await this.stepUpCredentials(
+      '删除用户需要再认证',
+      '批量删除前，请验证当前管理员密码和身份验证器验证码。',
     );
+    if (!credentials) {
+      return;
+    }
+    await this.runMutation(async () => {
+      for (const id of ids) {
+        const token = await this.auth.issueStepUp(
+          'users.delete',
+          credentials.currentPassword,
+          credentials.totpCode,
+        );
+        await this.userApi.deleteUser(id, token.token);
+      }
+    }, `已删除 ${ids.length} 个用户`);
   }
 
   async changeSelectedRoles(): Promise<void> {
@@ -314,13 +360,23 @@ export class UsersPage implements OnInit, OnDestroy {
       if (!roleIds) {
         return;
       }
-      await this.runMutation(
-        () =>
-          Promise.all(ids.map((id) => this.userApi.assignUserRoles(id, roleIds))).then(
-            () => undefined,
-          ),
-        `已更新 ${ids.length} 个用户的角色`,
+      const credentials = await this.stepUpCredentials(
+        '角色分配需要再认证',
+        '批量更新角色前，请验证当前管理员密码和身份验证器验证码。',
       );
+      if (!credentials) {
+        return;
+      }
+      await this.runMutation(async () => {
+        for (const id of ids) {
+          const token = await this.auth.issueStepUp(
+            'users.roles.write',
+            credentials.currentPassword,
+            credentials.totpCode,
+          );
+          await this.userApi.assignUserRoles(id, roleIds, token.token);
+        }
+      }, `已更新 ${ids.length} 个用户的角色`);
     } catch (error) {
       this.showError(error, '角色数据加载失败');
     }
@@ -343,28 +399,61 @@ export class UsersPage implements OnInit, OnDestroy {
         return;
       }
       if (user) {
+        const updateRequest = {
+          displayName: result.displayName,
+          email: result.email || null,
+          ...(canManageStatus ? { status: result.status } : {}),
+          ...(canResetPassword && result.password ? { password: result.password } : {}),
+        };
+        const updateNeedsStepUp = canManageStatus || Boolean(canResetPassword && result.password);
+        const updateToken = updateNeedsStepUp
+          ? await this.stepUp(
+              'users.sensitive',
+              '敏感操作需要再认证',
+              '修改用户密码或状态前，请验证当前管理员密码和身份验证器验证码。',
+            )
+          : undefined;
+        if (updateNeedsStepUp && !updateToken) {
+          return;
+        }
+        const roleToken = canManageRoles
+          ? await this.stepUp(
+              'users.roles.write',
+              '角色分配需要再认证',
+              '更新用户角色前，请验证当前管理员密码和身份验证器验证码。',
+            )
+          : undefined;
+        if (canManageRoles && !roleToken) {
+          return;
+        }
         await this.runMutation(async () => {
-          await this.userApi.updateUser(user.id, {
-            displayName: result.displayName,
-            email: result.email || null,
-            ...(canManageStatus ? { status: result.status } : {}),
-            ...(canResetPassword && result.password ? { password: result.password } : {}),
-          });
+          await this.userApi.updateUser(user.id, updateRequest, updateToken);
           if (canManageRoles) {
-            await this.userApi.assignUserRoles(user.id, result.roleIds);
+            await this.userApi.assignUserRoles(user.id, result.roleIds, roleToken!);
           }
         }, `已更新 ${result.displayName}`);
       } else {
+        const createRequest = {
+          username: result.username,
+          password: result.password,
+          displayName: result.displayName,
+          email: result.email || null,
+          ...(canManageStatus ? { status: result.status } : {}),
+          ...(canManageRoles ? { roleIds: result.roleIds.map(Number) } : {}),
+        };
+        const createNeedsStepUp = canManageRoles && result.roleIds.length > 0;
+        const createToken = createNeedsStepUp
+          ? await this.stepUp(
+              'users.sensitive',
+              '敏感操作需要再认证',
+              '创建带有角色的用户前，请验证当前管理员密码和身份验证器验证码。',
+            )
+          : undefined;
+        if (createNeedsStepUp && !createToken) {
+          return;
+        }
         await this.runMutation(
-          () =>
-            this.userApi.createUser({
-              username: result.username,
-              password: result.password,
-              displayName: result.displayName,
-              email: result.email || null,
-              ...(canManageStatus ? { status: result.status } : {}),
-              ...(canManageRoles ? { roleIds: result.roleIds.map(Number) } : {}),
-            }),
+          () => this.userApi.createUser(createRequest, createToken),
           `已创建 ${result.displayName}`,
         );
       }
@@ -385,6 +474,33 @@ export class UsersPage implements OnInit, OnDestroy {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  private async stepUp(
+    scope: import('../../core/auth.service').StepUpScope,
+    title: string,
+    message: string,
+  ): Promise<string | undefined> {
+    const credentials = await this.stepUpCredentials(title, message);
+    if (!credentials) {
+      return undefined;
+    }
+    try {
+      return (await this.auth.issueStepUp(scope, credentials.currentPassword, credentials.totpCode))
+        .token;
+    } catch (error) {
+      this.showError(error, '身份再认证失败');
+      return undefined;
+    }
+  }
+
+  private stepUpCredentials(
+    title: string,
+    message: string,
+  ): Promise<StepUpCredentials | undefined> {
+    return firstValueFrom(
+      this.dialog.open(StepUpDialog, { data: { title, message } }).afterClosed(),
+    );
   }
 
   private userQuery(): UserListQuery {

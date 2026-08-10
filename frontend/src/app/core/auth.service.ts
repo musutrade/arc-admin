@@ -15,6 +15,7 @@ import { getCurrentUserPermissions } from '../generated/api/fn/auth/get-current-
 import { getCurrentUser } from '../generated/api/fn/auth/get-current-user';
 import { login as loginRequest } from '../generated/api/fn/auth/login';
 import { logout as logoutRequest } from '../generated/api/fn/auth/logout';
+import { issueStepUpToken } from '../generated/api/fn/auth/issue-step-up-token';
 import { regenerateCurrentUserRecoveryCodes } from '../generated/api/fn/auth/regenerate-current-user-recovery-codes';
 import { revokeCurrentUserPasskey } from '../generated/api/fn/auth/revoke-current-user-passkey';
 import { startCurrentUserPasskeyRegistration } from '../generated/api/fn/auth/start-current-user-passkey-registration';
@@ -26,7 +27,17 @@ import { LoginResponse } from '../generated/api/models/login-response';
 import { MfaFactorRevokeRequest } from '../generated/api/models/mfa-factor-revoke-request';
 import { MfaStatusResponse } from '../generated/api/models/mfa-status-response';
 import { RecoveryCodesResponse } from '../generated/api/models/recovery-codes-response';
+import { StepUpResponse } from '../generated/api/models/step-up-response';
 import { UserResponse } from '../generated/api/models/user-response';
+
+export type StepUpScope =
+  | 'auth.password.change'
+  | 'users.sensitive'
+  | 'users.roles.write'
+  | 'users.delete'
+  | 'roles.sensitive'
+  | 'roles.permissions.write'
+  | 'roles.delete';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -164,8 +175,25 @@ export class AuthService {
     return codes.every((code) => this.permissionState().has(code));
   }
 
-  async changePassword(request: ChangePasswordRequest): Promise<void> {
-    await this.api.invoke(changeCurrentUserPassword, { body: request });
+  async issueStepUp(
+    scope: StepUpScope,
+    currentPassword: string,
+    totpCode?: string,
+  ): Promise<StepUpResponse> {
+    return this.api.invoke(issueStepUpToken, {
+      body: {
+        scope,
+        currentPassword,
+        ...(totpCode?.trim() ? { totpCode: totpCode.trim() } : {}),
+      },
+    });
+  }
+
+  async changePassword(request: ChangePasswordRequest, stepUpToken: string): Promise<void> {
+    await this.api.invoke(changeCurrentUserPassword, {
+      body: request,
+      'X-Step-Up-Token': stepUpToken,
+    });
     this.clearSession();
   }
 

@@ -16,6 +16,7 @@ import { RoleApiService } from '../../core/api/role-api.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { ConfirmDialog } from '../../core/confirm.dialog';
+import { StepUpDialog } from '../../core/step-up.dialog';
 import { DataScope, Role, RolePermissionRow } from '../../core/models';
 import { AssignPermissionsDialog } from '../role-permissions/assign-permissions.dialog';
 import { RoleEditorDialog, RoleEditorResult } from './role-editor.dialog';
@@ -104,8 +105,16 @@ export class RolesPage implements OnInit {
     if (!confirmed) {
       return;
     }
+    const stepUpToken = await this.stepUp(
+      'roles.sensitive',
+      '敏感操作需要再认证',
+      `${action}角色前，请验证当前管理员密码和身份验证器验证码。`,
+    );
+    if (!stepUpToken) {
+      return;
+    }
     await this.runMutation(
-      () => this.roleApi.updateRole(role.id, { isActive: activating }),
+      () => this.roleApi.updateRole(role.id, { isActive: activating }, stepUpToken),
       `已${action} ${role.name}`,
     );
   }
@@ -130,7 +139,18 @@ export class RolesPage implements OnInit {
     if (!confirmed) {
       return;
     }
-    await this.runMutation(() => this.roleApi.deleteRole(role.id), `已删除 ${role.name}`);
+    const stepUpToken = await this.stepUp(
+      'roles.delete',
+      '删除角色需要再认证',
+      '删除角色前，请验证当前管理员密码和身份验证器验证码。',
+    );
+    if (!stepUpToken) {
+      return;
+    }
+    await this.runMutation(
+      () => this.roleApi.deleteRole(role.id, stepUpToken),
+      `已删除 ${role.name}`,
+    );
   }
 
   async onEditPermissions(role: Role): Promise<void> {
@@ -159,8 +179,16 @@ export class RolesPage implements OnInit {
           .afterClosed(),
       );
       if (permissionIds) {
+        const stepUpToken = await this.stepUp(
+          'roles.permissions.write',
+          '权限变更需要再认证',
+          '更新角色权限前，请验证当前管理员密码和身份验证器验证码。',
+        );
+        if (!stepUpToken) {
+          return;
+        }
         await this.runMutation(
-          () => this.roleApi.assignRolePermissions(role.id, permissionIds),
+          () => this.roleApi.assignRolePermissions(role.id, permissionIds, stepUpToken),
           `已更新 ${role.name} 的权限`,
         );
       }
@@ -177,17 +205,29 @@ export class RolesPage implements OnInit {
       return;
     }
     if (role) {
+      const stepUpToken = await this.stepUp(
+        'roles.sensitive',
+        '敏感操作需要再认证',
+        '修改角色前，请验证当前管理员密码和身份验证器验证码。',
+      );
+      if (!stepUpToken) {
+        return;
+      }
       await this.runMutation(
         () =>
-          this.roleApi.updateRole(role.id, {
-            name: result.name,
-            category: result.category,
-            icon: result.icon || null,
-            color: result.color,
-            description: result.description || null,
-            dataScope: result.dataScope,
-            isActive: result.isActive,
-          }),
+          this.roleApi.updateRole(
+            role.id,
+            {
+              name: result.name,
+              category: result.category,
+              icon: result.icon || null,
+              color: result.color,
+              description: result.description || null,
+              dataScope: result.dataScope,
+              isActive: result.isActive,
+            },
+            stepUpToken,
+          ),
         `已更新 ${result.name}`,
       );
     } else {
@@ -223,5 +263,25 @@ export class RolesPage implements OnInit {
 
   private showError(error: unknown, fallback: string): void {
     this.snackBar.open(apiErrorMessage(error, fallback), '关闭', { duration: 5000 });
+  }
+
+  private async stepUp(
+    scope: import('../../core/auth.service').StepUpScope,
+    title: string,
+    message: string,
+  ): Promise<string | undefined> {
+    const credentials = await firstValueFrom(
+      this.dialog.open(StepUpDialog, { data: { title, message } }).afterClosed(),
+    );
+    if (!credentials) {
+      return undefined;
+    }
+    try {
+      return (await this.auth.issueStepUp(scope, credentials.currentPassword, credentials.totpCode))
+        .token;
+    } catch (error) {
+      this.showError(error, '身份再认证失败');
+      return undefined;
+    }
   }
 }

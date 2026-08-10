@@ -116,13 +116,29 @@ describe('AuthService', () => {
       currentPassword: 'current-password',
       newPassword: 'updated-password',
     };
-    const result = service.changePassword(request);
+    const result = service.changePassword(request, 'step-up-token');
     const apiRequest = http.expectOne('/api/v1/auth/me/password');
 
     expect(apiRequest.request.method).toBe('PUT');
     expect(apiRequest.request.body).toEqual(request);
+    expect(apiRequest.request.headers.get('X-Step-Up-Token')).toBe('step-up-token');
     apiRequest.flush(null, { status: 204, statusText: 'No Content' });
     await result;
     expect(service.currentUser()).toBeNull();
+  });
+
+  it('issues a scoped step-up token with the current credentials', async () => {
+    const result = service.issueStepUp('users.delete', 'current-password', '123456');
+    const request = http.expectOne('/api/v1/auth/me/step-up');
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      scope: 'users.delete',
+      currentPassword: 'current-password',
+      totpCode: '123456',
+    });
+    request.flush({ token: 'step-up-token', expiresAt: '2026-08-01T00:05:00Z' });
+
+    await expect(result).resolves.toEqual(expect.objectContaining({ token: 'step-up-token' }));
   });
 });

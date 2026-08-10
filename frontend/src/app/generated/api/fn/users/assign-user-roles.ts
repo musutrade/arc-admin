@@ -15,6 +15,11 @@ export interface AssignUserRoles$Params {
  * 用户 ID
  */
   id: number;
+
+/**
+ * 角色分配再认证凭据
+ */
+  'X-Step-Up-Token': string;
       body: AssignRolesRequest
 }
 
@@ -22,6 +27,7 @@ export function assignUserRoles(http: HttpClient, rootUrl: string, params: Assig
   const rb = new RequestBuilder(rootUrl, assignUserRoles.PATH, 'put');
   if (params) {
     rb.path('id', params.id, {});
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
     rb.body(params.body, 'application/json');
   }
 

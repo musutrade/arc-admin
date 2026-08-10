@@ -39,23 +39,35 @@ export class RoleApiService {
     return response.permissionIds.map(String);
   }
 
-  async createRole(request: CreateRoleRequest): Promise<Role> {
-    const role = await this.api.invoke(createRole, { body: request });
+  async createRole(request: CreateRoleRequest, stepUpToken?: string): Promise<Role> {
+    const role = await this.api.invoke(createRole, {
+      body: request,
+      'X-Step-Up-Token': stepUpToken,
+    });
     return mapRole(role);
   }
 
-  async updateRole(id: string, request: UpdateRoleRequest): Promise<Role> {
-    const role = await this.api.invoke(updateRole, { id: Number(id), body: request });
+  async updateRole(id: string, request: UpdateRoleRequest, stepUpToken?: string): Promise<Role> {
+    const role = await this.api.invoke(updateRole, {
+      id: Number(id),
+      body: request,
+      'X-Step-Up-Token': stepUpToken,
+    });
     return mapRole(role);
   }
 
-  async deleteRole(id: string): Promise<void> {
-    await this.api.invoke(deleteRole, { id: Number(id) });
+  async deleteRole(id: string, stepUpToken: string): Promise<void> {
+    await this.api.invoke(deleteRole, { id: Number(id), 'X-Step-Up-Token': stepUpToken });
   }
 
-  async assignRolePermissions(roleId: string, permissionIds: string[]): Promise<void> {
+  async assignRolePermissions(
+    roleId: string,
+    permissionIds: string[],
+    stepUpToken: string,
+  ): Promise<void> {
     await this.api.invoke(updateRolePermissions, {
       id: Number(roleId),
+      'X-Step-Up-Token': stepUpToken,
       body: {
         permissionIds: permissionIds.map(Number),
       },

@@ -3,6 +3,7 @@ import type {
   ChangePasswordRequest,
   CreateUserRequest,
   RoleResponse as ApiRole,
+  StepUpRequest,
   UpdateRoleRequest,
   UpdateUserRequest,
   UserResponse as ApiUser,
@@ -69,6 +70,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   let users: ApiUser[] = [administrator];
   let createdRequest: Record<string, unknown> | null = null;
   let passwordChangeRequest: ChangePasswordRequest | null = null;
+  let stepUpRequests: StepUpRequest[] = [];
   let roleStatusUpdateRequest: UpdateRoleRequest | null = null;
   let statusUpdateRequest: UpdateUserRequest | null = null;
 
@@ -104,6 +106,11 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       await route.fulfill({ json: { codes: permissions } });
     } else if (path === '/api/v1/auth/logout') {
       await route.fulfill({ status: 204 });
+    } else if (path === '/api/v1/auth/me/step-up' && request.method() === 'POST') {
+      stepUpRequests.push(request.postDataJSON() as StepUpRequest);
+      await route.fulfill({
+        json: { token: 'step-up-token', expiresAt: '2026-08-01T00:05:00Z' },
+      });
     } else if (path === '/api/v1/auth/me/password' && request.method() === 'PUT') {
       passwordChangeRequest = request.postDataJSON() as ChangePasswordRequest;
       await route.fulfill({ status: 204 });
@@ -212,6 +219,15 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   }
   await page.getByRole('menuitem', { name: '修改密码' }).click();
 
+  const completeStepUp = async (title: string) => {
+    const stepUpDialog = page.getByRole('dialog');
+    await expect(stepUpDialog.getByRole('heading', { name: title })).toBeVisible();
+    await stepUpDialog.getByLabel('当前密码').fill('safe-password');
+    await stepUpDialog.getByLabel('身份验证器验证码').fill('123456');
+    await stepUpDialog.getByRole('button', { name: '继续' }).click();
+    await expect(stepUpDialog).toBeHidden();
+  };
+
   const changePasswordDialog = page.getByRole('dialog');
   await expect(changePasswordDialog.getByRole('heading', { name: '修改密码' })).toBeVisible();
   await changePasswordDialog.locator('.editor-dialog').evaluate(async (element) => {
@@ -222,6 +238,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   const currentPassword = changePasswordDialog.locator('#current-password');
   const newPassword = changePasswordDialog.locator('#new-password');
   const confirmPassword = changePasswordDialog.locator('#confirm-password');
+  const totpCode = changePasswordDialog.locator('#totp-code');
   await currentPassword.fill('safe-password');
   await newPassword.fill('updated-safe-password');
   await confirmPassword.fill('different-password');
@@ -230,6 +247,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await confirmPassword.fill('updated-safe-password');
   await confirmPassword.blur();
   await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeHidden();
+  await totpCode.fill('123456');
   const savePassword = changePasswordDialog.getByRole('button', { name: '保存修改' });
   await expect(savePassword).toBeEnabled();
 
@@ -309,6 +327,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await page.getByLabel('邮箱').fill('new.user@example.test');
   await page.getByLabel('角色').selectOption({ label: '查看者' });
   await page.getByRole('button', { name: '保存用户' }).click();
+  await completeStepUp('敏感操作需要再认证');
 
   await expect(page.getByText('新用户', { exact: true })).toBeVisible();
   expect(createdRequest).toMatchObject({
@@ -359,6 +378,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     await page.screenshot({ path: testInfo.outputPath('deactivate-user-dialog.png') });
   }
   await deactivateDialog.getByRole('button', { name: '停用用户' }).click();
+  await completeStepUp('敏感操作需要再认证');
   await expect(createdUserRow.getByText('停用', { exact: true })).toBeVisible();
   expect(statusUpdateRequest).toEqual({ status: 'inactive' });
   await expect(createdUserRow.getByRole('button', { name: '启用用户 新用户' })).toBeVisible();
@@ -429,6 +449,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     });
   }
   await deactivateRoleDialog.getByRole('button', { name: '停用角色' }).click();
+  await completeStepUp('敏感操作需要再认证');
   await expect(deactivateRoleDialog).toBeHidden();
   await expect(viewerCard.getByText('停用', { exact: true })).toBeVisible();
   expect(roleStatusUpdateRequest).toEqual({ isActive: false });
@@ -455,6 +476,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await expect(activateRoleDialog.getByRole('heading', { name: '启用角色' })).toBeVisible();
   await expect(activateRoleDialog).toContainText('1 名成员将重新获得该角色授予的权限');
   await activateRoleDialog.getByRole('button', { name: '启用角色' }).click();
+  await completeStepUp('敏感操作需要再认证');
   await expect(activateRoleDialog).toBeHidden();
   await expect(viewerRow.getByText('启用', { exact: true })).toBeVisible();
   expect(roleStatusUpdateRequest).toEqual({ isActive: true });

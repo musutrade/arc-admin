@@ -2,14 +2,17 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormField, form, maxLength, required, submit } from '@angular/forms/signals';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { firstValueFrom } from 'rxjs';
 import { Router } from '@angular/router';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { MfaStatusResponse } from '../../generated/api/models/mfa-status-response';
+import { StepUpDialog, StepUpCredentials } from '../../core/step-up.dialog';
 
 @Component({
   selector: 'app-security',
-  imports: [FormField, MatIconModule, MatProgressSpinnerModule],
+  imports: [FormField, MatDialogModule, MatIconModule, MatProgressSpinnerModule],
   templateUrl: './security.html',
   styleUrl: './security.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -21,10 +24,10 @@ export class SecurityPage {
   readonly error = signal<string | null>(null);
   readonly message = signal<string | null>(null);
   readonly recoveryCodes = signal<readonly string[]>([]);
-  readonly revokePasskeyId = signal<number | null>(null);
   readonly auth = inject(AuthService);
 
   private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
   readonly registrationModel = signal({ name: '', currentPassword: '', totpCode: '' });
   readonly registrationForm = form(this.registrationModel, (path) => {
@@ -35,11 +38,6 @@ export class SecurityPage {
   });
   readonly recoveryModel = signal({ currentPassword: '', totpCode: '' });
   readonly recoveryForm = form(this.recoveryModel, (path) => {
-    required(path.currentPassword, { message: '请输入当前密码' });
-    required(path.totpCode, { message: '请输入身份验证器验证码' });
-  });
-  readonly revokeModel = signal({ currentPassword: '', totpCode: '' });
-  readonly revokeForm = form(this.revokeModel, (path) => {
     required(path.currentPassword, { message: '请输入当前密码' });
     required(path.totpCode, { message: '请输入身份验证器验证码' });
   });
@@ -71,27 +69,23 @@ export class SecurityPage {
     });
   }
 
-  confirmRevoke(id: number): void {
-    this.revokePasskeyId.set(id);
-    this.revokeModel.set({ currentPassword: '', totpCode: '' });
-    this.error.set(null);
-  }
-
-  cancelRevoke(): void {
-    this.revokePasskeyId.set(null);
-    this.error.set(null);
-  }
-
-  revokePasskey(): void {
-    const id = this.revokePasskeyId();
-    if (id === null) {
+  async confirmRevoke(id: number): Promise<void> {
+    const credentials: StepUpCredentials | undefined = await firstValueFrom(
+      this.dialog
+        .open(StepUpDialog, {
+          data: {
+            title: '撤销通行密钥需要再认证',
+            message: '撤销后全部会话将立即失效，请验证当前密码和身份验证器验证码。',
+          },
+        })
+        .afterClosed(),
+    );
+    if (!credentials) {
       return;
     }
-    submit(this.revokeForm, async () => {
-      await this.run(async () => {
-        await this.auth.revokePasskey(id, this.revokeModel());
-        await this.router.navigate(['/login']);
-      });
+    await this.run(async () => {
+      await this.auth.revokePasskey(id, credentials);
+      await this.router.navigate(['/login']);
     });
   }
 

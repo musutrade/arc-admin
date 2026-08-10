@@ -14,8 +14,8 @@ use crate::models::{
     MfaStatusResponse, MfaWebauthnChallengeResponse, PageAuditLog, PageQuery, PageUser,
     PermissionCodes, PermissionGroupResponse, PermissionResponse, PermissionTypeSchema,
     ReadinessResponse, RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse,
-    SortDirectionSchema, UpdateRolePermissionsRequest, UpdateRoleRequest, UpdateUserRequest,
-    UserResponse, UserSortBySchema, UserStatusSchema,
+    SortDirectionSchema, StepUpRequest, StepUpResponse, UpdateRolePermissionsRequest,
+    UpdateRoleRequest, UpdateUserRequest, UserResponse, UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -92,7 +92,10 @@ fn current_user() {}
     operation_id = "changeCurrentUserPassword",
     tag = "auth",
     security(("cookieAuth" = [])),
-    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    params(
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "密码修改再认证凭据")
+    ),
     request_body = ChangePasswordRequest,
     responses(
         (status = 204, description = "密码已修改，现有会话已撤销"),
@@ -101,6 +104,23 @@ fn current_user() {}
     )
 )]
 fn change_current_user_password() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/me/step-up",
+    operation_id = "issueStepUpToken",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    request_body = StepUpRequest,
+    responses(
+        (status = 200, description = "再认证凭据已签发", body = StepUpResponse),
+        (status = 401, description = "当前密码或验证码无效", body = ErrorEnvelope),
+        (status = 403, description = "该操作需要身份验证器验证码", body = ErrorEnvelope),
+        (status = 422, description = "操作范围无效", body = ErrorEnvelope)
+    )
+)]
+fn issue_step_up_token() {}
 
 #[utoipa::path(
     get,
@@ -267,7 +287,10 @@ fn list_users() {}
     operation_id = "createUser",
     tag = "users",
     security(("cookieAuth" = [])),
-    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    params(
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = Option<String>, Header, description = "敏感操作再认证凭据")
+    ),
     request_body = CreateUserRequest,
     responses(
         (status = 201, description = "用户已创建", body = UserResponse),
@@ -300,7 +323,8 @@ fn get_user() {}
     security(("cookieAuth" = [])),
     params(
         ("id" = i64, Path, description = "用户 ID"),
-        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = Option<String>, Header, description = "敏感操作再认证凭据")
     ),
     request_body = UpdateUserRequest,
     responses(
@@ -320,7 +344,8 @@ fn update_user() {}
     security(("cookieAuth" = [])),
     params(
         ("id" = i64, Path, description = "用户 ID"),
-        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "用户删除再认证凭据")
     ),
     responses(
         (status = 204, description = "用户已删除"),
@@ -338,7 +363,8 @@ fn delete_user() {}
     security(("cookieAuth" = [])),
     params(
         ("id" = i64, Path, description = "用户 ID"),
-        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "角色分配再认证凭据")
     ),
     request_body = AssignRolesRequest,
     responses(
@@ -366,7 +392,10 @@ fn list_roles() {}
     operation_id = "createRole",
     tag = "roles",
     security(("cookieAuth" = [])),
-    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    params(
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = Option<String>, Header, description = "权限变更再认证凭据")
+    ),
     request_body = CreateRoleRequest,
     responses(
         (status = 201, description = "角色已创建", body = RoleResponse),
@@ -399,7 +428,8 @@ fn get_role() {}
     security(("cookieAuth" = [])),
     params(
         ("id" = i64, Path, description = "角色 ID"),
-        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = Option<String>, Header, description = "敏感操作再认证凭据")
     ),
     request_body = UpdateRoleRequest,
     responses(
@@ -419,7 +449,8 @@ fn update_role() {}
     security(("cookieAuth" = [])),
     params(
         ("id" = i64, Path, description = "角色 ID"),
-        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "角色删除再认证凭据")
     ),
     responses(
         (status = 204, description = "角色已删除"),
@@ -452,7 +483,8 @@ fn get_role_permissions() {}
     security(("cookieAuth" = [])),
     params(
         ("id" = i64, Path, description = "角色 ID"),
-        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "权限分配再认证凭据")
     ),
     request_body = UpdateRolePermissionsRequest,
     responses(
@@ -512,6 +544,7 @@ fn list_audit_logs() {}
         logout,
         current_user,
         change_current_user_password,
+        issue_step_up_token,
         current_user_permissions,
         verify_mfa_totp,
         verify_mfa_recovery_code,
@@ -555,6 +588,8 @@ fn list_audit_logs() {}
         PermissionGroupResponse,
         LoginRequest,
         ChangePasswordRequest,
+        StepUpRequest,
+        StepUpResponse,
         LoginStatusSchema,
         MfaMethodSchema,
         LoginResponse,

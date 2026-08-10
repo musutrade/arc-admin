@@ -2,19 +2,6 @@
   display: block;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  h1 {
-    margin: 0 0 4px;
-    font-size: 24px;
-  }
-  p {
-    margin: 0;
-    color: var(--ui-color-text-secondary);
-  }
-}
 .loading-state {
   display: grid;
   place-items: center;
@@ -46,15 +33,24 @@
   width: 44px;
   height: 44px;
   border-radius: var(--ui-radius-lg);
-  background: var(--ui-color-success-soft);
-  color: var(--ui-color-success);
+  background: var(--ui-color-surface-subtle);
+  color: var(--ui-color-text-secondary);
+
+  &.active {
+    background: var(--ui-color-success-soft);
+    color: var(--ui-color-success);
+  }
 }
 .status-label {
   padding: 4px 8px;
-  border: 1px solid var(--ui-color-success-border);
+  border: 1px solid var(--ui-color-border-strong);
   border-radius: var(--ui-radius-md);
-  color: var(--ui-color-success);
+  color: var(--ui-color-text-secondary);
   font-size: 12px;
+}
+.status-band:not(.inactive) .status-label {
+  border-color: var(--ui-color-success-border);
+  color: var(--ui-color-success);
 }
 .section-heading {
   display: flex;
@@ -162,34 +158,6 @@ button {
   font: inherit;
   cursor: pointer;
 }
-.primary-btn,
-.secondary-btn,
-.danger-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: fit-content;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: var(--ui-radius-lg);
-  font-size: 14px;
-}
-.primary-btn {
-  border: 0;
-  background: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
-}
-.secondary-btn {
-  border: 1px solid var(--ui-color-border-strong);
-  background: transparent;
-  color: var(--ui-color-text-primary);
-}
-.danger-btn {
-  border: 0;
-  background: var(--ui-color-error);
-  color: var(--ui-color-on-solid);
-}
 .icon-btn {
   display: grid;
   place-items: center;
@@ -249,27 +217,6 @@ button {
   justify-content: flex-end;
   gap: 10px;
 }
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: var(--ui-color-overlay);
-}
-.confirm-dialog {
-  width: min(440px, 100%);
-  padding: 24px;
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-color-surface-panel);
-  box-shadow: var(--mat-sys-elevation-level3);
-  form {
-    display: grid;
-    gap: 14px;
-  }
-}
-
 @media (max-width: 800px) {
   .form-grid,
   .form-grid.three {

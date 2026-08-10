@@ -361,6 +361,21 @@ pub struct ChangePasswordRequest {
     pub new_password: String,
 }
 
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StepUpRequest {
+    pub current_password: String,
+    pub totp_code: Option<String>,
+    pub scope: String,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StepUpResponse {
+    pub token: String,
+    pub expires_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum LoginStatusSchema {

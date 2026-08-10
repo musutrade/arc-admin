@@ -11,12 +11,18 @@ import { CreateRoleRequest } from '../../models/create-role-request';
 import { RoleResponse } from '../../models/role-response';
 
 export interface CreateRole$Params {
+
+/**
+ * 权限变更再认证凭据
+ */
+  'X-Step-Up-Token'?: (string | null);
       body: CreateRoleRequest
 }
 
 export function createRole(http: HttpClient, rootUrl: string, params: CreateRole$Params, context?: HttpContext): Observable<StrictHttpResponse<RoleResponse>> {
   const rb = new RequestBuilder(rootUrl, createRole.PATH, 'post');
   if (params) {
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
     rb.body(params.body, 'application/json');
   }
 

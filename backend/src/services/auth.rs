@@ -379,15 +379,7 @@ pub async fn change_password(
         return Err(ApiError::validation("新密码不能与当前密码相同"));
     }
 
-    let row = repositories::users::find_by_id(pool, user_id)
-        .await
-        .map_err(db_error)?
-        .ok_or_else(ApiError::unauthorized)?;
-    let parsed = PasswordHash::new(&row.password_hash)
-        .map_err(|error| ApiError::internal(format!("invalid stored password hash: {error}")))?;
-    Argon2::default()
-        .verify_password(req.current_password.as_bytes(), &parsed)
-        .map_err(|_| ApiError::validation("当前密码不正确"))?;
+    verify_current_password(pool, user_id, &req.current_password).await?;
 
     let password_hash = hash_password(&req.new_password)?;
     let mut transaction = pool.begin().await.map_err(db_error)?;
@@ -422,6 +414,22 @@ pub async fn change_password(
     .map_err(db_error)?;
     transaction.commit().await.map_err(db_error)?;
     Ok(())
+}
+
+pub async fn verify_current_password(
+    pool: &PgPool,
+    user_id: i64,
+    password: &str,
+) -> Result<(), ApiError> {
+    let row = repositories::users::find_by_id(pool, user_id)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(ApiError::unauthorized)?;
+    let parsed = PasswordHash::new(&row.password_hash)
+        .map_err(|error| ApiError::internal(format!("invalid stored password hash: {error}")))?;
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .map_err(|_| ApiError::validation("当前密码不正确"))
 }
 
 pub async fn permission_codes(pool: &PgPool, user_id: i64) -> Result<PermissionCodes, ApiError> {

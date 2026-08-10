@@ -16,6 +16,11 @@ export interface UpdateUser$Params {
  * 用户 ID
  */
   id: number;
+
+/**
+ * 敏感操作再认证凭据
+ */
+  'X-Step-Up-Token'?: (string | null);
       body: UpdateUserRequest
 }
 
@@ -23,6 +28,7 @@ export function updateUser(http: HttpClient, rootUrl: string, params: UpdateUser
   const rb = new RequestBuilder(rootUrl, updateUser.PATH, 'put');
   if (params) {
     rb.path('id', params.id, {});
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
     rb.body(params.body, 'application/json');
   }
 

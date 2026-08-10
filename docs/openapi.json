@@ -497,6 +497,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "密码修改再认证凭据",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -560,6 +569,82 @@
           },
           "401": {
             "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/me/step-up": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "issueStepUpToken",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "再认证凭据已签发",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "当前密码或验证码无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "该操作需要身份验证器验证码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "操作范围无效",
             "content": {
               "application/json": {
                 "schema": {
@@ -900,6 +985,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "权限变更再认证凭据",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -1031,6 +1128,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "敏感操作再认证凭据",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -1111,6 +1220,15 @@
             "name": "X-CSRF-Token",
             "in": "header",
             "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "角色删除再认证凭据",
             "required": true,
             "schema": {
               "type": "string"
@@ -1225,6 +1343,15 @@
             "name": "X-CSRF-Token",
             "in": "header",
             "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "权限分配再认证凭据",
             "required": true,
             "schema": {
               "type": "string"
@@ -1411,6 +1538,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "敏感操作再认证凭据",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -1542,6 +1681,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "敏感操作再认证凭据",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -1626,6 +1777,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "用户删除再认证凭据",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1681,6 +1841,15 @@
             "name": "X-CSRF-Token",
             "in": "header",
             "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Step-Up-Token",
+            "in": "header",
+            "description": "角色分配再认证凭据",
             "required": true,
             "schema": {
               "type": "string"
@@ -2553,6 +2722,43 @@
           "asc",
           "desc"
         ]
+      },
+      "StepUpRequest": {
+        "type": "object",
+        "required": [
+          "currentPassword",
+          "scope"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "totpCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "StepUpResponse": {
+        "type": "object",
+        "required": [
+          "token",
+          "expiresAt"
+        ],
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
       },
       "UpdateRolePermissionsRequest": {
         "type": "object",

@@ -18,6 +18,8 @@ use tower::ServiceExt;
 
 #[derive(Debug)]
 struct TestSession {
+    username: String,
+    password: String,
     cookie_header: String,
     csrf_token: String,
     session_token: String,
@@ -80,7 +82,134 @@ async fn send(
     session: Option<&TestSession>,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
+    if let (Some(session), Some(scope)) = (session, sensitive_scope(&method, uri, body.as_ref())) {
+        let step_up_token = issue_step_up(app, session, scope).await;
+        return response_json(
+            request_with_step_up(app, method, uri, session, body, &step_up_token).await,
+        )
+        .await;
+    }
     response_json(request(app, method, uri, session, body, true, None).await).await
+}
+
+fn sensitive_scope(method: &Method, uri: &str, body: Option<&Value>) -> Option<&'static str> {
+    let path = uri.split('?').next().unwrap_or(uri);
+    let object = body.and_then(Value::as_object);
+    match (method, path) {
+        (&Method::PUT, "/api/v1/auth/me/password") => Some("auth.password.change"),
+        (&Method::DELETE, path) if path.starts_with("/api/v1/users/") => {
+            if path.ends_with("/roles") {
+                None
+            } else {
+                Some("users.delete")
+            }
+        }
+        (&Method::PUT, path) if path.starts_with("/api/v1/users/") && path.ends_with("/roles") => {
+            Some("users.roles.write")
+        }
+        (&Method::POST, "/api/v1/users") => {
+            let has_roles = object
+                .and_then(|value| value.get("roleIds"))
+                .and_then(Value::as_array)
+                .is_some_and(|ids| !ids.is_empty());
+            let has_inactive_status = object
+                .and_then(|value| value.get("status"))
+                .and_then(Value::as_str)
+                .is_some_and(|status| status != "active");
+            (has_roles || has_inactive_status).then_some("users.sensitive")
+        }
+        (&Method::PUT, path) if path.starts_with("/api/v1/users/") => object
+            .is_some_and(|value| value.contains_key("password") || value.contains_key("status"))
+            .then_some("users.sensitive"),
+        (&Method::DELETE, path) if path.starts_with("/api/v1/roles/") => {
+            (!path.ends_with("/permissions")).then_some("roles.delete")
+        }
+        (&Method::PUT, path)
+            if path.starts_with("/api/v1/roles/") && path.ends_with("/permissions") =>
+        {
+            Some("roles.permissions.write")
+        }
+        (&Method::POST, "/api/v1/roles") => {
+            let has_permissions = object
+                .and_then(|value| value.get("permissionIds"))
+                .and_then(Value::as_array)
+                .is_some_and(|ids| !ids.is_empty());
+            has_permissions.then_some("roles.permissions.write")
+        }
+        (&Method::PUT, path) if path.starts_with("/api/v1/roles/") => object
+            .is_some_and(|value| value.contains_key("dataScope") || value.contains_key("isActive"))
+            .then_some("roles.sensitive"),
+        _ => None,
+    }
+}
+
+async fn issue_step_up(app: &Router, session: &TestSession, scope: &str) -> String {
+    let totp_code = MFA_TEST_SECRETS
+        .get()
+        .and_then(|secrets| secrets.lock().ok())
+        .and_then(|secrets| secrets.get(&session.username).cloned())
+        .map(|secret| {
+            TOTP::new(
+                Algorithm::SHA1,
+                6,
+                1,
+                30,
+                Secret::Encoded(secret)
+                    .to_bytes()
+                    .expect("TOTP secret bytes"),
+                None,
+                session.username.clone(),
+            )
+            .expect("test TOTP")
+            .generate_current()
+            .expect("current TOTP code")
+        });
+    let (status, body) = response_json(
+        request(
+            app,
+            Method::POST,
+            "/api/v1/auth/me/step-up",
+            Some(session),
+            Some(json!({
+                "currentPassword": session.password,
+                "totpCode": totp_code,
+                "scope": scope,
+            })),
+            true,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "step-up failed: {body}");
+    body["token"].as_str().expect("step-up token").to_string()
+}
+
+async fn request_with_step_up(
+    app: &Router,
+    method: Method,
+    uri: &str,
+    session: &TestSession,
+    body: Option<Value>,
+    step_up_token: &str,
+) -> Response<Body> {
+    let mut builder = Request::builder()
+        .method(method.clone())
+        .uri(uri)
+        .header(COOKIE, &session.cookie_header)
+        .header("x-csrf-token", &session.csrf_token)
+        .header("x-step-up-token", step_up_token);
+    let body = match body {
+        Some(value) => {
+            builder = builder.header(CONTENT_TYPE, "application/json");
+            Body::from(value.to_string())
+        }
+        None => Body::empty(),
+    };
+    app.clone()
+        .oneshot(builder.body(body).expect("build request"))
+        .await
+        .expect("router response")
 }
 
 async fn send_from_ip(
@@ -113,7 +242,7 @@ async fn login(
         None,
     )
     .await;
-    let (status, body, session) = decode_login_response(response).await;
+    let (status, body, session) = decode_login_response(response, username, password).await;
     if status != StatusCode::OK || session.is_some() || body["status"] == "authenticated" {
         return (status, body, session);
     }
@@ -165,13 +294,15 @@ async fn login(
         None,
     )
     .await;
-    decode_login_response(response).await
+    decode_login_response(response, username, password).await
 }
 
 static MFA_TEST_SECRETS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 async fn decode_login_response(
     response: Response<Body>,
+    username: &str,
+    password: &str,
 ) -> (StatusCode, Value, Option<TestSession>) {
     let cookies = response
         .headers()
@@ -208,6 +339,8 @@ async fn decode_login_response(
                     .1
                     .to_string();
                 TestSession {
+                    username: username.to_string(),
+                    password: password.to_string(),
                     cookie_header: format!("{session_cookie}; {csrf_cookie}"),
                     csrf_token,
                     session_token,
@@ -478,6 +611,60 @@ async fn login_and_user_crud_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, error) = response_json(
+        request(
+            &app,
+            Method::PUT,
+            "/api/v1/auth/me/password",
+            Some(token),
+            Some(json!({
+                "currentPassword": "integration-admin-password",
+                "newPassword": "updated-integration-admin-password"
+            })),
+            true,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(error["error"]["message"], "需要先完成身份再认证");
+
+    let replay_token = issue_step_up(&app, token, "auth.password.change").await;
+    let (status, _) = response_json(
+        request_with_step_up(
+            &app,
+            Method::PUT,
+            "/api/v1/auth/me/password",
+            token,
+            Some(json!({
+                "currentPassword": "integration-admin-password",
+                "newPassword": "short"
+            })),
+            &replay_token,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, error) = response_json(
+        request_with_step_up(
+            &app,
+            Method::PUT,
+            "/api/v1/auth/me/password",
+            token,
+            Some(json!({
+                "currentPassword": "integration-admin-password",
+                "newPassword": "updated-integration-admin-password"
+            })),
+            &replay_token,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(error["error"]["message"], "再认证凭据已失效或已使用");
 
     let (status, error) = send(
         &app,

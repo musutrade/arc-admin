@@ -107,6 +107,20 @@ import { AuthService } from './auth.service';
             <small>{{ passwordForm.confirmPassword().errors()[0].message }}</small>
           }
         </div>
+
+        <div class="form-field">
+          <label for="totp-code">身份验证器验证码</label>
+          <input
+            id="totp-code"
+            [formField]="passwordForm.totpCode"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            placeholder="已启用时填写"
+          />
+          @if (passwordForm.totpCode().touched() && passwordForm.totpCode().errors().length) {
+            <small>{{ passwordForm.totpCode().errors()[0].message }}</small>
+          }
+        </div>
       </div>
 
       @if (errorMessage()) {
@@ -147,6 +161,7 @@ export class ChangePasswordDialog {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
+    totpCode: '',
   });
   readonly passwordForm = form(this.passwordModel, (path) => {
     required(path.currentPassword, { message: '请输入当前密码' });
@@ -159,6 +174,7 @@ export class ChangePasswordDialog {
         : undefined,
     );
     required(path.confirmPassword, { message: '请再次输入新密码' });
+    maxLength(path.totpCode, 12, { message: '验证码不能超过 12 位' });
     validate(path.confirmPassword, ({ value, valueOf }) =>
       value().length > 0 && value() !== valueOf(path.newPassword)
         ? { kind: 'passwordMismatch', message: '两次输入的新密码不一致' }
@@ -177,7 +193,13 @@ export class ChangePasswordDialog {
       this.errorMessage.set('');
       try {
         const { currentPassword, newPassword } = this.passwordModel();
-        await this.auth.changePassword({ currentPassword, newPassword });
+        const { totpCode } = this.passwordModel();
+        const stepUp = await this.auth.issueStepUp(
+          'auth.password.change',
+          currentPassword,
+          totpCode,
+        );
+        await this.auth.changePassword({ currentPassword, newPassword }, stepUp.token);
         this.dialogRef.close(true);
       } catch (error) {
         this.errorMessage.set(apiErrorMessage(error, '密码修改失败，请稍后重试'));

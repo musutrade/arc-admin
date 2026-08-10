@@ -82,10 +82,11 @@ describe('UserApiService', () => {
   });
 
   it('sends numeric role ids when assigning user roles', async () => {
-    const result = service.assignUserRoles('7', ['2', '4']);
+    const result = service.assignUserRoles('7', ['2', '4'], 'step-up-token');
     const request = http.expectOne('/api/v1/users/7/roles');
     expect(request.request.method).toBe('PUT');
     expect(request.request.body).toEqual({ roleIds: [2, 4] });
+    expect(request.request.headers.get('X-Step-Up-Token')).toBe('step-up-token');
     request.flush(null);
     await result;
   });

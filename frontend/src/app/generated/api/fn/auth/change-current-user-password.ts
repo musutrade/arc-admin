@@ -10,12 +10,18 @@ import { RequestBuilder } from '../../request-builder';
 import { ChangePasswordRequest } from '../../models/change-password-request';
 
 export interface ChangeCurrentUserPassword$Params {
+
+/**
+ * 密码修改再认证凭据
+ */
+  'X-Step-Up-Token': string;
       body: ChangePasswordRequest
 }
 
 export function changeCurrentUserPassword(http: HttpClient, rootUrl: string, params: ChangeCurrentUserPassword$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, changeCurrentUserPassword.PATH, 'put');
   if (params) {
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
     rb.body(params.body, 'application/json');
   }
 

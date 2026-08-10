@@ -16,6 +16,7 @@ import { RoleApiService } from '../../core/api/role-api.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { RolePermissionRow } from '../../core/models';
+import { StepUpDialog } from '../../core/step-up.dialog';
 import { AssignPermissionsDialog } from './assign-permissions.dialog';
 import { RoleEditorDialog, RoleEditorResult } from '../roles/role-editor.dialog';
 
@@ -75,8 +76,26 @@ export class RolePermissionsPage implements OnInit {
       if (!permissionIds) {
         return;
       }
+      const credentials = await firstValueFrom(
+        this.dialog
+          .open(StepUpDialog, {
+            data: {
+              title: '权限变更需要再认证',
+              message: '更新角色权限前，请验证当前管理员密码和身份验证器验证码。',
+            },
+          })
+          .afterClosed(),
+      );
+      if (!credentials) {
+        return;
+      }
       this.busy.set(true);
-      await this.roleApi.assignRolePermissions(row.roleId, permissionIds);
+      const stepUpToken = await this.auth.issueStepUp(
+        'roles.permissions.write',
+        credentials.currentPassword,
+        credentials.totpCode,
+      );
+      await this.roleApi.assignRolePermissions(row.roleId, permissionIds, stepUpToken.token);
       await this.auth.refreshSession();
       this.snackBar.open(`已更新 ${row.roleName} 的权限`, '关闭', { duration: 3000 });
       await this.loadRows();

@@ -62,10 +62,11 @@ describe('RoleApiService', () => {
   });
 
   it('sends numeric permission ids when assigning a role', async () => {
-    const result = service.assignRolePermissions('3', ['7', '9']);
+    const result = service.assignRolePermissions('3', ['7', '9'], 'step-up-token');
     const request = http.expectOne('/api/v1/roles/3/permissions');
     expect(request.request.method).toBe('PUT');
     expect(request.request.body).toEqual({ permissionIds: [7, 9] });
+    expect(request.request.headers.get('X-Step-Up-Token')).toBe('step-up-token');
     request.flush(null);
     await result;
   });

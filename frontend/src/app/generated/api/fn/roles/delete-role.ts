@@ -14,12 +14,18 @@ export interface DeleteRole$Params {
  * 角色 ID
  */
   id: number;
+
+/**
+ * 角色删除再认证凭据
+ */
+  'X-Step-Up-Token': string;
 }
 
 export function deleteRole(http: HttpClient, rootUrl: string, params: DeleteRole$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, deleteRole.PATH, 'delete');
   if (params) {
     rb.path('id', params.id, {});
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
   }
 
   return http.request(

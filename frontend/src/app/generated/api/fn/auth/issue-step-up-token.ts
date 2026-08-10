@@ -7,22 +7,16 @@ import { filter, map } from 'rxjs/operators';
 import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
-import { CreateUserRequest } from '../../models/create-user-request';
-import { UserResponse } from '../../models/user-response';
+import { StepUpRequest } from '../../models/step-up-request';
+import { StepUpResponse } from '../../models/step-up-response';
 
-export interface CreateUser$Params {
-
-/**
- * 敏感操作再认证凭据
- */
-  'X-Step-Up-Token'?: (string | null);
-      body: CreateUserRequest
+export interface IssueStepUpToken$Params {
+      body: StepUpRequest
 }
 
-export function createUser(http: HttpClient, rootUrl: string, params: CreateUser$Params, context?: HttpContext): Observable<StrictHttpResponse<UserResponse>> {
-  const rb = new RequestBuilder(rootUrl, createUser.PATH, 'post');
+export function issueStepUpToken(http: HttpClient, rootUrl: string, params: IssueStepUpToken$Params, context?: HttpContext): Observable<StrictHttpResponse<StepUpResponse>> {
+  const rb = new RequestBuilder(rootUrl, issueStepUpToken.PATH, 'post');
   if (params) {
-    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
     rb.body(params.body, 'application/json');
   }
 
@@ -31,9 +25,9 @@ export function createUser(http: HttpClient, rootUrl: string, params: CreateUser
   ).pipe(
     filter((r: any): r is HttpResponse<any> => r instanceof HttpResponse),
     map((r: HttpResponse<any>) => {
-      return r as StrictHttpResponse<UserResponse>;
+      return r as StrictHttpResponse<StepUpResponse>;
     })
   );
 }
 
-createUser.PATH = '/users';
+issueStepUpToken.PATH = '/auth/me/step-up';

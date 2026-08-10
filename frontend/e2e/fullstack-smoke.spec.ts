@@ -46,6 +46,12 @@ test('通过真实 Angular、Axum 和 PostgreSQL 完成登录与用户创建', a
   await dialog.getByLabel('角色').selectOption({ label: viewerRole!.name });
   await dialog.getByRole('button', { name: '保存用户' }).click();
 
+  const stepUpDialog = page.getByRole('dialog');
+  await expect(stepUpDialog.getByRole('heading', { name: '敏感操作需要再认证' })).toBeVisible();
+  await stepUpDialog.getByLabel('当前密码').fill('Fullstack-Smoke-Password-2026!');
+  await stepUpDialog.getByLabel('身份验证器验证码').fill(totp.generate());
+  await stepUpDialog.getByRole('button', { name: '继续' }).click();
+
   await expect(page.locator('mat-snack-bar-container')).toContainText(`已创建 ${displayName}`);
   await page.getByPlaceholder('按用户名或邮箱搜索...').fill(username);
   await expect(page.getByRole('row').filter({ hasText: displayName })).toBeVisible();

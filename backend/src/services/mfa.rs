@@ -822,21 +822,16 @@ fn hash_recovery_code(code: &str) -> Result<String, ApiError> {
         .map_err(|error| ApiError::internal(format!("failed to hash recovery code: {error}")))
 }
 
-async fn verify_password_and_totp(
+pub(crate) async fn verify_totp_code(
     pool: &PgPool,
     mfa: &MfaConfig,
     user_id: i64,
-    password: &str,
     code: &str,
 ) -> Result<(), ApiError> {
     let user = repositories::users::find_by_id(pool, user_id)
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
-    let parsed = PasswordHash::new(&user.password_hash).map_err(ApiError::internal)?;
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed)
-        .map_err(|_| ApiError::unauthorized())?;
     let encrypted = repositories::mfa::totp_secret(pool, user_id)
         .await
         .map_err(db_error)?
@@ -853,6 +848,22 @@ async fn verify_password_and_totp(
         return Err(ApiError::unauthorized());
     }
     Ok(())
+}
+
+pub(crate) async fn verify_password_and_totp(
+    pool: &PgPool,
+    mfa: &MfaConfig,
+    user_id: i64,
+    password: &str,
+    code: &str,
+) -> Result<(), ApiError> {
+    auth_service::verify_current_password(pool, user_id, password)
+        .await
+        .map_err(|error| match error {
+            ApiError::Validation(_) => ApiError::unauthorized(),
+            other => other,
+        })?;
+    verify_totp_code(pool, mfa, user_id, code).await
 }
 
 pub async fn regenerate_recovery_codes(

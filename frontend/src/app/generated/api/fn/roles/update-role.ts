@@ -16,6 +16,11 @@ export interface UpdateRole$Params {
  * 角色 ID
  */
   id: number;
+
+/**
+ * 敏感操作再认证凭据
+ */
+  'X-Step-Up-Token'?: (string | null);
       body: UpdateRoleRequest
 }
 
@@ -23,6 +28,7 @@ export function updateRole(http: HttpClient, rootUrl: string, params: UpdateRole
   const rb = new RequestBuilder(rootUrl, updateRole.PATH, 'put');
   if (params) {
     rb.path('id', params.id, {});
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
     rb.body(params.body, 'application/json');
   }
 

@@ -23,6 +23,8 @@ export type { ChangeCurrentUserPassword$Params } from './fn/auth/change-current-
 export { changeCurrentUserPassword } from './fn/auth/change-current-user-password';
 export type { GetCurrentUserPermissions$Params } from './fn/auth/get-current-user-permissions';
 export { getCurrentUserPermissions } from './fn/auth/get-current-user-permissions';
+export type { IssueStepUpToken$Params } from './fn/auth/issue-step-up-token';
+export { issueStepUpToken } from './fn/auth/issue-step-up-token';
 export type { FinishMfaPasskeyAuthentication$Params } from './fn/auth/finish-mfa-passkey-authentication';
 export { finishMfaPasskeyAuthentication } from './fn/auth/finish-mfa-passkey-authentication';
 export type { StartMfaPasskeyAuthentication$Params } from './fn/auth/start-mfa-passkey-authentication';

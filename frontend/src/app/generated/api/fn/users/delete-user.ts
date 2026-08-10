@@ -14,12 +14,18 @@ export interface DeleteUser$Params {
  * 用户 ID
  */
   id: number;
+
+/**
+ * 用户删除再认证凭据
+ */
+  'X-Step-Up-Token': string;
 }
 
 export function deleteUser(http: HttpClient, rootUrl: string, params: DeleteUser$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, deleteUser.PATH, 'delete');
   if (params) {
     rb.path('id', params.id, {});
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
   }
 
   return http.request(

@@ -15,6 +15,11 @@ export interface UpdateRolePermissions$Params {
  * 角色 ID
  */
   id: number;
+
+/**
+ * 权限分配再认证凭据
+ */
+  'X-Step-Up-Token': string;
       body: UpdateRolePermissionsRequest
 }
 
@@ -22,6 +27,7 @@ export function updateRolePermissions(http: HttpClient, rootUrl: string, params:
   const rb = new RequestBuilder(rootUrl, updateRolePermissions.PATH, 'put');
   if (params) {
     rb.path('id', params.id, {});
+    rb.header('X-Step-Up-Token', params['X-Step-Up-Token'], {});
     rb.body(params.body, 'application/json');
   }
 

@@ -32,6 +32,7 @@ const LOGIN_PATH: &str = "/api/v1/auth/login";
 const LOGOUT_PATH: &str = "/api/v1/auth/logout";
 const CURRENT_USER_PATH: &str = "/api/v1/auth/me";
 const CURRENT_USER_PASSWORD_PATH: &str = "/api/v1/auth/me/password";
+const STEP_UP_PATH: &str = "/api/v1/auth/me/step-up";
 const CURRENT_USER_PERMISSIONS_PATH: &str = "/api/v1/auth/me/permissions";
 const MFA_TOTP_VERIFY_PATH: &str = "/api/v1/auth/mfa/totp/verify";
 const MFA_RECOVERY_VERIFY_PATH: &str = "/api/v1/auth/mfa/recovery/verify";
@@ -61,6 +62,7 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (LOGOUT_PATH, &["post"]),
     (CURRENT_USER_PATH, &["get"]),
     (CURRENT_USER_PASSWORD_PATH, &["put"]),
+    (STEP_UP_PATH, &["post"]),
     (CURRENT_USER_PERMISSIONS_PATH, &["get"]),
     (MFA_TOTP_VERIFY_PATH, &["post"]),
     (MFA_RECOVERY_VERIFY_PATH, &["post"]),
@@ -124,6 +126,7 @@ fn base_router(state: AppState) -> Router {
             CURRENT_USER_PASSWORD_PATH,
             put(handlers::auth::change_password),
         )
+        .route(STEP_UP_PATH, post(handlers::auth::step_up))
         .route(
             CURRENT_USER_PERMISSIONS_PATH,
             get(handlers::auth::me_permissions),
