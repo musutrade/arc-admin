@@ -137,6 +137,7 @@ describe('ChangePasswordDialog', () => {
     await vi.waitFor(() => {
       expect(component.errorMessage()).toBe('身份验证器验证码不正确');
       expect(component.submitting()).toBe(false);
+      expect(component.passwordModel().totpCode).toBe('');
     });
     expect(auth.changePassword).not.toHaveBeenCalled();
     expect(dialogRef.close).not.toHaveBeenCalled();

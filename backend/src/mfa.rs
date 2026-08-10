@@ -10,12 +10,14 @@ use webauthn_rs::prelude::{Webauthn, WebauthnBuilder};
 
 const NONCE_LENGTH: usize = 12;
 const CIPHERTEXT_VERSION: u8 = 1;
+const DEFAULT_TOTP_STEP_SECS: u64 = 30;
 
 #[derive(Clone)]
 pub struct MfaConfig {
     cipher: Aes256Gcm,
     issuer: String,
     webauthn: Webauthn,
+    totp_step_secs: u64,
 }
 
 impl MfaConfig {
@@ -25,8 +27,28 @@ impl MfaConfig {
         rp_origin: &str,
         rp_name: &str,
     ) -> anyhow::Result<Self> {
+        Self::new_with_totp_step(
+            encryption_key,
+            rp_id,
+            rp_origin,
+            rp_name,
+            DEFAULT_TOTP_STEP_SECS,
+        )
+    }
+
+    #[doc(hidden)]
+    pub fn new_with_totp_step(
+        encryption_key: &[u8],
+        rp_id: &str,
+        rp_origin: &str,
+        rp_name: &str,
+        totp_step_secs: u64,
+    ) -> anyhow::Result<Self> {
         if encryption_key.len() != 32 {
             bail!("MFA_ENCRYPTION_KEY must decode to exactly 32 bytes");
+        }
+        if totp_step_secs == 0 {
+            bail!("TOTP step must be greater than zero");
         }
         let origin = Url::parse(rp_origin).context("WEBAUTHN_RP_ORIGIN must be an absolute URL")?;
         let webauthn = WebauthnBuilder::new(rp_id, &origin)
@@ -40,6 +62,7 @@ impl MfaConfig {
             cipher,
             issuer: rp_name.to_string(),
             webauthn,
+            totp_step_secs,
         })
     }
 
@@ -85,7 +108,7 @@ impl MfaConfig {
             Algorithm::SHA1,
             6,
             1,
-            30,
+            self.totp_step_secs,
             secret,
             Some(self.issuer.clone()),
             account_name.to_string(),

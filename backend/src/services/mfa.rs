@@ -17,7 +17,8 @@ use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
-use totp_rs::Secret;
+use std::time::{SystemTime, UNIX_EPOCH};
+use totp_rs::{Secret, TOTP};
 use uuid::Uuid;
 use webauthn_rs::prelude::{PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential};
 
@@ -832,22 +833,52 @@ pub(crate) async fn verify_totp_code(
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
-    let encrypted = repositories::mfa::totp_secret(pool, user_id)
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let encrypted = repositories::mfa::totp_secret_for_update(&mut transaction, user_id)
         .await
         .map_err(db_error)?
         .ok_or_else(|| ApiError::forbidden("该账号尚未完成 TOTP 注册"))?;
     let secret = mfa
         .decrypt_totp_secret(user_id, &encrypted)
         .map_err(ApiError::internal)?;
-    let valid = mfa
+    let totp = mfa
         .totp(&user.username, secret)
-        .map_err(ApiError::internal)?
-        .check_current(code.trim())
         .map_err(ApiError::internal)?;
-    if !valid {
+    let Some(counter) = matching_totp_counter(&totp, code)? else {
         return Err(ApiError::validation("身份验证器验证码不正确"));
+    };
+    let consumed =
+        repositories::mfa::consume_reauth_totp_counter(&mut transaction, user_id, counter)
+            .await
+            .map_err(db_error)?;
+    if !consumed {
+        return Err(ApiError::validation(
+            "验证码已使用或已过期，请输入最新验证码",
+        ));
     }
+    transaction.commit().await.map_err(db_error)?;
     Ok(())
+}
+
+fn matching_totp_counter(totp: &TOTP, code: &str) -> Result<Option<i64>, ApiError> {
+    let code = code.trim();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(ApiError::internal)?
+        .as_secs();
+    if !totp.check(code, timestamp) {
+        return Ok(None);
+    }
+
+    let current = timestamp / totp.step;
+    let first = current.saturating_sub(u64::from(totp.skew));
+    let last = current.saturating_add(u64::from(totp.skew));
+    for counter in (first..=last).rev() {
+        if totp.generate(counter * totp.step) == code {
+            return i64::try_from(counter).map(Some).map_err(ApiError::internal);
+        }
+    }
+    Ok(None)
 }
 
 pub(crate) async fn verify_reauthentication(

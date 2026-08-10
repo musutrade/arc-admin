@@ -242,6 +242,7 @@ export class ChangePasswordDialog {
         this.dialogRef.close(true);
       } catch (error) {
         this.errorMessage.set(apiErrorMessage(error, '密码修改失败，请稍后重试'));
+        this.passwordModel.update((model) => ({ ...model, totpCode: '' }));
       } finally {
         this.submitting.set(false);
       }

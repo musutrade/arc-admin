@@ -16,6 +16,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use totp_rs::{Algorithm, Secret, TOTP};
 use tower::ServiceExt;
 
+const MFA_TEST_STEP_SECS: u64 = 3;
+
 #[derive(Debug)]
 struct TestSession {
     username: String,
@@ -164,49 +166,95 @@ fn sensitive_scope(method: &Method, uri: &str, body: Option<&Value>) -> Option<&
 }
 
 async fn issue_step_up(app: &Router, session: &TestSession, scope: &str) -> String {
-    let totp_code = current_totp_code(session);
-    let (status, body) = response_json(
-        request(
-            app,
-            Method::POST,
-            "/api/v1/auth/me/step-up",
-            Some(session),
-            Some(json!({
-                "currentPassword": session.password,
-                "totpCode": totp_code,
-                "scope": scope,
-            })),
-            true,
-            None,
+    issue_step_up_with_code(app, session, scope).await.0
+}
+
+async fn issue_step_up_with_code(
+    app: &Router,
+    session: &TestSession,
+    scope: &str,
+) -> (String, Option<String>) {
+    for _ in 0..50 {
+        let totp_code = current_totp_code(session);
+        let (status, body) = response_json(
+            request(
+                app,
+                Method::POST,
+                "/api/v1/auth/me/step-up",
+                Some(session),
+                Some(json!({
+                    "currentPassword": session.password,
+                    "totpCode": totp_code,
+                    "scope": scope,
+                })),
+                true,
+                None,
+            )
+            .await,
         )
-        .await,
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "step-up failed: {body}");
-    body["token"].as_str().expect("step-up token").to_string()
+        .await;
+        if status == StatusCode::OK {
+            return (
+                body["token"].as_str().expect("step-up token").to_string(),
+                totp_code,
+            );
+        }
+        if body["error"]["message"] != "验证码已使用或已过期，请输入最新验证码" {
+            panic!("step-up failed with {status}: {body}");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    panic!("TOTP test counter did not advance")
 }
 
 async fn issue_module_unlock(app: &Router, session: &TestSession, module: &str) {
     let (status, body) = response_json(
         request(
             app,
-            Method::POST,
-            "/api/v1/auth/me/module-unlocks",
+            Method::GET,
+            &format!("/api/v1/auth/me/module-unlocks/{module}"),
             Some(session),
-            Some(json!({
-                "module": module,
-                "currentPassword": session.password,
-                "totpCode": current_totp_code(session),
-            })),
-            true,
+            None,
+            false,
             None,
         )
         .await,
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "module unlock failed: {body}");
-    assert_eq!(body["module"], module);
-    assert_eq!(body["unlocked"], true);
+    assert_eq!(status, StatusCode::OK, "module status failed: {body}");
+    if body["unlocked"] == true {
+        return;
+    }
+
+    for _ in 0..50 {
+        let (status, body) = response_json(
+            request(
+                app,
+                Method::POST,
+                "/api/v1/auth/me/module-unlocks",
+                Some(session),
+                Some(json!({
+                    "module": module,
+                    "currentPassword": session.password,
+                    "totpCode": current_totp_code(session),
+                })),
+                true,
+                None,
+            )
+            .await,
+        )
+        .await;
+        if status == StatusCode::OK {
+            assert_eq!(body["module"], module);
+            assert_eq!(body["unlocked"], true);
+            return;
+        }
+        if body["error"]["message"] != "验证码已使用或已过期，请输入最新验证码" {
+            panic!("module unlock failed with {status}: {body}");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    panic!("TOTP test counter did not advance")
 }
 
 fn current_totp_code(session: &TestSession) -> Option<String> {
@@ -219,7 +267,7 @@ fn current_totp_code(session: &TestSession) -> Option<String> {
                 Algorithm::SHA1,
                 6,
                 1,
-                30,
+                MFA_TEST_STEP_SECS,
                 Secret::Encoded(secret)
                     .to_bytes()
                     .expect("TOTP secret bytes"),
@@ -318,7 +366,7 @@ async fn login(
         Algorithm::SHA1,
         6,
         1,
-        30,
+        MFA_TEST_STEP_SECS,
         Secret::Encoded(secret)
             .to_bytes()
             .expect("TOTP secret bytes"),
@@ -423,11 +471,12 @@ async fn login_and_user_crud_flow() {
             secure_cookies: false,
         }),
         mfa: Arc::new(
-            MfaConfig::new(
+            MfaConfig::new_with_totp_step(
                 &[7_u8; 32],
                 "localhost",
                 "http://localhost:4200",
                 "Arc Admin",
+                MFA_TEST_STEP_SECS,
             )
             .expect("MFA config"),
         ),
@@ -748,7 +797,25 @@ async fn login_and_user_crud_flow() {
     let (status, _) = send(&app, Method::GET, "/api/v1/auth/me", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
 
-    let replay_token = issue_step_up(&app, token, "auth.password.change").await;
+    let (replay_token, replayed_totp_code) =
+        issue_step_up_with_code(&app, token, "auth.password.change").await;
+    let (status, replay_error) = send(
+        &app,
+        Method::POST,
+        "/api/v1/auth/me/step-up",
+        Some(token),
+        Some(json!({
+            "currentPassword": "integration-admin-password",
+            "totpCode": replayed_totp_code,
+            "scope": "auth.password.change"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        replay_error["error"]["message"],
+        "验证码已使用或已过期，请输入最新验证码"
+    );
     let (status, _) = response_json(
         request_with_step_up(
             &app,

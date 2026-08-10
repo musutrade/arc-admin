@@ -80,17 +80,6 @@ pub async fn ensure_settings(
     .await
 }
 
-pub async fn totp_secret(pool: &PgPool, user_id: i64) -> Result<Option<Vec<u8>>, sqlx::Error> {
-    sqlx::query_scalar(
-        "SELECT totp_secret_ciphertext FROM user_mfa_settings
-         WHERE user_id = $1 AND totp_enabled_at IS NOT NULL",
-    )
-    .bind(user_id)
-    .fetch_optional(pool)
-    .await
-    .map(Option::flatten)
-}
-
 pub async fn enable_totp(
     connection: &mut PgConnection,
     user_id: i64,
@@ -98,7 +87,9 @@ pub async fn enable_totp(
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "UPDATE user_mfa_settings
-         SET totp_secret_ciphertext = $2, totp_enabled_at = now(), updated_at = now()
+         SET totp_secret_ciphertext = $2,
+             totp_enabled_at = now(),
+             updated_at = now()
          WHERE user_id = $1",
     )
     .bind(user_id)
@@ -106,6 +97,27 @@ pub async fn enable_totp(
     .execute(connection)
     .await?;
     Ok(())
+}
+
+pub async fn consume_reauth_totp_counter(
+    connection: &mut PgConnection,
+    user_id: i64,
+    counter: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "UPDATE user_mfa_settings
+         SET last_reauth_totp_counter = $2,
+             last_reauth_totp_used_at = now(),
+             updated_at = now()
+         WHERE user_id = $1
+           AND (last_reauth_totp_counter IS NULL OR last_reauth_totp_counter < $2)
+         RETURNING TRUE",
+    )
+    .bind(user_id)
+    .bind(counter)
+    .fetch_optional(connection)
+    .await
+    .map(|updated| updated.unwrap_or(false))
 }
 
 pub async fn create_challenge(
