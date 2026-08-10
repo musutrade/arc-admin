@@ -34,11 +34,11 @@ pub async fn create(
     headers: HeaderMap,
     Json(req): Json<CreateRoleRequest>,
 ) -> Result<(StatusCode, Json<RoleResponse>), ApiError> {
-    if req
+    let needs_step_up = req
         .permission_ids
         .as_ref()
-        .is_some_and(|permission_ids| !permission_ids.is_empty())
-    {
+        .is_some_and(|permission_ids| !permission_ids.is_empty());
+    if needs_step_up {
         auth.require("role:permissions:write")?;
         services::step_up::consume(
             &state.pool,
@@ -46,6 +46,14 @@ pub async fn create(
             auth.user_id,
             &headers,
             services::step_up::ROLES_PERMISSIONS_SCOPE,
+        )
+        .await?;
+    } else {
+        services::module_unlock::require(
+            &state.pool,
+            auth.session_id,
+            auth.user_id,
+            services::module_unlock::ROLES_MODULE,
         )
         .await?;
     }
@@ -74,6 +82,14 @@ pub async fn update(
             auth.user_id,
             &headers,
             services::step_up::ROLES_SENSITIVE_SCOPE,
+        )
+        .await?;
+    } else {
+        services::module_unlock::require(
+            &state.pool,
+            auth.session_id,
+            auth.user_id,
+            services::module_unlock::ROLES_MODULE,
         )
         .await?;
     }

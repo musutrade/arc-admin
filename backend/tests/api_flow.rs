@@ -89,7 +89,27 @@ async fn send(
         )
         .await;
     }
+    if let (Some(session), Some(module)) = (session, routine_write_module(&method, uri)) {
+        issue_module_unlock(app, session, module).await;
+    }
     response_json(request(app, method, uri, session, body, true, None).await).await
+}
+
+fn routine_write_module(method: &Method, uri: &str) -> Option<&'static str> {
+    let path = uri.split('?').next().unwrap_or(uri);
+    match (method, path) {
+        (&Method::POST, "/api/v1/users") => Some("users"),
+        (&Method::PUT, path) if path.starts_with("/api/v1/users/") && !path.ends_with("/roles") => {
+            Some("users")
+        }
+        (&Method::POST, "/api/v1/roles") => Some("roles"),
+        (&Method::PUT, path)
+            if path.starts_with("/api/v1/roles/") && !path.ends_with("/permissions") =>
+        {
+            Some("roles")
+        }
+        _ => None,
+    }
 }
 
 fn sensitive_scope(method: &Method, uri: &str, body: Option<&Value>) -> Option<&'static str> {
@@ -144,26 +164,7 @@ fn sensitive_scope(method: &Method, uri: &str, body: Option<&Value>) -> Option<&
 }
 
 async fn issue_step_up(app: &Router, session: &TestSession, scope: &str) -> String {
-    let totp_code = MFA_TEST_SECRETS
-        .get()
-        .and_then(|secrets| secrets.lock().ok())
-        .and_then(|secrets| secrets.get(&session.username).cloned())
-        .map(|secret| {
-            TOTP::new(
-                Algorithm::SHA1,
-                6,
-                1,
-                30,
-                Secret::Encoded(secret)
-                    .to_bytes()
-                    .expect("TOTP secret bytes"),
-                None,
-                session.username.clone(),
-            )
-            .expect("test TOTP")
-            .generate_current()
-            .expect("current TOTP code")
-        });
+    let totp_code = current_totp_code(session);
     let (status, body) = response_json(
         request(
             app,
@@ -183,6 +184,52 @@ async fn issue_step_up(app: &Router, session: &TestSession, scope: &str) -> Stri
     .await;
     assert_eq!(status, StatusCode::OK, "step-up failed: {body}");
     body["token"].as_str().expect("step-up token").to_string()
+}
+
+async fn issue_module_unlock(app: &Router, session: &TestSession, module: &str) {
+    let (status, body) = response_json(
+        request(
+            app,
+            Method::POST,
+            "/api/v1/auth/me/module-unlocks",
+            Some(session),
+            Some(json!({
+                "module": module,
+                "currentPassword": session.password,
+                "totpCode": current_totp_code(session),
+            })),
+            true,
+            None,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "module unlock failed: {body}");
+    assert_eq!(body["module"], module);
+    assert_eq!(body["unlocked"], true);
+}
+
+fn current_totp_code(session: &TestSession) -> Option<String> {
+    MFA_TEST_SECRETS
+        .get()
+        .and_then(|secrets| secrets.lock().ok())
+        .and_then(|secrets| secrets.get(&session.username).cloned())
+        .map(|secret| {
+            TOTP::new(
+                Algorithm::SHA1,
+                6,
+                1,
+                30,
+                Secret::Encoded(secret)
+                    .to_bytes()
+                    .expect("TOTP secret bytes"),
+                None,
+                session.username.clone(),
+            )
+            .expect("test TOTP")
+            .generate_current()
+            .expect("current TOTP code")
+        })
 }
 
 async fn request_with_step_up(
@@ -531,6 +578,44 @@ async fn login_and_user_crud_flow() {
     assert_eq!(mfa_status["required"], true);
     assert_eq!(mfa_status["totpEnabled"], true);
     assert_eq!(mfa_status["recoveryCodesRemaining"], 10);
+
+    let admin_user_id = admin_login["user"]["id"].as_i64().expect("admin user id");
+    let (status, locked_status) = send(
+        &app,
+        Method::GET,
+        "/api/v1/auth/me/module-unlocks/users",
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(locked_status["unlocked"], false);
+    let locked_write = request(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{admin_user_id}"),
+        Some(&token),
+        Some(json!({"displayName": "Integration Administrator"})),
+        true,
+        None,
+    )
+    .await;
+    assert_eq!(locked_write.status(), StatusCode::FORBIDDEN);
+
+    issue_module_unlock(&app, &token, "users").await;
+    for _ in 0..2 {
+        let unlocked_write = request(
+            &app,
+            Method::PUT,
+            &format!("/api/v1/users/{admin_user_id}"),
+            Some(&token),
+            Some(json!({"displayName": "Integration Administrator"})),
+            true,
+            None,
+        )
+        .await;
+        assert_eq!(unlocked_write.status(), StatusCode::OK);
+    }
 
     let (status, mfa_challenge) = send(
         &app,

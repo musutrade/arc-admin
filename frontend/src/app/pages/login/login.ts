@@ -1,11 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormField, form, maxLength, minLength, required, submit } from '@angular/forms/signals';
+import { FormField, form, required, submit, validate } from '@angular/forms/signals';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Router } from '@angular/router';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
+import { authenticatorCodeError } from '../../core/authenticator-code';
 import { APP_CONFIG } from '../../core/runtime-config';
 import { LoginResponse } from '../../generated/api/models/login-response';
 import { MfaMethodSchema } from '../../generated/api/models/mfa-method-schema';
@@ -41,9 +42,7 @@ export class LoginPage {
   });
   readonly totpModel = signal({ code: '' });
   readonly totpForm = form(this.totpModel, (path) => {
-    required(path.code, { message: '请输入 6 位验证码' });
-    minLength(path.code, 6, { message: '验证码应为 6 位' });
-    maxLength(path.code, 6, { message: '验证码应为 6 位' });
+    validate(path.code, ({ value }) => authenticatorCodeError(value(), true));
   });
   readonly recoveryModel = signal({ code: '' });
   readonly recoveryForm = form(this.recoveryModel, (path) => {

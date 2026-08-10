@@ -33,6 +33,8 @@ const LOGOUT_PATH: &str = "/api/v1/auth/logout";
 const CURRENT_USER_PATH: &str = "/api/v1/auth/me";
 const CURRENT_USER_PASSWORD_PATH: &str = "/api/v1/auth/me/password";
 const STEP_UP_PATH: &str = "/api/v1/auth/me/step-up";
+const MODULE_UNLOCKS_PATH: &str = "/api/v1/auth/me/module-unlocks";
+const MODULE_UNLOCK_STATUS_PATH: &str = "/api/v1/auth/me/module-unlocks/{module}";
 const CURRENT_USER_PERMISSIONS_PATH: &str = "/api/v1/auth/me/permissions";
 const MFA_TOTP_VERIFY_PATH: &str = "/api/v1/auth/mfa/totp/verify";
 const MFA_RECOVERY_VERIFY_PATH: &str = "/api/v1/auth/mfa/recovery/verify";
@@ -63,6 +65,8 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (CURRENT_USER_PATH, &["get"]),
     (CURRENT_USER_PASSWORD_PATH, &["put"]),
     (STEP_UP_PATH, &["post"]),
+    (MODULE_UNLOCKS_PATH, &["post"]),
+    (MODULE_UNLOCK_STATUS_PATH, &["get"]),
     (CURRENT_USER_PERMISSIONS_PATH, &["get"]),
     (MFA_TOTP_VERIFY_PATH, &["post"]),
     (MFA_RECOVERY_VERIFY_PATH, &["post"]),
@@ -127,6 +131,11 @@ fn base_router(state: AppState) -> Router {
             put(handlers::auth::change_password),
         )
         .route(STEP_UP_PATH, post(handlers::auth::step_up))
+        .route(MODULE_UNLOCKS_PATH, post(handlers::auth::module_unlock))
+        .route(
+            MODULE_UNLOCK_STATUS_PATH,
+            get(handlers::auth::module_unlock_status),
+        )
         .route(
             CURRENT_USER_PERMISSIONS_PATH,
             get(handlers::auth::me_permissions),

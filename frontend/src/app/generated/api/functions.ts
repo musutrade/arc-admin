@@ -19,6 +19,10 @@ export type { RevokeCurrentUserPasskey$Params } from './fn/auth/revoke-current-u
 export { revokeCurrentUserPasskey } from './fn/auth/revoke-current-user-passkey';
 export type { RegenerateCurrentUserRecoveryCodes$Params } from './fn/auth/regenerate-current-user-recovery-codes';
 export { regenerateCurrentUserRecoveryCodes } from './fn/auth/regenerate-current-user-recovery-codes';
+export type { UnlockCurrentUserModule$Params } from './fn/auth/unlock-current-user-module';
+export { unlockCurrentUserModule } from './fn/auth/unlock-current-user-module';
+export type { GetCurrentUserModuleUnlockStatus$Params } from './fn/auth/get-current-user-module-unlock-status';
+export { getCurrentUserModuleUnlockStatus } from './fn/auth/get-current-user-module-unlock-status';
 export type { ChangeCurrentUserPassword$Params } from './fn/auth/change-current-user-password';
 export { changeCurrentUserPassword } from './fn/auth/change-current-user-password';
 export type { GetCurrentUserPermissions$Params } from './fn/auth/get-current-user-permissions';

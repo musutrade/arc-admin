@@ -34,6 +34,28 @@
   color: var(--ui-color-text-secondary);
 }
 
+.dialog-inline-status,
+.dialog-warning,
+.dialog-error {
+  grid-column: 1 / -1;
+}
+
+.dialog-inline-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ui-color-text-secondary);
+  font-size: 14px;
+}
+
+.dialog-warning {
+  padding: 10px 12px;
+  border-left: 3px solid var(--mat-sys-tertiary);
+  background: color-mix(in srgb, var(--mat-sys-tertiary) 10%, transparent);
+  color: var(--ui-color-text-primary);
+  font-size: 14px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -6,7 +6,7 @@
     "license": {
       "name": ""
     },
-    "version": "2.3.0"
+    "version": "2.4.0"
   },
   "servers": [
     {
@@ -496,6 +496,138 @@
           },
           "422": {
             "description": "重新认证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/me/module-unlocks": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "unlockCurrentUserModule",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "当前会话的 CSRF Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModuleUnlockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "模块已临时解锁",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleUnlockStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "该操作需要身份验证器验证码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "当前密码、验证码或模块范围无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/me/module-unlocks/{module}": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "getCurrentUserModuleUnlockStatus",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "path",
+            "description": "模块范围",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModuleUnlockScopeSchema"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "模块解锁状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModuleUnlockStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未认证",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "模块范围无效",
             "content": {
               "application/json": {
                 "schema": {
@@ -2474,6 +2606,56 @@
           },
           "publicKey": {
             "type": "object"
+          }
+        }
+      },
+      "ModuleUnlockRequest": {
+        "type": "object",
+        "required": [
+          "module",
+          "currentPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "module": {
+            "$ref": "#/components/schemas/ModuleUnlockScopeSchema"
+          },
+          "totpCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ModuleUnlockScopeSchema": {
+        "type": "string",
+        "enum": [
+          "users",
+          "roles"
+        ]
+      },
+      "ModuleUnlockStatusResponse": {
+        "type": "object",
+        "required": [
+          "module",
+          "unlocked"
+        ],
+        "properties": {
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "module": {
+            "$ref": "#/components/schemas/ModuleUnlockScopeSchema"
+          },
+          "unlocked": {
+            "type": "boolean"
           }
         }
       },

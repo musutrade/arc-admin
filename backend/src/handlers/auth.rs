@@ -6,12 +6,13 @@ use crate::error::ApiError;
 use crate::models::{
     ChangePasswordRequest, LoginRequest, LoginResponse, MfaCodeRequest, MfaFactorRevokeRequest,
     MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
-    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, PermissionCodes,
-    RecoveryCodesResponse, StepUpRequest, StepUpResponse, UserResponse,
+    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, ModuleUnlockRequest,
+    ModuleUnlockStatusResponse, PermissionCodes, RecoveryCodesResponse, StepUpRequest,
+    StepUpResponse, UserResponse,
 };
 use crate::services;
 use crate::AppState;
-use axum::extract::{ConnectInfo, State};
+use axum::extract::{ConnectInfo, Path, State};
 use axum::http::header::{CACHE_CONTROL, PRAGMA};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
@@ -98,6 +99,26 @@ pub async fn step_up(
     Json(req): Json<StepUpRequest>,
 ) -> Result<Json<StepUpResponse>, ApiError> {
     services::step_up::issue(&state.pool, &state.mfa, auth.session_id, auth.user_id, &req)
+        .await
+        .map(Json)
+}
+
+pub async fn module_unlock_status(
+    State(state): State<AppState>,
+    auth: ActorContext,
+    Path(module): Path<String>,
+) -> Result<Json<ModuleUnlockStatusResponse>, ApiError> {
+    services::module_unlock::status(&state.pool, auth.session_id, auth.user_id, &module)
+        .await
+        .map(Json)
+}
+
+pub async fn module_unlock(
+    State(state): State<AppState>,
+    auth: ActorContext,
+    Json(req): Json<ModuleUnlockRequest>,
+) -> Result<Json<ModuleUnlockStatusResponse>, ApiError> {
+    services::module_unlock::issue(&state.pool, &state.mfa, auth.session_id, auth.user_id, &req)
         .await
         .map(Json)
 }

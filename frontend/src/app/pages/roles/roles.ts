@@ -16,6 +16,7 @@ import { RoleApiService } from '../../core/api/role-api.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { ConfirmDialog } from '../../core/confirm.dialog';
+import { ModuleUnlockService } from '../../core/module-unlock.service';
 import { StepUpDialog } from '../../core/step-up.dialog';
 import { DataScope, Role, RolePermissionRow } from '../../core/models';
 import { AssignPermissionsDialog } from '../role-permissions/assign-permissions.dialog';
@@ -38,6 +39,7 @@ export class RolesPage implements OnInit {
   private readonly permissionApi = inject(PermissionApiService);
   private readonly roleApi = inject(RoleApiService);
   private readonly auth = inject(AuthService);
+  private readonly moduleUnlock = inject(ModuleUnlockService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -108,7 +110,7 @@ export class RolesPage implements OnInit {
     const stepUpToken = await this.stepUp(
       'roles.sensitive',
       '敏感操作需要再认证',
-      `${action}角色前，请验证当前管理员密码和身份验证器验证码。`,
+      `${action}角色前，请验证当前管理员身份。`,
     );
     if (!stepUpToken) {
       return;
@@ -142,7 +144,7 @@ export class RolesPage implements OnInit {
     const stepUpToken = await this.stepUp(
       'roles.delete',
       '删除角色需要再认证',
-      '删除角色前，请验证当前管理员密码和身份验证器验证码。',
+      '删除角色前，请验证当前管理员身份。',
     );
     if (!stepUpToken) {
       return;
@@ -182,7 +184,7 @@ export class RolesPage implements OnInit {
         const stepUpToken = await this.stepUp(
           'roles.permissions.write',
           '权限变更需要再认证',
-          '更新角色权限前，请验证当前管理员密码和身份验证器验证码。',
+          '更新角色权限前，请验证当前管理员身份。',
         );
         if (!stepUpToken) {
           return;
@@ -205,12 +207,20 @@ export class RolesPage implements OnInit {
       return;
     }
     if (role) {
-      const stepUpToken = await this.stepUp(
-        'roles.sensitive',
-        '敏感操作需要再认证',
-        '修改角色前，请验证当前管理员密码和身份验证器验证码。',
-      );
-      if (!stepUpToken) {
+      const dataScopeChanged = result.dataScope !== role.dataScope;
+      const statusChanged = result.isActive !== role.isActive;
+      const sensitiveChanged = dataScopeChanged || statusChanged;
+      const stepUpToken = sensitiveChanged
+        ? await this.stepUp(
+            'roles.sensitive',
+            '敏感操作需要再认证',
+            '修改角色数据范围或状态前，请验证当前管理员身份。',
+          )
+        : undefined;
+      if (sensitiveChanged && !stepUpToken) {
+        return;
+      }
+      if (!sensitiveChanged && !(await this.moduleUnlock.ensure('roles', '角色管理'))) {
         return;
       }
       await this.runMutation(
@@ -223,14 +233,17 @@ export class RolesPage implements OnInit {
               icon: result.icon || null,
               color: result.color,
               description: result.description || null,
-              dataScope: result.dataScope,
-              isActive: result.isActive,
+              ...(dataScopeChanged ? { dataScope: result.dataScope } : {}),
+              ...(statusChanged ? { isActive: result.isActive } : {}),
             },
             stepUpToken,
           ),
         `已更新 ${result.name}`,
       );
     } else {
+      if (!(await this.moduleUnlock.ensure('roles', '角色管理'))) {
+        return;
+      }
       await this.runMutation(
         () =>
           this.roleApi.createRole({

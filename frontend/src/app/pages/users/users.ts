@@ -21,6 +21,7 @@ import { Role, StatCard, User, UserStatus } from '../../core/models';
 import { AuthService } from '../../core/auth.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { ConfirmDialog } from '../../core/confirm.dialog';
+import { ModuleUnlockService } from '../../core/module-unlock.service';
 import { StepUpCredentials, StepUpDialog } from '../../core/step-up.dialog';
 import { PasswordDialog } from './password.dialog';
 import { RoleSelectionDialog } from './role-selection.dialog';
@@ -69,6 +70,7 @@ export class UsersPage implements OnInit, OnDestroy {
   private readonly roleApi = inject(RoleApiService);
   private readonly userApi = inject(UserApiService);
   private readonly auth = inject(AuthService);
+  private readonly moduleUnlock = inject(ModuleUnlockService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -249,7 +251,7 @@ export class UsersPage implements OnInit, OnDestroy {
     const stepUpToken = await this.stepUp(
       'users.sensitive',
       '敏感操作需要再认证',
-      '重置用户密码前，请验证当前管理员密码和身份验证器验证码。',
+      '重置用户密码前，请验证当前管理员身份。',
     );
     if (!stepUpToken) {
       return;
@@ -277,7 +279,7 @@ export class UsersPage implements OnInit, OnDestroy {
     const stepUpToken = await this.stepUp(
       'users.sensitive',
       '敏感操作需要再认证',
-      `${action}用户前，请验证当前管理员密码和身份验证器验证码。`,
+      `${action}用户前，请验证当前管理员身份。`,
     );
     if (!stepUpToken) {
       return;
@@ -309,7 +311,7 @@ export class UsersPage implements OnInit, OnDestroy {
     const stepUpToken = await this.stepUp(
       'users.delete',
       '删除用户需要再认证',
-      '删除后账号将立即停用，请验证当前管理员密码和身份验证器验证码。',
+      '删除后账号将立即停用，请验证当前管理员身份。',
     );
     if (!stepUpToken) {
       return;
@@ -330,7 +332,7 @@ export class UsersPage implements OnInit, OnDestroy {
     }
     const credentials = await this.stepUpCredentials(
       '删除用户需要再认证',
-      '批量删除前，请验证当前管理员密码和身份验证器验证码。',
+      '批量删除前，请验证当前管理员身份。',
     );
     if (!credentials) {
       return;
@@ -362,7 +364,7 @@ export class UsersPage implements OnInit, OnDestroy {
       }
       const credentials = await this.stepUpCredentials(
         '角色分配需要再认证',
-        '批量更新角色前，请验证当前管理员密码和身份验证器验证码。',
+        '批量更新角色前，请验证当前管理员身份。',
       );
       if (!credentials) {
         return;
@@ -399,36 +401,58 @@ export class UsersPage implements OnInit, OnDestroy {
         return;
       }
       if (user) {
+        const email = result.email || null;
+        const basicChanged = result.displayName !== user.name || (email ?? '') !== user.email;
+        const statusChanged = canManageStatus && result.status !== user.status;
+        const passwordChanged = canResetPassword && Boolean(result.password);
+        const currentRoleIds = roles
+          .filter((role) => user.roles.includes(role.name))
+          .map((role) => role.id);
+        const rolesChanged = canManageRoles && !sameValues(currentRoleIds, result.roleIds);
         const updateRequest = {
           displayName: result.displayName,
-          email: result.email || null,
-          ...(canManageStatus ? { status: result.status } : {}),
-          ...(canResetPassword && result.password ? { password: result.password } : {}),
+          email,
+          ...(statusChanged ? { status: result.status } : {}),
+          ...(passwordChanged ? { password: result.password } : {}),
         };
-        const updateNeedsStepUp = canManageStatus || Boolean(canResetPassword && result.password);
+        const updateNeeded = basicChanged || statusChanged || passwordChanged;
+        const updateNeedsStepUp = statusChanged || passwordChanged;
         const updateToken = updateNeedsStepUp
           ? await this.stepUp(
               'users.sensitive',
               '敏感操作需要再认证',
-              '修改用户密码或状态前，请验证当前管理员密码和身份验证器验证码。',
+              '修改用户密码或状态前，请验证当前管理员身份。',
             )
           : undefined;
         if (updateNeedsStepUp && !updateToken) {
           return;
         }
-        const roleToken = canManageRoles
+        if (
+          updateNeeded &&
+          !updateNeedsStepUp &&
+          !(await this.moduleUnlock.ensure('users', '用户管理'))
+        ) {
+          return;
+        }
+        const roleToken = rolesChanged
           ? await this.stepUp(
               'users.roles.write',
               '角色分配需要再认证',
-              '更新用户角色前，请验证当前管理员密码和身份验证器验证码。',
+              '更新用户角色前，请验证当前管理员身份。',
             )
           : undefined;
-        if (canManageRoles && !roleToken) {
+        if (rolesChanged && !roleToken) {
+          return;
+        }
+        if (!updateNeeded && !rolesChanged) {
+          this.snackBar.open('未检测到需要保存的变更', '关闭', { duration: 3000 });
           return;
         }
         await this.runMutation(async () => {
-          await this.userApi.updateUser(user.id, updateRequest, updateToken);
-          if (canManageRoles) {
+          if (updateNeeded) {
+            await this.userApi.updateUser(user.id, updateRequest, updateToken);
+          }
+          if (rolesChanged) {
             await this.userApi.assignUserRoles(user.id, result.roleIds, roleToken!);
           }
         }, `已更新 ${result.displayName}`);
@@ -441,15 +465,20 @@ export class UsersPage implements OnInit, OnDestroy {
           ...(canManageStatus ? { status: result.status } : {}),
           ...(canManageRoles ? { roleIds: result.roleIds.map(Number) } : {}),
         };
-        const createNeedsStepUp = canManageRoles && result.roleIds.length > 0;
+        const createNeedsStepUp =
+          (canManageStatus && result.status !== 'active') ||
+          (canManageRoles && result.roleIds.length > 0);
         const createToken = createNeedsStepUp
           ? await this.stepUp(
               'users.sensitive',
               '敏感操作需要再认证',
-              '创建带有角色的用户前，请验证当前管理员密码和身份验证器验证码。',
+              '创建带有角色或非启用状态的用户前，请验证当前管理员身份。',
             )
           : undefined;
         if (createNeedsStepUp && !createToken) {
+          return;
+        }
+        if (!createNeedsStepUp && !(await this.moduleUnlock.ensure('users', '用户管理'))) {
           return;
         }
         await this.runMutation(
@@ -553,4 +582,8 @@ export class UsersPage implements OnInit, OnDestroy {
       .join('')
       .toUpperCase();
   }
+}
+
+function sameValues(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
 }

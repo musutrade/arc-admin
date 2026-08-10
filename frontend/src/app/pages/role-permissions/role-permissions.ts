@@ -15,6 +15,7 @@ import { PermissionApiService } from '../../core/api/permission-api.service';
 import { RoleApiService } from '../../core/api/role-api.service';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
+import { ModuleUnlockService } from '../../core/module-unlock.service';
 import { RolePermissionRow } from '../../core/models';
 import { StepUpDialog } from '../../core/step-up.dialog';
 import { AssignPermissionsDialog } from './assign-permissions.dialog';
@@ -36,6 +37,7 @@ export class RolePermissionsPage implements OnInit {
   private readonly roleApi = inject(RoleApiService);
   private readonly dialog = inject(MatDialog);
   private readonly auth = inject(AuthService);
+  private readonly moduleUnlock = inject(ModuleUnlockService);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly canCreateRole = computed(() => this.auth.hasPermission('role:write'));
@@ -81,7 +83,7 @@ export class RolePermissionsPage implements OnInit {
           .open(StepUpDialog, {
             data: {
               title: '权限变更需要再认证',
-              message: '更新角色权限前，请验证当前管理员密码和身份验证器验证码。',
+              message: '更新角色权限前，请验证当前管理员身份。',
             },
           })
           .afterClosed(),
@@ -111,6 +113,9 @@ export class RolePermissionsPage implements OnInit {
       this.dialog.open(RoleEditorDialog, { data: null }).afterClosed(),
     );
     if (!result) {
+      return;
+    }
+    if (!(await this.moduleUnlock.ensure('roles', '角色管理'))) {
       return;
     }
     try {

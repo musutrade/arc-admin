@@ -50,18 +50,26 @@ pub async fn create(
     {
         auth.require("user:admin:deactivate")?;
     }
-    if req.role_ids.as_ref().is_some_and(|ids| !ids.is_empty())
+    let needs_step_up = req.role_ids.as_ref().is_some_and(|ids| !ids.is_empty())
         || req
             .status
             .as_deref()
-            .is_some_and(|status| status != "active")
-    {
+            .is_some_and(|status| status != "active");
+    if needs_step_up {
         services::step_up::consume(
             &state.pool,
             auth.session_id,
             auth.user_id,
             &headers,
             services::step_up::USERS_SENSITIVE_SCOPE,
+        )
+        .await?;
+    } else {
+        services::module_unlock::require(
+            &state.pool,
+            auth.session_id,
+            auth.user_id,
+            services::module_unlock::USERS_MODULE,
         )
         .await?;
     }
@@ -90,6 +98,14 @@ pub async fn update(
             auth.user_id,
             &headers,
             services::step_up::USERS_SENSITIVE_SCOPE,
+        )
+        .await?;
+    } else {
+        services::module_unlock::require(
+            &state.pool,
+            auth.session_id,
+            auth.user_id,
+            services::module_unlock::USERS_MODULE,
         )
         .await?;
     }

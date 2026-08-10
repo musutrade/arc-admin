@@ -11,6 +11,7 @@ import { changeCurrentUserPassword } from '../generated/api/fn/auth/change-curre
 import { finishCurrentUserPasskeyRegistration } from '../generated/api/fn/auth/finish-current-user-passkey-registration';
 import { finishMfaPasskeyAuthentication } from '../generated/api/fn/auth/finish-mfa-passkey-authentication';
 import { getCurrentUserMfaStatus } from '../generated/api/fn/auth/get-current-user-mfa-status';
+import { getCurrentUserModuleUnlockStatus } from '../generated/api/fn/auth/get-current-user-module-unlock-status';
 import { getCurrentUserPermissions } from '../generated/api/fn/auth/get-current-user-permissions';
 import { getCurrentUser } from '../generated/api/fn/auth/get-current-user';
 import { login as loginRequest } from '../generated/api/fn/auth/login';
@@ -22,10 +23,13 @@ import { startCurrentUserPasskeyRegistration } from '../generated/api/fn/auth/st
 import { startMfaPasskeyAuthentication } from '../generated/api/fn/auth/start-mfa-passkey-authentication';
 import { verifyMfaRecoveryCode } from '../generated/api/fn/auth/verify-mfa-recovery-code';
 import { verifyMfaTotp } from '../generated/api/fn/auth/verify-mfa-totp';
+import { unlockCurrentUserModule } from '../generated/api/fn/auth/unlock-current-user-module';
 import { ChangePasswordRequest } from '../generated/api/models/change-password-request';
 import { LoginResponse } from '../generated/api/models/login-response';
 import { MfaFactorRevokeRequest } from '../generated/api/models/mfa-factor-revoke-request';
 import { MfaStatusResponse } from '../generated/api/models/mfa-status-response';
+import { ModuleUnlockScopeSchema } from '../generated/api/models/module-unlock-scope-schema';
+import { ModuleUnlockStatusResponse } from '../generated/api/models/module-unlock-status-response';
 import { RecoveryCodesResponse } from '../generated/api/models/recovery-codes-response';
 import { StepUpResponse } from '../generated/api/models/step-up-response';
 import { UserResponse } from '../generated/api/models/user-response';
@@ -44,10 +48,13 @@ export class AuthService {
   private readonly api = inject(Api);
   private readonly userState = signal<UserResponse | null>(null);
   private readonly permissionState = signal<ReadonlySet<string>>(new Set());
+  private readonly mfaStatusState = signal<MfaStatusResponse | null>(null);
   private sessionCheck: Promise<boolean> | null = null;
+  private mfaStatusCheck: Promise<MfaStatusResponse> | null = null;
 
   readonly currentUser = this.userState.asReadonly();
   readonly permissions = this.permissionState.asReadonly();
+  readonly mfaStatus = this.mfaStatusState.asReadonly();
 
   async login(username: string, password: string, remember: boolean): Promise<LoginResponse> {
     const response = await this.api.invoke(loginRequest, {
@@ -89,8 +96,23 @@ export class AuthService {
     return response;
   }
 
-  getMfaStatus(): Promise<MfaStatusResponse> {
-    return this.api.invoke(getCurrentUserMfaStatus);
+  async getMfaStatus(): Promise<MfaStatusResponse> {
+    const status = await this.api.invoke(getCurrentUserMfaStatus);
+    this.mfaStatusState.set(status);
+    return status;
+  }
+
+  ensureMfaStatus(): Promise<MfaStatusResponse> {
+    const cached = this.mfaStatusState();
+    if (cached) {
+      return Promise.resolve(cached);
+    }
+    if (!this.mfaStatusCheck) {
+      this.mfaStatusCheck = this.getMfaStatus().finally(() => {
+        this.mfaStatusCheck = null;
+      });
+    }
+    return this.mfaStatusCheck;
   }
 
   supportsPasskeys(): boolean {
@@ -108,9 +130,11 @@ export class AuthService {
     const credential = await startRegistration({
       optionsJSON: challenge.publicKey as PublicKeyCredentialCreationOptionsJSON,
     });
-    return this.api.invoke(finishCurrentUserPasskeyRegistration, {
+    const status = await this.api.invoke(finishCurrentUserPasskeyRegistration, {
       body: { challengeToken: challenge.challengeToken, credential },
     });
+    this.mfaStatusState.set(status);
+    return status;
   }
 
   async revokePasskey(id: number, request: MfaFactorRevokeRequest): Promise<void> {
@@ -189,6 +213,24 @@ export class AuthService {
     });
   }
 
+  getModuleUnlockStatus(module: ModuleUnlockScopeSchema): Promise<ModuleUnlockStatusResponse> {
+    return this.api.invoke(getCurrentUserModuleUnlockStatus, { module });
+  }
+
+  unlockModule(
+    module: ModuleUnlockScopeSchema,
+    currentPassword: string,
+    totpCode?: string,
+  ): Promise<ModuleUnlockStatusResponse> {
+    return this.api.invoke(unlockCurrentUserModule, {
+      body: {
+        module,
+        currentPassword,
+        ...(totpCode?.trim() ? { totpCode: totpCode.trim() } : {}),
+      },
+    });
+  }
+
   async changePassword(request: ChangePasswordRequest, stepUpToken: string): Promise<void> {
     await this.api.invoke(changeCurrentUserPassword, {
       body: request,
@@ -230,5 +272,7 @@ export class AuthService {
   private clearSession(): void {
     this.userState.set(null);
     this.permissionState.set(new Set());
+    this.mfaStatusState.set(null);
+    this.mfaStatusCheck = null;
   }
 }

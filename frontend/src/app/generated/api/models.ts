@@ -24,6 +24,9 @@ export type { MfaPasskeyRegistrationStartRequest } from './models/mfa-passkey-re
 export type { MfaPasskeyResponse } from './models/mfa-passkey-response';
 export type { MfaStatusResponse } from './models/mfa-status-response';
 export type { MfaWebauthnChallengeResponse } from './models/mfa-webauthn-challenge-response';
+export type { ModuleUnlockRequest } from './models/module-unlock-request';
+export type { ModuleUnlockScopeSchema } from './models/module-unlock-scope-schema';
+export type { ModuleUnlockStatusResponse } from './models/module-unlock-status-response';
 export type { PageAuditLog } from './models/page-audit-log';
 export type { PageUser } from './models/page-user';
 export type { PermissionCodes } from './models/permission-codes';

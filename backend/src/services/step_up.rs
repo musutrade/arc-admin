@@ -5,7 +5,7 @@ use crate::error::{db_error, ApiError};
 use crate::mfa::MfaConfig;
 use crate::models::{StepUpRequest, StepUpResponse};
 use crate::repositories;
-use crate::services::{auth as auth_service, mfa};
+use crate::services::mfa;
 use axum::http::HeaderMap;
 use chrono::{Duration, Utc};
 use serde_json::json;
@@ -45,18 +45,14 @@ pub async fn issue(
     if !is_valid_scope(&req.scope) {
         return Err(ApiError::validation("无效的再认证操作范围"));
     }
-    auth_service::verify_current_password(pool, user_id, &req.current_password).await?;
-    let summary = repositories::mfa::summary(pool, user_id)
-        .await
-        .map_err(db_error)?;
-    if summary.totp_enabled || summary.required {
-        let code = req
-            .totp_code
-            .as_deref()
-            .filter(|code| !code.trim().is_empty())
-            .ok_or_else(|| ApiError::forbidden("该操作需要身份验证器验证码"))?;
-        mfa::verify_totp_code(pool, mfa_config, user_id, code).await?;
-    }
+    mfa::verify_reauthentication(
+        pool,
+        mfa_config,
+        user_id,
+        &req.current_password,
+        req.totp_code.as_deref(),
+    )
+    .await?;
 
     let token = session_auth::random_token();
     let expires_at = Utc::now() + Duration::seconds(TOKEN_TTL_SECS);

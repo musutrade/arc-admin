@@ -1,8 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormField, form, required, submit, validate } from '@angular/forms/signals';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { apiErrorMessage } from './api-error';
+import { AuthService } from './auth.service';
+import { authenticatorCodeError } from './authenticator-code';
 
 export interface StepUpDialogData {
   title: string;
@@ -44,26 +47,41 @@ export interface StepUpCredentials {
             <small>{{ stepUpForm.currentPassword().errors()[0].message }}</small>
           }
         </div>
-        <div class="form-field">
-          <label for="step-up-totp">身份验证器验证码</label>
-          <div
-            class="verification-input"
-            [class.input-error]="stepUpForm.totpCode().touched() && stepUpForm.totpCode().invalid()"
-          >
-            <mat-icon>verified_user</mat-icon>
-            <input
-              id="step-up-totp"
-              type="text"
-              [formField]="stepUpForm.totpCode"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              placeholder="000000"
-            />
+        @if (mfaLoading()) {
+          <div class="dialog-inline-status" role="status">
+            <mat-progress-spinner diameter="18" mode="indeterminate" />
+            <span>正在读取账户安全状态</span>
           </div>
-          @if (stepUpForm.totpCode().touched() && stepUpForm.totpCode().errors().length) {
-            <small>{{ stepUpForm.totpCode().errors()[0].message }}</small>
-          }
-        </div>
+        } @else if (mfaError()) {
+          <div class="dialog-error" role="alert">{{ mfaError() }}</div>
+        } @else if (requiresEnrollment()) {
+          <div class="dialog-warning" role="alert">
+            当前账户必须先在“账号安全”中启用身份验证器，才能继续此操作。
+          </div>
+        } @else if (requiresTotp()) {
+          <div class="form-field">
+            <label for="step-up-totp">身份验证器验证码</label>
+            <div
+              class="verification-input"
+              [class.input-error]="
+                stepUpForm.totpCode().touched() && stepUpForm.totpCode().invalid()
+              "
+            >
+              <mat-icon>verified_user</mat-icon>
+              <input
+                id="step-up-totp"
+                type="text"
+                [formField]="stepUpForm.totpCode"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                placeholder="000000"
+              />
+            </div>
+            @if (stepUpForm.totpCode().touched() && stepUpForm.totpCode().errors().length) {
+              <small>{{ stepUpForm.totpCode().errors()[0].message }}</small>
+            }
+          </div>
+        }
       </div>
 
       <div class="dialog-actions">
@@ -73,7 +91,13 @@ export interface StepUpCredentials {
         <button
           type="submit"
           class="btn-primary"
-          [disabled]="stepUpForm().invalid() || submitting()"
+          [disabled]="
+            stepUpForm().invalid() ||
+            submitting() ||
+            mfaLoading() ||
+            !!mfaError() ||
+            requiresEnrollment()
+          "
           [attr.aria-busy]="submitting()"
         >
           @if (submitting()) {
@@ -90,24 +114,42 @@ export interface StepUpCredentials {
 export class StepUpDialog {
   readonly data = inject<StepUpDialogData>(MAT_DIALOG_DATA);
   private readonly dialogRef = inject(MatDialogRef<StepUpDialog>);
+  private readonly auth = inject(AuthService);
   readonly submitting = signal(false);
+  readonly mfaLoading = signal(true);
+  readonly mfaError = signal('');
+  readonly mfaStatus = this.auth.mfaStatus;
+  readonly requiresTotp = computed(() => this.mfaStatus()?.totpEnabled === true);
+  readonly requiresEnrollment = computed(
+    () => this.mfaStatus()?.required === true && !this.requiresTotp(),
+  );
   readonly stepUpModel = signal({ currentPassword: '', totpCode: '' });
   readonly stepUpForm = form(this.stepUpModel, (path) => {
     required(path.currentPassword, { message: '请输入当前密码' });
-    validate(path.totpCode, ({ value }) =>
-      value().length > 0 && value().length !== 6
-        ? { kind: 'totpLength', message: '验证码应为 6 位' }
-        : undefined,
-    );
+    validate(path.totpCode, ({ value }) => authenticatorCodeError(value(), this.requiresTotp()));
   });
 
+  constructor() {
+    void this.loadMfaStatus();
+  }
+
   confirm(): void {
-    if (this.submitting()) {
+    if (this.submitting() || this.mfaLoading() || this.mfaError() || this.requiresEnrollment()) {
       return;
     }
     submit(this.stepUpForm, async () => {
       this.submitting.set(true);
       this.dialogRef.close(this.stepUpModel());
     });
+  }
+
+  private async loadMfaStatus(): Promise<void> {
+    try {
+      await this.auth.ensureMfaStatus();
+    } catch (error) {
+      this.mfaError.set(apiErrorMessage(error, '账户安全状态读取失败'));
+    } finally {
+      this.mfaLoading.set(false);
+    }
   }
 }

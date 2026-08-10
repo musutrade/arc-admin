@@ -850,6 +850,26 @@ pub(crate) async fn verify_totp_code(
     Ok(())
 }
 
+pub(crate) async fn verify_reauthentication(
+    pool: &PgPool,
+    mfa: &MfaConfig,
+    user_id: i64,
+    password: &str,
+    code: Option<&str>,
+) -> Result<(), ApiError> {
+    auth_service::verify_current_password(pool, user_id, password).await?;
+    let summary = repositories::mfa::summary(pool, user_id)
+        .await
+        .map_err(db_error)?;
+    if summary.totp_enabled || summary.required {
+        let code = code
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| ApiError::forbidden("该操作需要身份验证器验证码"))?;
+        verify_totp_code(pool, mfa, user_id, code).await?;
+    }
+    Ok(())
+}
+
 pub(crate) async fn verify_password_and_totp(
     pool: &PgPool,
     mfa: &MfaConfig,

@@ -11,11 +11,12 @@ use crate::models::{
     LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
     MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
     MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
-    MfaStatusResponse, MfaWebauthnChallengeResponse, PageAuditLog, PageQuery, PageUser,
-    PermissionCodes, PermissionGroupResponse, PermissionResponse, PermissionTypeSchema,
-    ReadinessResponse, RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse,
-    SortDirectionSchema, StepUpRequest, StepUpResponse, UpdateRolePermissionsRequest,
-    UpdateRoleRequest, UpdateUserRequest, UserResponse, UserSortBySchema, UserStatusSchema,
+    MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
+    ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
+    PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
+    RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
+    StepUpRequest, StepUpResponse, UpdateRolePermissionsRequest, UpdateRoleRequest,
+    UpdateUserRequest, UserResponse, UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -121,6 +122,38 @@ fn change_current_user_password() {}
     )
 )]
 fn issue_step_up_token() {}
+
+#[utoipa::path(
+    post,
+    path = "/auth/me/module-unlocks",
+    operation_id = "unlockCurrentUserModule",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    params(("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token")),
+    request_body = ModuleUnlockRequest,
+    responses(
+        (status = 200, description = "模块已临时解锁", body = ModuleUnlockStatusResponse),
+        (status = 401, description = "未认证", body = ErrorEnvelope),
+        (status = 403, description = "该操作需要身份验证器验证码", body = ErrorEnvelope),
+        (status = 422, description = "当前密码、验证码或模块范围无效", body = ErrorEnvelope)
+    )
+)]
+fn unlock_current_user_module() {}
+
+#[utoipa::path(
+    get,
+    path = "/auth/me/module-unlocks/{module}",
+    operation_id = "getCurrentUserModuleUnlockStatus",
+    tag = "auth",
+    security(("cookieAuth" = [])),
+    params(("module" = ModuleUnlockScopeSchema, Path, description = "模块范围")),
+    responses(
+        (status = 200, description = "模块解锁状态", body = ModuleUnlockStatusResponse),
+        (status = 401, description = "未认证", body = ErrorEnvelope),
+        (status = 422, description = "模块范围无效", body = ErrorEnvelope)
+    )
+)]
+fn current_user_module_unlock_status() {}
 
 #[utoipa::path(
     get,
@@ -537,7 +570,7 @@ fn list_audit_logs() {}
 #[openapi(
     info(
         title = "Arc Admin API",
-        version = "2.3.0",
+        version = "2.4.0",
         description = "Arc Admin 母模板的认证、RBAC、用户与审计 API"
     ),
     paths(
@@ -548,6 +581,8 @@ fn list_audit_logs() {}
         current_user,
         change_current_user_password,
         issue_step_up_token,
+        unlock_current_user_module,
+        current_user_module_unlock_status,
         current_user_permissions,
         verify_mfa_totp,
         verify_mfa_recovery_code,
@@ -593,6 +628,9 @@ fn list_audit_logs() {}
         ChangePasswordRequest,
         StepUpRequest,
         StepUpResponse,
+        ModuleUnlockScopeSchema,
+        ModuleUnlockRequest,
+        ModuleUnlockStatusResponse,
         LoginStatusSchema,
         MfaMethodSchema,
         LoginResponse,

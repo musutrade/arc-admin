@@ -378,6 +378,31 @@ pub struct StepUpResponse {
 
 #[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub enum ModuleUnlockScopeSchema {
+    Users,
+    Roles,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleUnlockRequest {
+    #[schema(value_type = ModuleUnlockScopeSchema)]
+    pub module: String,
+    pub current_password: String,
+    pub totp_code: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleUnlockStatusResponse {
+    #[schema(value_type = ModuleUnlockScopeSchema)]
+    pub module: String,
+    pub unlocked: bool,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub enum LoginStatusSchema {
     Authenticated,
     MfaRequired,

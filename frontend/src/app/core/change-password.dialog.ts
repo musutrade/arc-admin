@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import {
   FormField,
   form,
@@ -13,6 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { apiErrorMessage } from './api-error';
 import { AuthService } from './auth.service';
+import { authenticatorCodeError } from './authenticator-code';
 
 @Component({
   selector: 'app-change-password-dialog',
@@ -108,28 +109,41 @@ import { AuthService } from './auth.service';
           }
         </div>
 
-        <div class="form-field">
-          <label for="totp-code">身份验证器验证码</label>
-          <div
-            class="verification-input"
-            [class.input-error]="
-              passwordForm.totpCode().touched() && passwordForm.totpCode().invalid()
-            "
-          >
-            <mat-icon>verified_user</mat-icon>
-            <input
-              id="totp-code"
-              type="text"
-              inputmode="numeric"
-              [formField]="passwordForm.totpCode"
-              placeholder="000000"
-              autocomplete="one-time-code"
-            />
+        @if (mfaLoading()) {
+          <div class="dialog-inline-status" role="status">
+            <mat-progress-spinner diameter="18" mode="indeterminate" />
+            <span>正在读取账户安全状态</span>
           </div>
-          @if (passwordForm.totpCode().touched() && passwordForm.totpCode().errors().length) {
-            <small>{{ passwordForm.totpCode().errors()[0].message }}</small>
-          }
-        </div>
+        } @else if (mfaError()) {
+          <div class="dialog-error" role="alert">{{ mfaError() }}</div>
+        } @else if (requiresEnrollment()) {
+          <div class="dialog-warning" role="alert">
+            当前账户必须先在“账号安全”中启用身份验证器，才能修改密码。
+          </div>
+        } @else if (requiresTotp()) {
+          <div class="form-field">
+            <label for="totp-code">身份验证器验证码</label>
+            <div
+              class="verification-input"
+              [class.input-error]="
+                passwordForm.totpCode().touched() && passwordForm.totpCode().invalid()
+              "
+            >
+              <mat-icon>verified_user</mat-icon>
+              <input
+                id="totp-code"
+                type="text"
+                inputmode="numeric"
+                [formField]="passwordForm.totpCode"
+                placeholder="000000"
+                autocomplete="one-time-code"
+              />
+            </div>
+            @if (passwordForm.totpCode().touched() && passwordForm.totpCode().errors().length) {
+              <small>{{ passwordForm.totpCode().errors()[0].message }}</small>
+            }
+          </div>
+        }
       </div>
 
       @if (errorMessage()) {
@@ -143,7 +157,13 @@ import { AuthService } from './auth.service';
         <button
           type="submit"
           class="btn-primary"
-          [disabled]="passwordForm().invalid() || submitting()"
+          [disabled]="
+            passwordForm().invalid() ||
+            submitting() ||
+            mfaLoading() ||
+            !!mfaError() ||
+            requiresEnrollment()
+          "
           [attr.aria-busy]="submitting()"
         >
           @if (submitting()) {
@@ -163,6 +183,13 @@ export class ChangePasswordDialog {
 
   readonly submitting = signal(false);
   readonly errorMessage = signal('');
+  readonly mfaLoading = signal(true);
+  readonly mfaError = signal('');
+  readonly mfaStatus = this.auth.mfaStatus;
+  readonly requiresTotp = computed(() => this.mfaStatus()?.totpEnabled === true);
+  readonly requiresEnrollment = computed(
+    () => this.mfaStatus()?.required === true && !this.requiresTotp(),
+  );
   readonly showCurrentPassword = signal(false);
   readonly showNewPassword = signal(false);
   readonly showConfirmPassword = signal(false);
@@ -183,11 +210,7 @@ export class ChangePasswordDialog {
         : undefined,
     );
     required(path.confirmPassword, { message: '请再次输入新密码' });
-    validate(path.totpCode, ({ value }) =>
-      value().length > 0 && value().length !== 6
-        ? { kind: 'totpLength', message: '验证码应为 6 位' }
-        : undefined,
-    );
+    validate(path.totpCode, ({ value }) => authenticatorCodeError(value(), this.requiresTotp()));
     validate(path.confirmPassword, ({ value, valueOf }) =>
       value().length > 0 && value() !== valueOf(path.newPassword)
         ? { kind: 'passwordMismatch', message: '两次输入的新密码不一致' }
@@ -197,8 +220,12 @@ export class ChangePasswordDialog {
 
   readonly toggle = (visible: boolean): boolean => !visible;
 
+  constructor() {
+    void this.loadMfaStatus();
+  }
+
   submitPassword(): void {
-    if (this.submitting()) {
+    if (this.submitting() || this.mfaLoading() || this.mfaError() || this.requiresEnrollment()) {
       return;
     }
     submit(this.passwordForm, async () => {
@@ -209,7 +236,7 @@ export class ChangePasswordDialog {
         const stepUp = await this.auth.issueStepUp(
           'auth.password.change',
           currentPassword,
-          totpCode,
+          this.requiresTotp() ? totpCode : undefined,
         );
         await this.auth.changePassword({ currentPassword, newPassword }, stepUp.token);
         this.dialogRef.close(true);
@@ -219,5 +246,15 @@ export class ChangePasswordDialog {
         this.submitting.set(false);
       }
     });
+  }
+
+  private async loadMfaStatus(): Promise<void> {
+    try {
+      await this.auth.ensureMfaStatus();
+    } catch (error) {
+      this.mfaError.set(apiErrorMessage(error, '账户安全状态读取失败'));
+    } finally {
+      this.mfaLoading.set(false);
+    }
   }
 }

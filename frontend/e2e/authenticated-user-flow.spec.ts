@@ -104,6 +104,33 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       await route.fulfill({ json: administrator });
     } else if (path === '/api/v1/auth/me/permissions') {
       await route.fulfill({ json: { codes: permissions } });
+    } else if (path === '/api/v1/auth/me/mfa') {
+      await route.fulfill({
+        json: {
+          passkeys: [],
+          recoveryCodesRemaining: 10,
+          required: false,
+          totpEnabled: true,
+        },
+      });
+    } else if (path === '/api/v1/auth/me/module-unlocks' && request.method() === 'POST') {
+      const payload = request.postDataJSON() as { module: string };
+      await route.fulfill({
+        json: {
+          module: payload.module,
+          unlocked: true,
+          expiresAt: '2026-08-01T00:05:00Z',
+        },
+      });
+    } else if (/^\/api\/v1\/auth\/me\/module-unlocks\/(users|roles)$/.test(path)) {
+      const module = path.split('/').at(-1);
+      await route.fulfill({
+        json: {
+          module,
+          unlocked: request.method() === 'GET' ? false : true,
+          expiresAt: request.method() === 'GET' ? null : '2026-08-01T00:05:00Z',
+        },
+      });
     } else if (path === '/api/v1/auth/logout') {
       await route.fulfill({ status: 204 });
     } else if (path === '/api/v1/auth/me/step-up' && request.method() === 'POST') {

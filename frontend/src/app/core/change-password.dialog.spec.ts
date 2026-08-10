@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
 import { AuthService } from './auth.service';
@@ -9,12 +10,25 @@ describe('ChangePasswordDialog', () => {
   let fixture: ComponentFixture<ChangePasswordDialog>;
   let auth: {
     changePassword: ReturnType<typeof vi.fn>;
+    ensureMfaStatus: ReturnType<typeof vi.fn>;
     issueStepUp: ReturnType<typeof vi.fn>;
+    mfaStatus: ReturnType<typeof signal>;
   };
   let dialogRef: { close: ReturnType<typeof vi.fn> };
 
-  beforeEach(() => {
-    auth = { changePassword: vi.fn(), issueStepUp: vi.fn() };
+  beforeEach(async () => {
+    const mfaStatus = signal({
+      passkeys: [],
+      recoveryCodesRemaining: 0,
+      required: false,
+      totpEnabled: true,
+    });
+    auth = {
+      changePassword: vi.fn(),
+      ensureMfaStatus: vi.fn().mockResolvedValue(mfaStatus()),
+      issueStepUp: vi.fn(),
+      mfaStatus,
+    };
     dialogRef = { close: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
@@ -24,6 +38,7 @@ describe('ChangePasswordDialog', () => {
     });
     fixture = TestBed.createComponent(ChangePasswordDialog);
     component = fixture.componentInstance;
+    await fixture.whenStable();
   });
 
   it('rejects a confirmation that does not match the new password', async () => {
@@ -51,7 +66,27 @@ describe('ChangePasswordDialog', () => {
     await fixture.whenStable();
 
     expect(component.passwordForm.totpCode().invalid()).toBe(true);
-    expect(component.passwordForm.totpCode().errors()[0].message).toBe('验证码应为 6 位');
+    expect(component.passwordForm.totpCode().errors()[0].message).toBe('验证码应为 6 位数字');
+  });
+
+  it('does not require or display a code for users without an authenticator', async () => {
+    auth.mfaStatus.set({
+      passkeys: [],
+      recoveryCodesRemaining: 0,
+      required: false,
+      totpEnabled: false,
+    });
+    component.passwordModel.set({
+      currentPassword: 'current-password',
+      newPassword: 'updated-password',
+      confirmPassword: 'updated-password',
+      totpCode: '',
+    });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.passwordForm.totpCode().valid()).toBe(true);
+    expect(fixture.nativeElement.querySelector('#totp-code')).toBeNull();
   });
 
   it('submits valid passwords and closes the dialog', async () => {
