@@ -44,7 +44,7 @@
     "@playwright/test": "^1.62.1",
     "angular-eslint": "22.1.0",
     "eslint": "^10.6.0",
-    "jsdom": "^26.1.0",
+    "jsdom": "^30.0.1",
     "ng-openapi-gen": "^1.0.1",
     "otpauth": "^9.5.1",
     "prettier": "^3.8.1",
