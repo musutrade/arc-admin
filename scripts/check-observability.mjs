@@ -36,6 +36,16 @@ function checkObservability() {
   const prometheusDatasource = read(
     "observability/grafana/provisioning/datasources/prometheus.yaml",
   );
+  const productionAlertingCompose = read(
+    "observability/compose.production-alerting.yaml",
+  );
+  const productionContactPoints = read(
+    "observability/grafana/provisioning/alerting/production/contact-points.yaml",
+  );
+  const productionNotificationPolicy = read(
+    "observability/grafana/provisioning/alerting/production/notification-policy.yaml",
+  );
+  const observabilityEnvironment = read("observability/.env.example");
 
   for (const image of [
     "grafana/loki:3.7.2",
@@ -61,6 +71,8 @@ function checkObservability() {
     requireText(compose, binding, "Compose 本机端口");
   }
   requireText(compose, "GRAFANA_ADMIN_PASSWORD:?", "Grafana 管理员密码保护");
+  requireText(compose, "alerting/log-alerts.yaml:ro", "Grafana 日志告警挂载");
+  requireText(compose, "alerting/metrics-alerts.yaml:ro", "Grafana 指标告警挂载");
   requireText(compose, "/var/run/docker.sock:ro", "Docker 日志采集");
   requireText(compose, "external: true", "生产监控网络隔离");
   requireText(gitignore, "/observability/logs/*.jsonl", "本地日志忽略规则");
@@ -104,6 +116,41 @@ function checkObservability() {
   requireText(blackbox, "valid_status_codes: [200]", "Blackbox");
   requireText(prometheusDatasource, "uid: prometheus", "Prometheus 数据源");
   requireText(metricsAlerts, "uid: application-entry-down", "指标告警");
+
+  for (const variable of [
+    "GRAFANA_ALERT_CONTACT_TYPE",
+    "GRAFANA_ALERT_WEBHOOK_URL",
+  ]) {
+    requireText(
+      productionAlertingCompose,
+      `${variable}:?`,
+      "生产告警 Compose 环境保护",
+    );
+    if (!new RegExp(`^${variable}=\\s*$`, "m").test(observabilityEnvironment)) {
+      throw new Error(`可观测性环境示例中的 ${variable} 必须保持为空`);
+    }
+  }
+  for (const expected of [
+    "name: arc-admin-production-alerts",
+    "uid: arc-admin-production-alerts",
+    "type: $GRAFANA_ALERT_CONTACT_TYPE",
+    "url: $GRAFANA_ALERT_WEBHOOK_URL",
+    "disableResolveMessage: false",
+  ]) {
+    requireText(productionContactPoints, expected, "Grafana 生产联系点");
+  }
+  for (const expected of [
+    "receiver: arc-admin-production-alerts",
+    "group_by: [alertname]",
+    "group_wait: 30s",
+    "group_interval: 5m",
+    "repeat_interval: 4h",
+  ]) {
+    requireText(productionNotificationPolicy, expected, "Grafana 生产通知策略");
+  }
+  if (/https?:\/\//.test(productionContactPoints)) {
+    throw new Error("Grafana 生产联系点禁止包含实际 Webhook 地址");
+  }
 
   for (const expected of [
     "uid: application-error-burst",

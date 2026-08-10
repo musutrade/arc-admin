@@ -1,6 +1,6 @@
 # Grafana 告警通知配置
 
-Grafana 已自动装载日志告警规则，但联系点包含机器人地址、SMTP 密码等部署秘密，因此不随项目模板提交。每个生产环境都必须单独完成本页配置，测试通知和真实告警均送达后，才算完成告警闭环。
+Grafana 已自动装载告警规则。仓库提供生产联系点和默认通知策略的 provisioning 文件，但机器人地址等部署秘密只通过环境变量注入。每个生产环境都必须独立配置并完成送达验收。
 
 ## 前置条件
 
@@ -9,11 +9,33 @@ Grafana 已自动装载日志告警规则，但联系点包含机器人地址、
 - 已准备企业微信群、钉钉群、SMTP 账号或 HTTPS Webhook；
 - 操作者具有 Grafana 管理员或告警管理权限。
 
-启动日志栈：
+开发环境只启动基础栈，不创建生产联系点：
 
 ```bash
 docker compose --env-file observability/.env -f observability/compose.yaml up -d
 ```
+
+## 生产配置供应
+
+在每个生产环境受保护的 `observability/.env` 中设置以下值：
+
+```env
+GRAFANA_ALERT_CONTACT_TYPE=wecom
+GRAFANA_ALERT_WEBHOOK_URL=<由部署环境或密钥系统注入>
+```
+
+`GRAFANA_ALERT_CONTACT_TYPE` 支持 `wecom`、`dingding` 或 `webhook`。地址必须与类型匹配；使用 `webhook` 时，接收端必须理解 Grafana Webhook JSON。不要把真实地址写入 `.env.example`、Compose、provisioning 文件、工单或日志。
+
+生产环境同时加载基础栈和告警覆盖：
+
+```bash
+docker compose --env-file observability/.env \
+  -f observability/compose.yaml \
+  -f observability/compose.production-alerting.yaml \
+  up -d
+```
+
+生产覆盖会在类型或地址为空时直接拒绝解析 Compose。Grafana 启动后自动创建 `arc-admin-production-alerts` 联系点，并把默认通知策略绑定到该联系点；通知按 `alertname` 分组，保留恢复通知。
 
 Grafana 默认只监听本机的 `http://127.0.0.1:3000`。管理员用户名默认为 `admin`，查看初始化生成的密码：
 
@@ -46,7 +68,7 @@ https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx
 
 Webhook 地址具有发送权限，按密码管理：不要写入文档、工单、日志或 Git 仓库，泄露后立即在企业微信中重新生成。
 
-### 2. 创建 Grafana 联系点
+### 2. 配置生产环境变量
 
 登录 Grafana，依次进入：
 
@@ -54,22 +76,20 @@ Webhook 地址具有发送权限，按密码管理：不要写入文档、工单
 Alerts & IRM -> Alerting -> Notification configuration -> Contact points
 ```
 
-点击“New contact point”，填写：
+使用企业微信时设置：
 
-| 配置项 | 建议值 |
-| --- | --- |
-| Name | `企业微信告警` |
-| Integration | `WeCom` |
-| URL | 企业微信机器人 Webhook 地址 |
-| Disable resolved message | 不启用，保留恢复通知 |
+```env
+GRAFANA_ALERT_CONTACT_TYPE=wecom
+GRAFANA_ALERT_WEBHOOK_URL=<企业微信机器人 Webhook 地址>
+```
 
-先点击“Test”，选择预设测试消息，再点击“Send test notification”。群内收到测试消息后保存联系点。
+重启 Grafana 后进入 Contact points，打开只读的 `arc-admin-production-alerts` 联系点，点击“Test”并发送测试通知。
 
 ## 钉钉
 
 1. 在钉钉告警群中添加“自定义机器人”并复制 Webhook 地址；
 2. 在机器人安全设置中使用自定义关键词，例如“告警”；
-3. 在 Grafana 新建联系点，Integration 选择 `DingDing`，URL 填写机器人地址；
+3. 设置 `GRAFANA_ALERT_CONTACT_TYPE=dingding`，并通过 `GRAFANA_ALERT_WEBHOOK_URL` 注入机器人地址；
 4. 确保自定义通知内容始终包含配置的安全关键词；
 5. 发送测试通知，成功后保存。
 
@@ -106,25 +126,25 @@ SMTP 生效后，在 Contact points 中新建 `Email` 联系点，填写一个�
 
 测试时应确认接收端返回 HTTP 2xx，并记录 Grafana 告警指纹或事件 ID；不要在接收端日志中输出认证凭据和完整请求头。
 
-## 绑定通知策略
+## 检查通知策略
 
-创建联系点不会自动发送真实告警。进入：
+生产 provisioning 已创建默认通知策略。进入：
 
 ```text
 Alerts & IRM -> Alerting -> Notification configuration -> Notification policies
 ```
 
-在 `Default policy` 右侧选择“Edit”，先使用以下配置打通所有现有规则：
+确认默认策略包含以下配置：
 
 | 配置项 | 建议值 |
 | --- | --- |
-| Default contact point | 刚创建并测试成功的联系点 |
+| Default contact point | `arc-admin-production-alerts` |
 | Group by | `alertname` |
 | Group wait | `30s` |
 | Group interval | `5m` |
 | Repeat interval | `4h` |
 
-保存后，未命中子策略的告警都会发送到该联系点。项目规模扩大后再增加子策略，例如：
+Provisioning 管理的策略不能在界面修改。需要增加分级路由时，修改生产 provisioning 文件并重新部署，例如：
 
 - `severity=critical`：企业微信加邮件或值班 Webhook；
 - `severity=warning`：企业微信或钉钉告警群。
@@ -161,7 +181,7 @@ Alerts & IRM -> Alerting -> Notification configuration -> Notification policies
 
 ### 重建后联系点丢失
 
-通过界面创建的联系点保存在 Grafana 数据卷中。普通 `docker compose down` 会保留数据，`docker compose down --volumes` 会删除日志和 Grafana 配置数据。生产环境应备份 Grafana 数据卷，或在密钥管理方案确定后改为受控配置供应。
+确认启动命令包含 `compose.production-alerting.yaml`，且环境变量仍由密钥系统注入。Provisioning 联系点会在 Grafana 重建时恢复，不依赖 Grafana 数据卷中的手工配置。
 
 ### 查看发送错误
 

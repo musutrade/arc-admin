@@ -95,7 +95,8 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./grafana/provisioning/alerting/log-alerts.yaml:/etc/grafana/provisioning/alerting/log-alerts.yaml:ro
+      - ./grafana/provisioning/alerting/metrics-alerts.yaml:/etc/grafana/provisioning/alerting/metrics-alerts.yaml:ro
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

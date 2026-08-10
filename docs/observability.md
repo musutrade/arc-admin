@@ -121,7 +121,7 @@ Grafana 默认装载以下规则：
 - “HTTP 5xx 持续出现”：5 分钟内 5xx 超过 3 条并持续 2 分钟，级别 `critical`。
 - “应用入口不可用”：内部 Blackbox 探测连续 2 分钟失败，级别 `critical`。
 
-规则会立即评估，但通知渠道属于部署环境的秘密配置，不写入模板。首次部署后应按照 [Grafana 告警通知配置](grafana-alert-notifications.md)创建企业微信、钉钉、邮件或 Webhook 联系点，并绑定通知策略。测试通知和真实告警均成功送达后，才可视为生产告警闭环完成。
+规则会立即评估。生产环境使用 `observability/compose.production-alerting.yaml` 额外挂载联系点与默认通知策略，类型和 Webhook 地址只从部署环境注入，不写入模板。首次部署后仍需按照 [Grafana 告警通知配置](grafana-alert-notifications.md)完成测试通知和真实告警演练；`Firing` 与 `Resolved` 均成功送达后，才可视为生产告警闭环完成。
 
 ## 外部心跳
 
