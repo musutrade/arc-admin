@@ -125,26 +125,12 @@
               </div>
             }
 
-            <div class="field">
-              <label for="totp-code">身份验证器验证码</label>
-              <div
-                class="input-wrap"
-                [class.input-error]="totpForm.code().touched() && totpForm.code().invalid()"
-              >
-                <mat-icon>verified_user</mat-icon>
-                <input
-                  id="totp-code"
-                  type="text"
-                  inputmode="numeric"
-                  [formField]="totpForm.code"
-                  placeholder="000000"
-                  autocomplete="one-time-code"
-                />
-              </div>
-              @if (totpForm.code().touched() && totpForm.code().invalid()) {
-                <p class="field-error">{{ totpForm.code().errors()[0].message }}</p>
-              }
-            </div>
+            <app-authenticator-code-field
+              class="login-code-field"
+              controlId="totp-code"
+              appearance="login"
+              [formField]="totpForm.code"
+            />
 
             @if (error()) {
               <div class="login-error">

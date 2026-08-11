@@ -7,6 +7,7 @@ import { Router } from '@angular/router';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { authenticatorCodeError } from '../../core/authenticator-code';
+import { AuthenticatorCodeField } from '../../core/authenticator-code-field';
 import { APP_CONFIG } from '../../core/runtime-config';
 import { LoginResponse } from '../../generated/api/models/login-response';
 import { MfaMethodSchema } from '../../generated/api/models/mfa-method-schema';
@@ -15,7 +16,7 @@ type LoginStep = 'password' | 'totp' | 'recovery' | 'recoveryCodes';
 
 @Component({
   selector: 'app-login',
-  imports: [FormField, MatIconModule, MatProgressSpinnerModule],
+  imports: [AuthenticatorCodeField, FormField, MatIconModule, MatProgressSpinnerModule],
   templateUrl: './login.html',
   styleUrl: './login.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

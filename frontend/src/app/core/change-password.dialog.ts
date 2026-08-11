@@ -14,10 +14,17 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { apiErrorMessage } from './api-error';
 import { AuthService } from './auth.service';
 import { authenticatorCodeError } from './authenticator-code';
+import { AuthenticatorCodeField } from './authenticator-code-field';
 
 @Component({
   selector: 'app-change-password-dialog',
-  imports: [FormField, MatDialogModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [
+    AuthenticatorCodeField,
+    FormField,
+    MatDialogModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+  ],
   template: `
     <form
       class="editor-dialog compact-dialog"
@@ -121,28 +128,7 @@ import { authenticatorCodeError } from './authenticator-code';
             当前账户必须先在“账号安全”中启用身份验证器，才能修改密码。
           </div>
         } @else if (requiresTotp()) {
-          <div class="form-field">
-            <label for="totp-code">身份验证器验证码</label>
-            <div
-              class="verification-input"
-              [class.input-error]="
-                passwordForm.totpCode().touched() && passwordForm.totpCode().invalid()
-              "
-            >
-              <mat-icon>verified_user</mat-icon>
-              <input
-                id="totp-code"
-                type="text"
-                inputmode="numeric"
-                [formField]="passwordForm.totpCode"
-                placeholder="000000"
-                autocomplete="one-time-code"
-              />
-            </div>
-            @if (passwordForm.totpCode().touched() && passwordForm.totpCode().errors().length) {
-              <small>{{ passwordForm.totpCode().errors()[0].message }}</small>
-            }
-          </div>
+          <app-authenticator-code-field controlId="totp-code" [formField]="passwordForm.totpCode" />
         }
       </div>
 

@@ -8,12 +8,19 @@ import { Router } from '@angular/router';
 import { apiErrorMessage } from '../../core/api-error';
 import { AuthService } from '../../core/auth.service';
 import { authenticatorCodeError } from '../../core/authenticator-code';
+import { AuthenticatorCodeField } from '../../core/authenticator-code-field';
 import { MfaStatusResponse } from '../../generated/api/models/mfa-status-response';
 import { StepUpDialog, StepUpCredentials } from '../../core/step-up.dialog';
 
 @Component({
   selector: 'app-security',
-  imports: [FormField, MatDialogModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [
+    AuthenticatorCodeField,
+    FormField,
+    MatDialogModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+  ],
   templateUrl: './security.html',
   styleUrl: './security.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

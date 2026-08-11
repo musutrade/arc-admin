@@ -6,6 +6,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { apiErrorMessage } from './api-error';
 import { AuthService } from './auth.service';
 import { authenticatorCodeError } from './authenticator-code';
+import { AuthenticatorCodeField } from './authenticator-code-field';
 
 export interface StepUpDialogData {
   title: string;
@@ -19,7 +20,13 @@ export interface StepUpCredentials {
 
 @Component({
   selector: 'app-step-up-dialog',
-  imports: [FormField, MatDialogModule, MatIconModule, MatProgressSpinnerModule],
+  imports: [
+    AuthenticatorCodeField,
+    FormField,
+    MatDialogModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+  ],
   template: `
     <form
       class="editor-dialog compact-dialog"
@@ -59,28 +66,10 @@ export interface StepUpCredentials {
             当前账户必须先在“账号安全”中启用身份验证器，才能继续此操作。
           </div>
         } @else if (requiresTotp()) {
-          <div class="form-field">
-            <label for="step-up-totp">身份验证器验证码</label>
-            <div
-              class="verification-input"
-              [class.input-error]="
-                stepUpForm.totpCode().touched() && stepUpForm.totpCode().invalid()
-              "
-            >
-              <mat-icon>verified_user</mat-icon>
-              <input
-                id="step-up-totp"
-                type="text"
-                [formField]="stepUpForm.totpCode"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                placeholder="000000"
-              />
-            </div>
-            @if (stepUpForm.totpCode().touched() && stepUpForm.totpCode().errors().length) {
-              <small>{{ stepUpForm.totpCode().errors()[0].message }}</small>
-            }
-          </div>
+          <app-authenticator-code-field
+            controlId="step-up-totp"
+            [formField]="stepUpForm.totpCode"
+          />
         }
       </div>
 
