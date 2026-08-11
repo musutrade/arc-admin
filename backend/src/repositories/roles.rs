@@ -1,7 +1,7 @@
 //! 角色 Repository：唯一的角色数据访问层（SQL 写操作只允许出现在这里）
 
 use crate::models::{RoleRow, RoleWithPermissionsRow};
-use sqlx::{PgConnection, PgPool, Row};
+use sqlx::{AssertSqlSafe, PgConnection, PgPool, Row};
 
 const ROLE_SELECT: &str = "SELECT r.id, r.code, r.name, r.category, r.icon, r.color, \
     r.description, r.data_scope, r.is_active, \
@@ -72,7 +72,7 @@ pub async fn list_all(pool: &PgPool) -> Result<Vec<RoleWithPermissionsRow>, sqlx
 }
 
 pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<RoleRow>, sqlx::Error> {
-    sqlx::query_as::<_, RoleRow>(&format!("{ROLE_SELECT} WHERE r.id = $1"))
+    sqlx::query_as::<_, RoleRow>(AssertSqlSafe(format!("{ROLE_SELECT} WHERE r.id = $1")))
         .bind(id)
         .fetch_optional(pool)
         .await

@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, OnceLock};
-use totp_rs::{Algorithm, Secret, TOTP};
+use totp_rs::{Algorithm, Builder, Secret, Totp};
 use tower::ServiceExt;
 
 const MFA_TEST_STEP_SECS: u64 = 3;
@@ -263,21 +263,22 @@ fn current_totp_code(session: &TestSession) -> Option<String> {
         .and_then(|secrets| secrets.lock().ok())
         .and_then(|secrets| secrets.get(&session.username).cloned())
         .map(|secret| {
-            TOTP::new(
-                Algorithm::SHA1,
-                6,
-                1,
-                MFA_TEST_STEP_SECS,
-                Secret::Encoded(secret)
-                    .to_bytes()
-                    .expect("TOTP secret bytes"),
-                None,
-                session.username.clone(),
-            )
-            .expect("test TOTP")
-            .generate_current()
-            .expect("current TOTP code")
+            test_totp(&session.username, &secret)
+                .generate_current()
+                .to_string()
         })
+}
+
+fn test_totp(account_name: &str, secret: &str) -> Totp {
+    Builder::new()
+        .with_algorithm(Algorithm::SHA1)
+        .with_digits(6)
+        .with_skew(1)
+        .with_step_duration(MFA_TEST_STEP_SECS)
+        .with_secret(Secret::try_from_base32(secret).expect("TOTP secret bytes"))
+        .with_account_name(account_name)
+        .build()
+        .expect("test TOTP")
 }
 
 async fn request_with_step_up(
@@ -362,20 +363,7 @@ async fn login(
             .cloned()
             .expect("enrolled TOTP test secret")
     };
-    let code = TOTP::new(
-        Algorithm::SHA1,
-        6,
-        1,
-        MFA_TEST_STEP_SECS,
-        Secret::Encoded(secret)
-            .to_bytes()
-            .expect("TOTP secret bytes"),
-        None,
-        username.to_string(),
-    )
-    .expect("test TOTP")
-    .generate_current()
-    .expect("current TOTP code");
+    let code = test_totp(username, &secret).generate_current().to_string();
     let response = request(
         app,
         Method::POST,

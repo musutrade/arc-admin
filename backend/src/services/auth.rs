@@ -8,7 +8,6 @@ use crate::models::{
     PermissionCodes, UserResponse, UserRow,
 };
 use crate::repositories;
-use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -546,7 +545,7 @@ pub fn validate_password(password: &str) -> Result<(), ApiError> {
 
 /// Argon2 password hash in PHC format with a cryptographically random salt.
 pub fn hash_password(password: &str) -> Result<String, ApiError> {
-    let salt = SaltString::generate(&mut OsRng);
+    let salt = auth::password_salt();
     Argon2::default()
         .hash_password(password.as_bytes(), &salt)
         .map(|hash| hash.to_string())

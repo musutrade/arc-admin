@@ -115,7 +115,11 @@ fn write_archive(
             .and_then(|name| name.to_str())
             .ok_or_else(|| anyhow::anyhow!("归档文件名不是有效 UTF-8"))?
             .to_string(),
-        sha256: format!("{:x}", hasher.finalize()),
+        sha256: hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
         record_count: rows.len(),
         first_id: first.id,
         last_id: last.id,

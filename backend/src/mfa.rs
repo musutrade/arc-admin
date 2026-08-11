@@ -3,8 +3,7 @@
 use aes_gcm::aead::{Aead, Payload};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use anyhow::{bail, Context};
-use argon2::password_hash::rand_core::{OsRng, RngCore};
-use totp_rs::{Algorithm, TOTP};
+use totp_rs::{Algorithm, Builder, Totp};
 use url::Url;
 use webauthn_rs::prelude::{Webauthn, WebauthnBuilder};
 
@@ -68,12 +67,13 @@ impl MfaConfig {
 
     pub fn encrypt_totp_secret(&self, user_id: i64, secret: &[u8]) -> anyhow::Result<Vec<u8>> {
         let mut nonce_bytes = [0_u8; NONCE_LENGTH];
-        OsRng.fill_bytes(&mut nonce_bytes);
+        getrandom::fill(&mut nonce_bytes).context("failed to generate MFA nonce")?;
         let aad = user_id.to_be_bytes();
         let ciphertext = self
             .cipher
             .encrypt(
-                Nonce::from_slice(&nonce_bytes),
+                &Nonce::try_from(nonce_bytes.as_slice())
+                    .map_err(|_| anyhow::anyhow!("invalid MFA nonce length"))?,
                 Payload {
                     msg: secret,
                     aad: &aad,
@@ -94,7 +94,8 @@ impl MfaConfig {
         let aad = user_id.to_be_bytes();
         self.cipher
             .decrypt(
-                Nonce::from_slice(&encoded[1..1 + NONCE_LENGTH]),
+                &Nonce::try_from(&encoded[1..1 + NONCE_LENGTH])
+                    .map_err(|_| anyhow::anyhow!("invalid MFA nonce length"))?,
                 Payload {
                     msg: &encoded[1 + NONCE_LENGTH..],
                     aad: &aad,
@@ -103,17 +104,17 @@ impl MfaConfig {
             .map_err(|_| anyhow::anyhow!("failed to decrypt MFA secret"))
     }
 
-    pub fn totp(&self, account_name: &str, secret: Vec<u8>) -> anyhow::Result<TOTP> {
-        TOTP::new(
-            Algorithm::SHA1,
-            6,
-            1,
-            self.totp_step_secs,
-            secret,
-            Some(self.issuer.clone()),
-            account_name.to_string(),
-        )
-        .map_err(|error| anyhow::anyhow!("failed to configure TOTP: {error}"))
+    pub fn totp(&self, account_name: &str, secret: Vec<u8>) -> anyhow::Result<Totp> {
+        Builder::new()
+            .with_algorithm(Algorithm::SHA1)
+            .with_digits(6)
+            .with_skew(1)
+            .with_step_duration(self.totp_step_secs)
+            .with_secret(secret)
+            .with_issuer(Some(self.issuer.clone()))
+            .with_account_name(account_name)
+            .build()
+            .map_err(|error| anyhow::anyhow!("failed to configure TOTP: {error}"))
     }
 
     pub const fn webauthn(&self) -> &Webauthn {

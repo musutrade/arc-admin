@@ -2,7 +2,7 @@
 
 use crate::access::ActorContext;
 use crate::models::{UserRow, UserWithRolesRow};
-use sqlx::{PgConnection, PgPool, Row};
+use sqlx::{AssertSqlSafe, PgConnection, PgPool, Row};
 
 const USER_COLUMNS: &str =
     "id, username, password_hash, display_name, email, status, organization_id, department_id, token_version, last_login_at, created_at";
@@ -47,18 +47,18 @@ pub async fn find_by_username(
     pool: &PgPool,
     username: &str,
 ) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as::<_, UserRow>(&format!(
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "SELECT {USER_COLUMNS} FROM users WHERE username = $1 AND deleted_at IS NULL"
-    ))
+    )))
     .bind(username)
     .fetch_optional(pool)
     .await
 }
 
 pub async fn find_by_id(pool: &PgPool, id: i64) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as::<_, UserRow>(&format!(
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "SELECT {USER_COLUMNS} FROM users WHERE id = $1 AND deleted_at IS NULL"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await
@@ -69,7 +69,7 @@ pub async fn find_by_id_for_actor(
     actor: &ActorContext,
     id: i64,
 ) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as::<_, UserRow>(&format!(
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "WITH RECURSIVE visible_departments AS (
              SELECT d.id
              FROM departments d
@@ -93,7 +93,7 @@ pub async fn find_by_id_for_actor(
                       AND department_id IN (SELECT id FROM visible_departments)
                )
            )"
-    ))
+    )))
     .bind(id)
     .bind(actor.organization_id)
     .bind(actor.user_id)
@@ -167,7 +167,7 @@ pub async fn list(
          ORDER BY {order_by}, u.id ASC
          LIMIT $8 OFFSET $9"
     );
-    sqlx::query_as::<_, UserWithRolesRow>(&query)
+    sqlx::query_as::<_, UserWithRolesRow>(AssertSqlSafe(query))
         .bind(actor.data_scope.as_str())
         .bind(actor.organization_id)
         .bind(actor.user_id)
@@ -276,14 +276,14 @@ pub(crate) async fn create(
     connection: &mut PgConnection,
     user: &NewUser,
 ) -> Result<UserRow, sqlx::Error> {
-    sqlx::query_as::<_, UserRow>(&format!(
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "INSERT INTO users (
              username, password_hash, display_name, email, status,
              organization_id, department_id
          )
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING {USER_COLUMNS}"
-    ))
+    )))
     .bind(&user.username)
     .bind(&user.password_hash)
     .bind(&user.display_name)
@@ -302,7 +302,7 @@ pub async fn activate_bootstrap_account(
     display_name: &str,
     email: Option<String>,
 ) -> Result<UserRow, sqlx::Error> {
-    sqlx::query_as::<_, UserRow>(&format!(
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "UPDATE users
          SET password_hash = $2,
              display_name = $3,
@@ -312,7 +312,7 @@ pub async fn activate_bootstrap_account(
              updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL
          RETURNING {USER_COLUMNS}"
-    ))
+    )))
     .bind(id)
     .bind(password_hash)
     .bind(display_name)
@@ -329,7 +329,7 @@ pub async fn update_profile(
     email: Option<String>,
     status: Option<String>,
 ) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as::<_, UserRow>(&format!(
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "UPDATE users
          SET display_name = COALESCE($2, display_name),
              email = CASE WHEN $3 THEN $4 ELSE email END,
@@ -337,7 +337,7 @@ pub async fn update_profile(
              updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL
          RETURNING {USER_COLUMNS}"
-    ))
+    )))
     .bind(id)
     .bind(display_name)
     .bind(email_is_set)
@@ -352,12 +352,12 @@ pub async fn update_password(
     id: i64,
     password_hash: &str,
 ) -> Result<Option<UserRow>, sqlx::Error> {
-    sqlx::query_as::<_, UserRow>(&format!(
+    sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "UPDATE users
          SET password_hash = $2, token_version = token_version + 1, updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL
          RETURNING {USER_COLUMNS}"
-    ))
+    )))
     .bind(id)
     .bind(password_hash)
     .fetch_optional(&mut *connection)

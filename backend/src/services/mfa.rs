@@ -10,15 +10,13 @@ use crate::models::{
 };
 use crate::repositories;
 use crate::services::auth::{self as auth_service, LoginContext, LoginSessionOutcome};
-use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::PgPool;
-use std::time::{SystemTime, UNIX_EPOCH};
-use totp_rs::{Secret, TOTP};
+use totp_rs::{Secret, Totp};
 use uuid::Uuid;
 use webauthn_rs::prelude::{PasskeyAuthentication, PasskeyRegistration, PublicKeyCredential};
 
@@ -67,10 +65,8 @@ pub async fn begin_login(
         .await
         .map_err(db_error)?;
     if summary.required && !summary.totp_enabled {
-        let secret = Secret::generate_secret();
-        let secret_bytes = secret.to_bytes().map_err(|error| {
-            ApiError::internal(format!("invalid generated TOTP secret: {error}"))
-        })?;
+        let secret = Secret::generate();
+        let secret_bytes = secret.as_ref().to_vec();
         let encrypted = mfa
             .encrypt_totp_secret(user.id, &secret_bytes)
             .map_err(ApiError::internal)?;
@@ -112,9 +108,9 @@ pub async fn begin_login(
             user: None,
             challenge_token: Some(token),
             methods: vec![MfaMethodSchema::Totp],
-            totp_secret: Some(totp.get_secret_base32()),
-            totp_uri: Some(totp.get_url()),
-            totp_qr_code: Some(totp.get_qr_base64().map_err(ApiError::internal)?),
+            totp_secret: Some(totp.secret().to_base32()),
+            totp_uri: Some(totp.to_url().map_err(ApiError::internal)?),
+            totp_qr_code: Some(totp.to_qr_base64().map_err(ApiError::internal)?),
             recovery_codes: Vec::new(),
         }));
     }
@@ -197,7 +193,7 @@ pub async fn verify_totp_login(
         .totp(&user.username, secret)
         .map_err(ApiError::internal)?
         .check_current(code.trim())
-        .map_err(ApiError::internal)?;
+        .is_some();
     if !valid {
         let locked = repositories::mfa::record_challenge_failure(&mut transaction, challenge.id)
             .await
@@ -296,7 +292,7 @@ async fn verify_totp_enrollment(
         .totp(&user.username, secret)
         .map_err(ApiError::internal)?
         .check_current(code.trim())
-        .map_err(ApiError::internal)?;
+        .is_some();
     if !valid {
         let locked = repositories::mfa::record_challenge_failure(&mut transaction, challenge.id)
             .await
@@ -823,7 +819,7 @@ fn hash_recovery_code(code: &str) -> Result<String, ApiError> {
     let params = Params::new(4 * 1024, 1, 1, None)
         .map_err(|error| ApiError::internal(format!("invalid recovery hash profile: {error}")))?;
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password(code.as_bytes(), &SaltString::generate(&mut OsRng))
+        .hash_password(code.as_bytes(), &session_auth::password_salt())
         .map(|hash| hash.to_string())
         .map_err(|error| ApiError::internal(format!("failed to hash recovery code: {error}")))
 }
@@ -893,25 +889,10 @@ pub(crate) async fn verify_totp_code(
     Ok(())
 }
 
-fn matching_totp_counter(totp: &TOTP, code: &str) -> Result<Option<i64>, ApiError> {
-    let code = code.trim();
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(ApiError::internal)?
-        .as_secs();
-    if !totp.check(code, timestamp) {
-        return Ok(None);
-    }
-
-    let current = timestamp / totp.step;
-    let first = current.saturating_sub(u64::from(totp.skew));
-    let last = current.saturating_add(u64::from(totp.skew));
-    for counter in (first..=last).rev() {
-        if totp.generate(counter * totp.step) == code {
-            return i64::try_from(counter).map(Some).map_err(ApiError::internal);
-        }
-    }
-    Ok(None)
+fn matching_totp_counter(totp: &Totp, code: &str) -> Result<Option<i64>, ApiError> {
+    totp.check_current(code.trim())
+        .map(|counter| i64::try_from(counter).map_err(ApiError::internal))
+        .transpose()
 }
 
 pub(crate) async fn verify_reauthentication(

@@ -173,6 +173,7 @@ patterns = [
   "README.md",
   "CHANGELOG.md",
   ".gitignore",
+  ".gitattributes",
   ".dockerignore",
   "AGENTS.md",
   "start.sh",
