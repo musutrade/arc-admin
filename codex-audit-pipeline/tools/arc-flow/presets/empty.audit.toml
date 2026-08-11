@@ -1,5 +1,12 @@
 hard_rules = []
 arch_rules = []
 
+[engine]
+ignore_filename = ".auditignore"
+json_report_filename = "review_context.json"
+markdown_report_filename = "review_context.md"
+markdown_max_bytes = 4096
+markdown_occurrences_per_rule = 3
+
 [paths]
 exclude = ["target", "node_modules", "dist", ".git", ".arc-flow/reports"]

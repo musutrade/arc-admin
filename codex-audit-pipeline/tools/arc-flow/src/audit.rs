@@ -6,6 +6,7 @@ use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 // ============================================================
@@ -23,12 +24,61 @@ struct PathsConfig {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 struct Config {
+    engine: EngineConfig,
     #[serde(default)]
     paths: PathsConfig,
     #[serde(default)]
     hard_rules: Vec<HardRule>,
     #[serde(default)]
     arch_rules: Vec<ArchRule>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+struct EngineConfig {
+    ignore_filename: String,
+    json_report_filename: String,
+    markdown_report_filename: String,
+    markdown_max_bytes: usize,
+    markdown_occurrences_per_rule: usize,
+    #[serde(default)]
+    comment_syntax: HashMap<String, CommentSyntax>,
+}
+
+#[derive(Debug, Default, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+struct CommentSyntax {
+    #[serde(default)]
+    line: Vec<String>,
+    #[serde(default)]
+    block: Vec<BlockCommentSyntax>,
+    #[serde(default)]
+    strings: Vec<StringSyntax>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+struct BlockCommentSyntax {
+    start: String,
+    end: String,
+    #[serde(default)]
+    nested: bool,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+struct StringSyntax {
+    start: String,
+    end: String,
+    #[serde(default)]
+    escape: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum AllowlistEntry {
+    PathPrefix { path: String },
+    Regex { pattern: String },
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -42,7 +92,7 @@ struct HardRule {
     #[serde(default)]
     exclude_patterns: Vec<String>,
     #[serde(default)]
-    allowlist: Vec<String>,
+    allowlist: Vec<AllowlistEntry>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -59,7 +109,7 @@ struct ArchRule {
     #[serde(default)]
     exclude_patterns: Vec<String>,
     #[serde(default)]
-    allowlist: Vec<String>,
+    allowlist: Vec<AllowlistEntry>,
 }
 
 // ============================================================
@@ -308,22 +358,148 @@ fn source_line_at<'a>(
     )
 }
 
-fn is_inside_line_comment(line: &str, match_start: usize, extension: Option<&str>) -> bool {
-    line.find("//").is_some_and(|pos| pos < match_start)
-        || (extension == Some("sql") && line.find("--").is_some_and(|pos| pos < match_start))
+enum LexicalState<'a> {
+    Code,
+    String(&'a StringSyntax),
+    LineComment {
+        start: usize,
+    },
+    BlockComment {
+        syntax: &'a BlockCommentSyntax,
+        start: usize,
+        depth: usize,
+    },
 }
 
-fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[String]) -> bool {
+fn token_at(bytes: &[u8], offset: usize, token: &str) -> bool {
+    bytes[offset..].starts_with(token.as_bytes())
+}
+
+fn comment_ranges(content: &str, syntax: &CommentSyntax) -> Vec<Range<usize>> {
+    let bytes = content.as_bytes();
+    let mut ranges = Vec::new();
+    let mut state = LexicalState::Code;
+    let mut offset = 0;
+
+    while offset < bytes.len() {
+        match state {
+            LexicalState::Code => {
+                if let Some(string) = syntax
+                    .strings
+                    .iter()
+                    .filter(|string| token_at(bytes, offset, &string.start))
+                    .max_by_key(|string| string.start.len())
+                {
+                    offset += string.start.len();
+                    state = LexicalState::String(string);
+                } else if let Some(block) = syntax
+                    .block
+                    .iter()
+                    .filter(|block| token_at(bytes, offset, &block.start))
+                    .max_by_key(|block| block.start.len())
+                {
+                    let start = offset;
+                    offset += block.start.len();
+                    state = LexicalState::BlockComment {
+                        syntax: block,
+                        start,
+                        depth: 1,
+                    };
+                } else if let Some(line) = syntax
+                    .line
+                    .iter()
+                    .filter(|line| token_at(bytes, offset, line))
+                    .max_by_key(|line| line.len())
+                {
+                    let start = offset;
+                    offset += line.len();
+                    state = LexicalState::LineComment { start };
+                } else {
+                    offset += 1;
+                }
+            }
+            LexicalState::String(string) => {
+                if string
+                    .escape
+                    .as_deref()
+                    .is_some_and(|escape| token_at(bytes, offset, escape))
+                {
+                    offset += string.escape.as_deref().map_or(0, str::len);
+                    offset = (offset + 1).min(bytes.len());
+                } else if token_at(bytes, offset, &string.end) {
+                    offset += string.end.len();
+                    state = LexicalState::Code;
+                } else {
+                    offset += 1;
+                }
+            }
+            LexicalState::LineComment { start } => {
+                if bytes[offset] == b'\n' {
+                    ranges.push(start..offset);
+                    state = LexicalState::Code;
+                }
+                offset += 1;
+            }
+            LexicalState::BlockComment {
+                syntax: block,
+                start,
+                mut depth,
+            } => {
+                if block.nested && token_at(bytes, offset, &block.start) {
+                    depth += 1;
+                    offset += block.start.len();
+                    state = LexicalState::BlockComment {
+                        syntax: block,
+                        start,
+                        depth,
+                    };
+                } else if token_at(bytes, offset, &block.end) {
+                    depth -= 1;
+                    offset += block.end.len();
+                    if depth == 0 {
+                        ranges.push(start..offset);
+                        state = LexicalState::Code;
+                    } else {
+                        state = LexicalState::BlockComment {
+                            syntax: block,
+                            start,
+                            depth,
+                        };
+                    }
+                } else {
+                    offset += 1;
+                    state = LexicalState::BlockComment {
+                        syntax: block,
+                        start,
+                        depth,
+                    };
+                }
+            }
+        }
+    }
+
+    match state {
+        LexicalState::LineComment { start } | LexicalState::BlockComment { start, .. } => {
+            ranges.push(start..bytes.len())
+        }
+        LexicalState::Code | LexicalState::String(_) => {}
+    }
+    ranges
+}
+
+fn is_comment_offset(ranges: &[Range<usize>], offset: usize) -> bool {
+    let index = ranges.partition_point(|range| range.start <= offset);
+    index > 0 && ranges[index - 1].contains(&offset)
+}
+
+fn is_allowlisted(path: &Path, project_root: &Path, allowlist: &[AllowlistEntry]) -> bool {
     let relative = path.strip_prefix(project_root).unwrap_or(path);
     let path_str = relative.to_str().unwrap_or("");
-    allowlist.iter().any(|pattern| {
-        if pattern.contains('*') || pattern.contains('[') || pattern.contains('(') {
-            Regex::new(pattern)
-                .map(|re| re.is_match(path_str))
-                .unwrap_or(false)
-        } else {
-            relative.starts_with(Path::new(pattern))
-        }
+    allowlist.iter().any(|entry| match entry {
+        AllowlistEntry::PathPrefix { path } => relative.starts_with(Path::new(path)),
+        AllowlistEntry::Regex { pattern } => Regex::new(pattern)
+            .map(|re| re.is_match(path_str))
+            .unwrap_or(false),
     })
 }
 
@@ -332,6 +508,7 @@ fn scan_files(
     root_paths: &[PathBuf],
     exclude_dirs: &[PathBuf],
     rule: &HardRule,
+    engine: &EngineConfig,
 ) -> Result<Vec<Violation>> {
     if root_paths.is_empty() || rule.patterns.is_empty() {
         return Ok(Vec::new());
@@ -346,7 +523,7 @@ fn scan_files(
         walk_builder.add(root_path);
     }
     let entries = walk_builder
-        .add_custom_ignore_filename(".auditignore")
+        .add_custom_ignore_filename(&engine.ignore_filename)
         .follow_links(false)
         .build()
         .collect::<std::result::Result<Vec<_>, ignore::Error>>()?;
@@ -384,12 +561,16 @@ fn scan_files(
             let mut reported_lines = HashSet::new();
             let line_starts = source_line_starts(&content);
             let extension = path.extension().and_then(|value| value.to_str());
+            let comments = extension
+                .and_then(|extension| engine.comment_syntax.get(extension))
+                .map(|syntax| comment_ranges(&content, syntax))
+                .unwrap_or_default();
 
             for (idx, re) in regexes.iter().enumerate() {
                 for matched in re.find_iter(&content) {
-                    let (line_number, line, offset_in_line) =
+                    let (line_number, line, _) =
                         source_line_at(&content, &line_starts, matched.start());
-                    if is_inside_line_comment(line, offset_in_line, extension)
+                    if is_comment_offset(&comments, matched.start())
                         || !reported_lines.insert(line_number)
                     {
                         continue;
@@ -442,7 +623,7 @@ fn scan_arch_rules(
             walk_builder.add(root_path);
         }
         let entries = walk_builder
-            .add_custom_ignore_filename(".auditignore")
+            .add_custom_ignore_filename(&config.engine.ignore_filename)
             .follow_links(false)
             .build()
             .collect::<std::result::Result<Vec<_>, ignore::Error>>()?;
@@ -480,12 +661,16 @@ fn scan_arch_rules(
                 let mut reported_lines = HashSet::new();
                 let line_starts = source_line_starts(&content);
                 let extension = path.extension().and_then(|value| value.to_str());
+                let comments = extension
+                    .and_then(|extension| config.engine.comment_syntax.get(extension))
+                    .map(|syntax| comment_ranges(&content, syntax))
+                    .unwrap_or_default();
 
                 for re in &regexes {
                     for matched in re.find_iter(&content) {
-                        let (line_number, line, offset_in_line) =
+                        let (line_number, line, _) =
                             source_line_at(&content, &line_starts, matched.start());
-                        if is_inside_line_comment(line, offset_in_line, extension)
+                        if is_comment_offset(&comments, matched.start())
                             || allowed_regexes.iter().any(|allowed| allowed.is_match(line))
                             || !reported_lines.insert(line_number)
                         {
@@ -522,6 +707,7 @@ fn generate_markdown(
     arch_violations: &[ArchViolation],
 ) -> String {
     let mut output = String::new();
+    let occurrence_limit = config.engine.markdown_occurrences_per_rule;
 
     output.push_str("=== 【自动化硬性约束扫描结果】 ===\n\n");
 
@@ -535,7 +721,7 @@ fn generate_markdown(
         output.push_str(&format!(">> {}: 违规数量 {}\n", rule.name, count));
 
         if count > 0 {
-            for v in rule_violations.iter().take(3) {
+            for v in rule_violations.iter().take(occurrence_limit) {
                 output.push_str(&format!(
                     "    {}:{}: {}\n",
                     v.file.display(),
@@ -543,8 +729,8 @@ fn generate_markdown(
                     v.content
                 ));
             }
-            if count > 3 {
-                output.push_str(&format!("    ... 剩余 {} 处\n", count - 3));
+            if count > occurrence_limit {
+                output.push_str(&format!("    ... 剩余 {} 处\n", count - occurrence_limit));
             }
         } else {
             output.push_str("  ✅ 未发现\n");
@@ -564,7 +750,7 @@ fn generate_markdown(
         output.push_str(&format!(">> {}: 违规数量 {}\n", rule.name, count));
 
         if count > 0 {
-            for v in violations.iter().take(3) {
+            for v in violations.iter().take(occurrence_limit) {
                 output.push_str(&format!(
                     "    {}:{}: {}\n",
                     v.file.display(),
@@ -572,8 +758,8 @@ fn generate_markdown(
                     v.content
                 ));
             }
-            if count > 3 {
-                output.push_str(&format!("    ... 剩余 {} 处\n", count - 3));
+            if count > occurrence_limit {
+                output.push_str(&format!("    ... 剩余 {} 处\n", count - occurrence_limit));
             }
             output.push_str(&format!("  💡 建议: {}\n", rule.suggestion));
         } else {
@@ -614,6 +800,7 @@ struct JsonSummary {
     total_violations: usize,
     blocker_count: usize,
     error_count: usize,
+    warning_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -690,6 +877,11 @@ fn generate_report(
         .filter(|v| v.severity == "error")
         .map(|v| v.count)
         .sum();
+    let warning_count: usize = hard_json
+        .iter()
+        .filter(|v| v.severity == "warning")
+        .map(|v| v.count)
+        .sum();
 
     JsonReport {
         timestamp: chrono::Utc::now().to_rfc3339(),
@@ -699,6 +891,7 @@ fn generate_report(
             total_violations: total,
             blocker_count,
             error_count,
+            warning_count,
         },
     }
 }
@@ -708,9 +901,58 @@ pub struct AuditOutcome {
     pub total_violations: usize,
     pub blocker_count: usize,
     pub error_count: usize,
+    pub warning_count: usize,
+    pub report_file: PathBuf,
+}
+
+fn validate_filename(value: &str, field: &str) -> Result<()> {
+    let path = Path::new(value);
+    if value.trim().is_empty() || path.components().count() != 1 || path.file_name().is_none() {
+        bail!("audit engine {field} must be a filename without directory components");
+    }
+    Ok(())
+}
+
+fn validate_engine_config(engine: &EngineConfig) -> Result<()> {
+    validate_filename(&engine.ignore_filename, "ignore_filename")?;
+    validate_filename(&engine.json_report_filename, "json_report_filename")?;
+    validate_filename(&engine.markdown_report_filename, "markdown_report_filename")?;
+    if engine.json_report_filename == engine.markdown_report_filename {
+        bail!("audit engine report filenames must be distinct");
+    }
+    if engine.markdown_max_bytes == 0 || engine.markdown_occurrences_per_rule == 0 {
+        bail!("audit engine markdown limits must be positive");
+    }
+    for (extension, syntax) in &engine.comment_syntax {
+        if extension.trim().is_empty()
+            || syntax.line.iter().any(|token| token.is_empty())
+            || syntax
+                .block
+                .iter()
+                .any(|block| block.start.is_empty() || block.end.is_empty())
+            || syntax.strings.iter().any(|string| {
+                string.start.is_empty()
+                    || string.end.is_empty()
+                    || string.escape.as_ref().is_some_and(String::is_empty)
+            })
+        {
+            bail!("audit engine comment syntax for {extension:?} contains an empty token");
+        }
+        if syntax
+            .block
+            .iter()
+            .any(|block| block.nested && block.start == block.end)
+        {
+            bail!(
+                "audit engine nested comment syntax for {extension:?} requires distinct delimiters"
+            );
+        }
+    }
+    Ok(())
 }
 
 fn validate_audit_config(project_root: &Path, config: &Config) -> Result<Vec<PathBuf>> {
+    validate_engine_config(&config.engine)?;
     for (alias, path) in &config.paths.aliases {
         resolve_repo_path(
             project_root,
@@ -773,19 +1015,26 @@ fn validate_audit_config(project_root: &Path, config: &Config) -> Result<Vec<Pat
     Ok(exclude_dirs)
 }
 
-fn validate_allowlist(project_root: &Path, allowlist: &[String], rule_name: &str) -> Result<()> {
-    for pattern in allowlist {
-        if pattern.contains('*') || pattern.contains('[') || pattern.contains('(') {
-            Regex::new(pattern).with_context(|| {
-                format!("audit rule {rule_name:?} has invalid allowlist regex {pattern:?}")
-            })?;
-        } else {
-            resolve_repo_path(
-                project_root,
-                Path::new(pattern),
-                &format!("audit rule {rule_name:?} allowlist path"),
-                false,
-            )?;
+fn validate_allowlist(
+    project_root: &Path,
+    allowlist: &[AllowlistEntry],
+    rule_name: &str,
+) -> Result<()> {
+    for entry in allowlist {
+        match entry {
+            AllowlistEntry::PathPrefix { path } => {
+                resolve_repo_path(
+                    project_root,
+                    Path::new(path),
+                    &format!("audit rule {rule_name:?} allowlist path"),
+                    false,
+                )?;
+            }
+            AllowlistEntry::Regex { pattern } => {
+                Regex::new(pattern).with_context(|| {
+                    format!("audit rule {rule_name:?} has invalid allowlist regex {pattern:?}")
+                })?;
+            }
         }
     }
     Ok(())
@@ -807,7 +1056,13 @@ pub fn run(
     for rule in &config.hard_rules {
         let root_paths =
             resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
-        let violations = scan_files(project_root, &root_paths, &exclude_dirs, rule)?;
+        let violations = scan_files(
+            project_root,
+            &root_paths,
+            &exclude_dirs,
+            rule,
+            &config.engine,
+        )?;
         all_hard_violations.extend(violations);
     }
 
@@ -818,25 +1073,33 @@ pub fn run(
         total_violations: report.summary.total_violations,
         blocker_count: report.summary.blocker_count,
         error_count: report.summary.error_count,
+        warning_count: report.summary.warning_count,
+        report_file: report_dir.join(&config.engine.json_report_filename),
     };
 
     fs::create_dir_all(report_dir)?;
-    fs::write(report_dir.join("review_context.json"), &full_json)?;
+    fs::write(&outcome.report_file, &full_json)?;
 
     let markdown = generate_markdown(&config, &all_hard_violations, &arch_violations);
-    let truncated = if markdown.len() > 4096 {
+    let truncated = if markdown.len() > config.engine.markdown_max_bytes {
         let mut value = markdown;
-        let mut boundary = 4096;
+        let mut boundary = config.engine.markdown_max_bytes;
         while !value.is_char_boundary(boundary) {
             boundary -= 1;
         }
         value.truncate(boundary);
-        value.push_str("\n\n... (report truncated to 4KB; see review_context.json)");
+        value.push_str(&format!(
+            "\n\n... (report truncated to {} bytes; see {})",
+            config.engine.markdown_max_bytes, config.engine.json_report_filename
+        ));
         value
     } else {
         markdown
     };
-    fs::write(report_dir.join("review_context.md"), truncated)?;
+    fs::write(
+        report_dir.join(&config.engine.markdown_report_filename),
+        truncated,
+    )?;
 
     if emit_json {
         println!("{full_json}");
@@ -914,7 +1177,8 @@ mod tests {
             exclude_patterns: Vec::new(),
             allowlist: Vec::new(),
         };
-        let violations = scan_files(&test_dir.0, &roots, &[], &rule).expect("scan fixture");
+        let violations = scan_files(&test_dir.0, &roots, &[], &rule, &configured_audit().engine)
+            .expect("scan fixture");
 
         assert_eq!(violations.len(), 2);
     }
@@ -942,8 +1206,14 @@ mod tests {
         .expect("write sensitive log fixture");
         let rule = configured_hard_rule("日志不得记录完整请求头或显式敏感字段");
 
-        let violations =
-            scan_files(&test_dir.0, &[source], &[], &rule).expect("scan sensitive log fixture");
+        let violations = scan_files(
+            &test_dir.0,
+            &[source],
+            &[],
+            &rule,
+            &configured_audit().engine,
+        )
+        .expect("scan sensitive log fixture");
 
         assert_eq!(violations.len(), 2);
         assert_eq!(
@@ -987,7 +1257,14 @@ mod tests {
         .expect("write external SQL fixture");
         let rule = configured_hard_rule("SQL 写操作仅允许出现在 Repository/迁移/测试层");
 
-        let violations = scan_files(&test_dir.0, &[source], &[], &rule).expect("scan SQL fixtures");
+        let violations = scan_files(
+            &test_dir.0,
+            &[source],
+            &[],
+            &rule,
+            &configured_audit().engine,
+        )
+        .expect("scan SQL fixtures");
 
         assert_eq!(violations.len(), 4);
         assert!(violations
@@ -1016,6 +1293,7 @@ mod tests {
             .expect("service SQL rule must exist");
         service_rule.paths = vec!["services".to_string()];
         let config = Config {
+            engine: configured_audit().engine,
             paths: PathsConfig::default(),
             hard_rules: Vec::new(),
             arch_rules: vec![service_rule],
@@ -1036,6 +1314,7 @@ mod tests {
         fs::write(layout.join("layout.ts"), "HttpClient\n").expect("write layout fixture");
 
         let config = Config {
+            engine: configured_audit().engine,
             paths: PathsConfig {
                 exclude: Vec::new(),
                 aliases: HashMap::new(),
@@ -1064,7 +1343,9 @@ mod tests {
 
     #[test]
     fn literal_allowlist_is_a_path_prefix_not_a_substring() {
-        let allowlist = vec!["backend/src/repositories".to_string()];
+        let allowlist = vec![AllowlistEntry::PathPrefix {
+            path: "backend/src/repositories".to_string(),
+        }];
         let root = Path::new("/repo");
 
         assert!(is_allowlisted(
@@ -1080,9 +1361,75 @@ mod tests {
     }
 
     #[test]
+    fn regex_allowlist_is_explicit() {
+        let allowlist = vec![AllowlistEntry::Regex {
+            pattern: r"^backend/src/generated/.*\.rs$".to_string(),
+        }];
+        let root = Path::new("/repo");
+
+        assert!(is_allowlisted(
+            Path::new("/repo/backend/src/generated/users.rs"),
+            root,
+            &allowlist
+        ));
+        assert!(!is_allowlisted(
+            Path::new("/repo/backend/src/services/users.rs"),
+            root,
+            &allowlist
+        ));
+    }
+
+    #[test]
+    fn configured_comment_syntax_handles_strings_and_block_comments() {
+        let test_dir = TestDir::new("comment-syntax");
+        let source = test_dir.child("src");
+        fs::write(
+            source.join("sample.rs"),
+            concat!(
+                "fn sample() {\n",
+                "    let url = \"https://example.invalid\"; forbidden_call();\n",
+                "    /* forbidden_call();\n",
+                "       /* forbidden_call(); */\n",
+                "    */\n",
+                "    let marker = \"/*\"; forbidden_call();\n",
+                "    // forbidden_call();\n",
+                "}\n",
+            ),
+        )
+        .expect("write comment fixture");
+        let rule = HardRule {
+            name: "comment rule".into(),
+            severity: "error".into(),
+            paths: Vec::new(),
+            extensions: vec!["rs".into()],
+            patterns: vec!["forbidden_call".into()],
+            exclude_patterns: Vec::new(),
+            allowlist: Vec::new(),
+        };
+
+        let violations = scan_files(
+            &test_dir.0,
+            &[source],
+            &[],
+            &rule,
+            &configured_audit().engine,
+        )
+        .expect("scan comment fixture");
+
+        assert_eq!(
+            violations
+                .iter()
+                .map(|violation| violation.line)
+                .collect::<Vec<_>>(),
+            vec![2, 6]
+        );
+    }
+
+    #[test]
     fn missing_rule_root_fails_closed() {
         let test_dir = TestDir::new("missing-root");
         let config = Config {
+            engine: configured_audit().engine,
             paths: PathsConfig::default(),
             hard_rules: vec![HardRule {
                 name: "missing".into(),
@@ -1105,6 +1452,7 @@ mod tests {
     fn rule_root_cannot_escape_project() {
         let test_dir = TestDir::new("outside-root");
         let config = Config {
+            engine: configured_audit().engine,
             paths: PathsConfig::default(),
             hard_rules: vec![HardRule {
                 name: "outside".into(),

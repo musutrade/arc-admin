@@ -160,14 +160,13 @@ fn run_selected(
             timed_out: false,
             cancelled: false,
             duration_ms: audit_started.elapsed().as_millis(),
-            log: project
-                .reports
-                .join("review_context.json")
-                .to_string_lossy()
-                .to_string(),
+            log: outcome.report_file.to_string_lossy().to_string(),
             detail: Some(format!(
-                "{} violation(s), {} blocker(s), {} error(s)",
-                outcome.total_violations, outcome.blocker_count, outcome.error_count
+                "{} violation(s), {} blocker(s), {} error(s), {} warning(s)",
+                outcome.total_violations,
+                outcome.blocker_count,
+                outcome.error_count,
+                outcome.warning_count
             )),
         };
         print_result(&audit_result);

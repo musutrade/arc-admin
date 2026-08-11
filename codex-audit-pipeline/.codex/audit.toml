@@ -2,6 +2,49 @@
 # auditor 审计规则配置
 # 路径均相对于项目根目录；可用环境变量 BACKEND_DIR / FRONTEND_DIR 覆盖
 # ============================================================
+[engine]
+ignore_filename = ".auditignore"
+json_report_filename = "review_context.json"
+markdown_report_filename = "review_context.md"
+markdown_max_bytes = 4096
+markdown_occurrences_per_rule = 3
+
+[engine.comment_syntax.rs]
+line = ["//"]
+block = [{ start = "/*", end = "*/", nested = true }]
+strings = [
+  { start = 'r###"', end = '"###' },
+  { start = 'r##"', end = '"##' },
+  { start = 'r#"', end = '"#' },
+  { start = 'r"', end = '"' },
+  { start = '"', end = '"', escape = '\' },
+]
+
+[engine.comment_syntax.sql]
+line = ["--"]
+block = [{ start = "/*", end = "*/" }]
+strings = [
+  { start = "'", end = "'" },
+  { start = '"', end = '"' },
+]
+
+[engine.comment_syntax.ts]
+line = ["//"]
+block = [{ start = "/*", end = "*/" }]
+strings = [
+  { start = "'", end = "'", escape = '\' },
+  { start = '"', end = '"', escape = '\' },
+  { start = "`", end = "`", escape = '\' },
+]
+
+[engine.comment_syntax.tmpl]
+line = ["//"]
+block = [{ start = "/*", end = "*/", nested = true }]
+strings = [
+  { start = 'r#"', end = '"#' },
+  { start = '"', end = '"', escape = '\' },
+]
+
 [paths]
 backend = "backend"
 frontend = "frontend"
@@ -31,11 +74,11 @@ patterns = [
   '\.exec\s*\(',
 ]
 allowlist = [
-  "backend/src/repositories",
-  "backend/src/db.rs",
-  "backend/migrations",
-  "backend/tests",
-  "backend/src/seed",
+  { kind = "path-prefix", path = "backend/src/repositories" },
+  { kind = "path-prefix", path = "backend/src/db.rs" },
+  { kind = "path-prefix", path = "backend/migrations" },
+  { kind = "path-prefix", path = "backend/tests" },
+  { kind = "path-prefix", path = "backend/src/seed" },
 ]
 exclude_patterns = []
 

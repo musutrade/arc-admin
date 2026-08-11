@@ -381,10 +381,12 @@ remove_env = ["DATABASE_URL"]
 `[paths].secrets_config` 指向独立、受版本控制的 TOML 文件。预设会生成一套通用高置信规则，项目可在不重新编译 `arc-flow` 的情况下增加供应商或业务密钥规则。配置版本、规则 ID、正则、捕获组和最小长度都会在扫描前校验；配置缺失、空规则或无效捕获组会直接让门禁失败。
 
 ```toml
-version = 1
+version = 2
 
 [placeholders]
 minimum_unique_characters = 4
+maximum_nonalphanumeric_characters = 2
+prefixes = ["${", "{{", "<"]
 markers = ["change-me", "replace-me", "placeholder"]
 exact = ["password", "secret"]
 
@@ -400,7 +402,7 @@ minimum_length = 12
 
 - `direct`：正则命中即报告，适合有固定前缀或结构的 Token、JWT、私钥头。
 - `value`：只对指定捕获组执行长度、占位符和字符多样性判断，适合命名密钥及厂商 Webhook Token。
-- `postgres-url`：分别捕获用户名、密码、主机和数据库；可只豁免本机、测试库、用户名密码相同的临时数据库 URL。
+- `postgres-url`：分别捕获用户名、密码、主机和数据库；`local_test_policy` 可显式配置临时数据库允许的主机、库名后缀及用户名密码约束。
 - `webhook-url`：解析捕获到的 URL，检查配置的敏感查询参数或高信息路径末段。
 
 扫描报告只包含命中文件名，不会复制密钥内容。占位符策略只作用于捕获值；`direct` 应仅配置误报概率足够低的模式。
@@ -412,6 +414,13 @@ minimum_length = 12
 ```toml
 hard_rules = []
 arch_rules = []
+
+[engine]
+ignore_filename = ".auditignore"
+json_report_filename = "review_context.json"
+markdown_report_filename = "review_context.md"
+markdown_max_bytes = 4096
+markdown_occurrences_per_rule = 3
 
 [paths]
 exclude = ["target", "node_modules", "dist", ".git"]
@@ -426,11 +435,15 @@ severity = "blocker"
 paths = ["api"]
 extensions = ["rs", "sql"]
 patterns = ['(?i)INSERT\\s+INTO', '\\.execute\\s*\\(']
-allowlist = ["services/api/src/repositories", "services/api/migrations", "services/api/tests"]
+allowlist = [
+  { kind = "path-prefix", path = "services/api/src/repositories" },
+  { kind = "path-prefix", path = "services/api/migrations" },
+  { kind = "path-prefix", path = "services/api/tests" },
+]
 exclude_patterns = []
 ```
 
-`paths` 可以引用审计文件 `[paths]` 中的 alias。`allowlist` 按路径前缀放行；包含正则元字符的 allowlist 项按正则处理。`exclude_patterns` 用正则排除文件路径。
+`paths` 可以引用审计文件 `[paths]` 中的 alias。`allowlist` 必须显式使用 `path-prefix` 或 `regex` 类型，避免根据字符串内容猜测语义。`exclude_patterns` 用正则排除文件路径。
 
 ### 13.2 Architecture rule
 
@@ -451,7 +464,7 @@ exclude_patterns = []
 
 每个规则的 `paths` 必须解析到项目根内已经存在的目录。路径中的 `..`、逃出项目的绝对路径或符号链接都会被拒绝；目录遍历或文件读取失败也会让审计失败，避免扫描缺失时误报通过。审计报告统一记录仓库相对路径。
 
-auditor 是确定性的整文件正则扫描器，不是语言 parser。正则默认启用 multi-line 模式，因此 `^`/`$` 仍按代码行匹配，`\s` 可以跨行；需要让 `.` 跨行时应在规则中显式使用 `(?s)`。报告定位到匹配起始行，Rust/前端源码会忽略该位置之前的 `//`，SQL 文件会额外忽略 `--` 行注释。扫描器不跟踪跨行 `/* ... */` 块注释；需要语法树级判断时，应使用项目语言自己的 lint 工具，并把该工具配置成一个 step。
+auditor 是确定性的整文件正则扫描器，不是语言 parser。正则默认启用 multi-line 模式，因此 `^`/`$` 仍按代码行匹配，`\s` 可以跨行；需要让 `.` 跨行时应在规则中显式使用 `(?s)`。报告定位到匹配起始行。`[engine.comment_syntax.<扩展名>]` 可配置行注释、块注释和字符串定界符；扫描器会跟踪这些词法状态，避免把字符串中的注释标记当成真实注释。需要抽象语法树级判断时，应使用项目语言自己的 lint 工具，并把该工具配置成一个 step。
 
 ## 14. 最小完整示例
 

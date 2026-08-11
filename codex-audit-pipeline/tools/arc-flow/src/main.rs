@@ -271,13 +271,13 @@ fn run() -> Result<bool> {
             let outcome = audit::run(&project.root, &project.audit_config, &project.reports, json)?;
             if !json {
                 println!(
-                    "Audit: {} violation(s), {} blocker(s), {} error(s)",
-                    outcome.total_violations, outcome.blocker_count, outcome.error_count
+                    "Audit: {} violation(s), {} blocker(s), {} error(s), {} warning(s)",
+                    outcome.total_violations,
+                    outcome.blocker_count,
+                    outcome.error_count,
+                    outcome.warning_count
                 );
-                println!(
-                    "Report: {}",
-                    project.reports.join("review_context.json").display()
-                );
+                println!("Report: {}", outcome.report_file.display());
             }
             Ok(outcome.total_violations == 0)
         }

@@ -8,7 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 use url::Url;
 
-const SECRET_CONFIG_VERSION: u32 = 1;
+const SECRET_CONFIG_VERSION: u32 = 2;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -22,8 +22,18 @@ struct SecretConfig {
 #[serde(deny_unknown_fields)]
 struct PlaceholderConfig {
     minimum_unique_characters: usize,
+    maximum_nonalphanumeric_characters: usize,
     markers: Vec<String>,
     exact: Vec<String>,
+    prefixes: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LocalTestDatabasePolicy {
+    hosts: Vec<String>,
+    database_suffixes: Vec<String>,
+    require_username_equals_password: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +58,7 @@ enum SecretRule {
         database_capture: usize,
         minimum_length: usize,
         #[serde(default)]
-        allow_local_test_credentials: bool,
+        local_test_policy: Option<LocalTestDatabasePolicy>,
     },
     WebhookUrl {
         id: String,
@@ -96,7 +106,7 @@ enum CompiledRule {
         host_capture: usize,
         database_capture: usize,
         minimum_length: usize,
-        allow_local_test_credentials: bool,
+        local_test_policy: Option<CompiledLocalTestDatabasePolicy>,
     },
     WebhookUrl {
         pattern: Regex,
@@ -105,6 +115,12 @@ enum CompiledRule {
         query_minimum_length: usize,
         path_minimum_length: usize,
     },
+}
+
+struct CompiledLocalTestDatabasePolicy {
+    hosts: HashSet<String>,
+    database_suffixes: Vec<String>,
+    require_username_equals_password: bool,
 }
 
 struct SecretScanner {
@@ -139,6 +155,7 @@ impl SecretScanner {
                 .markers
                 .iter()
                 .chain(&config.placeholders.exact)
+                .chain(&config.placeholders.prefixes)
                 .any(|value| value.trim().is_empty())
         {
             bail!("secret scan placeholder policy contains an invalid value");
@@ -180,7 +197,7 @@ impl SecretScanner {
                     host_capture,
                     database_capture,
                     minimum_length,
-                    allow_local_test_credentials,
+                    local_test_policy,
                     ..
                 } => {
                     let captures = [
@@ -196,6 +213,9 @@ impl SecretScanner {
                         bail!("secret scan rule {id:?} requires distinct PostgreSQL captures");
                     }
                     validate_minimum(&id, minimum_length)?;
+                    let local_test_policy = local_test_policy
+                        .map(|policy| compile_local_test_policy(&id, policy))
+                        .transpose()?;
                     CompiledRule::PostgresUrl {
                         pattern,
                         username_capture,
@@ -203,7 +223,7 @@ impl SecretScanner {
                         host_capture,
                         database_capture,
                         minimum_length,
-                        allow_local_test_credentials,
+                        local_test_policy,
                     }
                 }
                 SecretRule::WebhookUrl {
@@ -269,7 +289,7 @@ impl CompiledRule {
                 host_capture,
                 database_capture,
                 minimum_length,
-                allow_local_test_credentials,
+                local_test_policy,
             } => pattern.captures_iter(bytes).any(|captures| {
                 let values = [
                     *username_capture,
@@ -281,9 +301,9 @@ impl CompiledRule {
                 let [Some(username), Some(password), Some(host), Some(database)] = values else {
                     return false;
                 };
-                if *allow_local_test_credentials
-                    && is_local_test_database(username, password, host, database)
-                {
+                if local_test_policy.as_ref().is_some_and(|policy| {
+                    is_local_test_database(username, password, host, database, policy)
+                }) {
                     return false;
                 }
                 looks_like_secret(password, *minimum_length, placeholders)
@@ -326,12 +346,50 @@ fn validate_minimum(id: &str, minimum: usize) -> Result<()> {
     Ok(())
 }
 
-fn is_local_test_database(username: &[u8], password: &[u8], host: &[u8], database: &[u8]) -> bool {
+fn compile_local_test_policy(
+    id: &str,
+    policy: LocalTestDatabasePolicy,
+) -> Result<CompiledLocalTestDatabasePolicy> {
+    if policy.hosts.is_empty()
+        || policy.database_suffixes.is_empty()
+        || policy
+            .hosts
+            .iter()
+            .chain(&policy.database_suffixes)
+            .any(|value| value.trim().is_empty())
+    {
+        bail!("secret scan rule {id:?} has an invalid local test database policy");
+    }
+    Ok(CompiledLocalTestDatabasePolicy {
+        hosts: policy
+            .hosts
+            .into_iter()
+            .map(|host| host.to_ascii_lowercase())
+            .collect(),
+        database_suffixes: policy
+            .database_suffixes
+            .into_iter()
+            .map(|suffix| suffix.to_ascii_lowercase())
+            .collect(),
+        require_username_equals_password: policy.require_username_equals_password,
+    })
+}
+
+fn is_local_test_database(
+    username: &[u8],
+    password: &[u8],
+    host: &[u8],
+    database: &[u8],
+    policy: &CompiledLocalTestDatabasePolicy,
+) -> bool {
     let host = String::from_utf8_lossy(host).to_ascii_lowercase();
     let database = String::from_utf8_lossy(database).to_ascii_lowercase();
-    matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1" | "[::1]")
-        && (database.ends_with("_test") || database.ends_with("-test"))
-        && username == password
+    policy.hosts.contains(&host)
+        && policy
+            .database_suffixes
+            .iter()
+            .any(|suffix| database.ends_with(suffix))
+        && (!policy.require_username_equals_password || username == password)
 }
 
 fn webhook_url_contains_secret(
@@ -370,9 +428,10 @@ fn looks_like_secret(
         character.is_ascii_whitespace() || matches!(character, '"' | '\'')
     });
     if value.len() < minimum_length
-        || (value.starts_with(char::from(36)) && value.as_bytes().get(1) == Some(&b'{'))
-        || value.starts_with("{{")
-        || value.starts_with('<')
+        || placeholders
+            .prefixes
+            .iter()
+            .any(|prefix| value.starts_with(prefix))
     {
         return false;
     }
@@ -395,7 +454,8 @@ fn looks_like_secret(
         .filter(|byte| byte.is_ascii_alphanumeric())
         .collect::<Vec<_>>();
     let unique = significant.iter().copied().collect::<HashSet<_>>();
-    significant.len() >= minimum_length.saturating_sub(2)
+    significant.len()
+        >= minimum_length.saturating_sub(placeholders.maximum_nonalphanumeric_characters)
         && unique.len() >= placeholders.minimum_unique_characters
 }
 
@@ -537,10 +597,12 @@ mod tests {
     #[test]
     fn invalid_secret_config_fails_closed() {
         let invalid_capture = r#"
-version = 1
+version = 2
 
 [placeholders]
 minimum_unique_characters = 4
+maximum_nonalphanumeric_characters = 2
+prefixes = ["${"]
 markers = ["change-me"]
 exact = ["password"]
 
@@ -552,17 +614,69 @@ capture = 1
 minimum_length = 8
 "#;
         let empty_rules = r#"
-version = 1
+version = 2
 rules = []
 
 [placeholders]
 minimum_unique_characters = 4
+maximum_nonalphanumeric_characters = 2
+prefixes = ["${"]
 markers = ["change-me"]
 exact = ["password"]
 "#;
 
         assert!(SecretScanner::from_source(invalid_capture).is_err());
         assert!(SecretScanner::from_source(empty_rules).is_err());
+    }
+
+    #[test]
+    fn placeholder_prefixes_are_configurable() {
+        let placeholders = PlaceholderConfig {
+            minimum_unique_characters: 4,
+            maximum_nonalphanumeric_characters: 2,
+            markers: Vec::new(),
+            exact: Vec::new(),
+            prefixes: vec!["ref:".to_string()],
+        };
+
+        assert!(!looks_like_secret(
+            b"ref:correct-horse-battery-staple",
+            12,
+            &placeholders
+        ));
+        assert!(looks_like_secret(
+            b"${correct-horse-battery-staple}",
+            12,
+            &placeholders
+        ));
+    }
+
+    #[test]
+    fn local_test_database_policy_is_configurable() {
+        let policy = compile_local_test_policy(
+            "postgres",
+            LocalTestDatabasePolicy {
+                hosts: vec!["db.internal".to_string()],
+                database_suffixes: vec!["_sandbox".to_string()],
+                require_username_equals_password: false,
+            },
+        )
+        .expect("compile local database policy");
+
+        assert!(is_local_test_database(
+            b"app",
+            b"different-password",
+            b"db.internal",
+            b"arc_admin_sandbox",
+            &policy
+        ));
+        assert!(!is_local_test_database(
+            b"postgres",
+            b"postgres",
+            b"localhost",
+            b"arc_admin_test",
+            &policy
+        ));
     }
 
     #[test]
@@ -593,7 +707,7 @@ exact = ["password"]
         let project = Project::discover(Some(root.clone()), None).expect("discover Git fixture");
         fs::write(
             &project.secrets_config,
-            "version = 1\nrules = []\n[placeholders]\nminimum_unique_characters = 4\nmarkers = []\nexact = []\n",
+            "version = 2\nrules = []\n[placeholders]\nminimum_unique_characters = 4\nmaximum_nonalphanumeric_characters = 2\nprefixes = []\nmarkers = []\nexact = []\n",
         )
         .expect("replace working-tree secret config");
 
