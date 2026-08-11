@@ -96,7 +96,9 @@ pub async fn list(
     action: Option<String>,
     page: i64,
     page_size: i64,
+    cursor: Option<(DateTime<Utc>, i64)>,
 ) -> Result<Vec<AuditLogRow>, sqlx::Error> {
+    let (cursor_created_at, cursor_id) = cursor.unzip();
     sqlx::query_as::<_, AuditLogRow>(
         "WITH RECURSIVE visible_departments AS (
              SELECT d.id
@@ -124,11 +126,12 @@ pub async fn list(
            )
            AND ($5::text IS NULL OR a.action ILIKE '%' || $5 || '%'
                 OR a.target_type ILIKE '%' || $5 || '%'
-                OR COALESCE(u.username, '') ILIKE '%' || $5 || '%'
+                OR u.username ILIKE '%' || $5 || '%'
                 OR a.trace_id = $5)
            AND ($6::text IS NULL OR a.action = $6)
+           AND ($7::timestamptz IS NULL OR (a.created_at, a.id) < ($7, $8::bigint))
          ORDER BY a.created_at DESC, a.id DESC
-         LIMIT $7 OFFSET $8",
+         LIMIT $9 OFFSET $10",
     )
     .bind(actor.data_scope.as_str())
     .bind(actor.organization_id)
@@ -136,8 +139,14 @@ pub async fn list(
     .bind(actor.department_id)
     .bind(keyword)
     .bind(action)
-    .bind(page_size)
-    .bind((page - 1) * page_size)
+    .bind(cursor_created_at)
+    .bind(cursor_id)
+    .bind(page_size + 1)
+    .bind(if cursor_created_at.is_some() {
+        0
+    } else {
+        (page - 1) * page_size
+    })
     .fetch_all(pool)
     .await
 }
@@ -174,7 +183,7 @@ pub async fn count(
            )
            AND ($5::text IS NULL OR a.action ILIKE '%' || $5 || '%'
                 OR a.target_type ILIKE '%' || $5 || '%'
-                OR COALESCE(u.username, '') ILIKE '%' || $5 || '%'
+                OR u.username ILIKE '%' || $5 || '%'
                 OR a.trace_id = $5)
            AND ($6::text IS NULL OR a.action = $6)",
     )

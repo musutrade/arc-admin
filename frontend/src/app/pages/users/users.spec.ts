@@ -41,11 +41,12 @@ const getUsers = vi.fn(async (query: Parameters<UserApiService['getUsers']>[0]) 
   };
 });
 const userApiStub: Partial<UserApiService> = { getUsers };
+const getUserStats = vi.fn(() => Promise.resolve([]));
 const dashboardApiStub: Partial<DashboardApiService> = {
-  getUserStats: () => Promise.resolve([]),
+  getUserStats,
 };
 const authServiceStub: Partial<AuthService> = {
-  hasPermission: () => false,
+  hasPermission: (code) => code === 'dashboard:analytics:read',
 };
 
 describe('UsersPage', () => {
@@ -54,6 +55,7 @@ describe('UsersPage', () => {
 
   beforeEach(async () => {
     getUsers.mockClear();
+    getUserStats.mockClear();
     await TestBed.configureTestingModule({
       imports: [UsersPage],
       providers: [
@@ -83,6 +85,15 @@ describe('UsersPage', () => {
   it('uses server-provided role options', () => {
     const roles = page.roleOptions();
     expect(roles).toContain('Auditor');
+  });
+
+  it('does not reload dashboard statistics while filtering or paging', async () => {
+    expect(getUserStats).toHaveBeenCalledTimes(1);
+    page.goToPage(2);
+    await vi.waitFor(() => expect(getUsers).toHaveBeenCalledTimes(2));
+    page.applyRoleFilter('Auditor');
+    await vi.waitFor(() => expect(getUsers).toHaveBeenCalledTimes(3));
+    expect(getUserStats).toHaveBeenCalledTimes(1);
   });
 
   it('sends a debounced keyword to the server', async () => {

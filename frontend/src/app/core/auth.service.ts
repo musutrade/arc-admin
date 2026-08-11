@@ -50,6 +50,8 @@ export class AuthService {
   private readonly permissionState = signal<ReadonlySet<string>>(new Set());
   private readonly mfaStatusState = signal<MfaStatusResponse | null>(null);
   private sessionCheck: Promise<boolean> | null = null;
+  private permissionCheck: Promise<void> | null = null;
+  private permissionEpoch = 0;
   private mfaStatusCheck: Promise<MfaStatusResponse> | null = null;
 
   readonly currentUser = this.userState.asReadonly();
@@ -260,9 +262,24 @@ export class AuthService {
     this.clearSession();
   }
 
-  async refreshPermissions(): Promise<void> {
-    const response = await this.api.invoke(getCurrentUserPermissions);
-    this.permissionState.set(new Set(response.codes));
+  refreshPermissions(): Promise<void> {
+    if (!this.permissionCheck) {
+      const epoch = this.permissionEpoch;
+      const request = this.api
+        .invoke(getCurrentUserPermissions)
+        .then((response) => {
+          if (epoch === this.permissionEpoch) {
+            this.permissionState.set(new Set(response.codes));
+          }
+        })
+        .finally(() => {
+          if (this.permissionCheck === request) {
+            this.permissionCheck = null;
+          }
+        });
+      this.permissionCheck = request;
+    }
+    return this.permissionCheck;
   }
 
   private loadPermissions(): Promise<void> {
@@ -270,6 +287,8 @@ export class AuthService {
   }
 
   private clearSession(): void {
+    this.permissionEpoch += 1;
+    this.permissionCheck = null;
     this.userState.set(null);
     this.permissionState.set(new Set());
     this.mfaStatusState.set(null);

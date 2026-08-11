@@ -15,10 +15,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgConnection, PgPool};
 use std::net::IpAddr;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::Semaphore;
 
 pub const MIN_PASSWORD_LENGTH: usize = 12;
 pub const MAX_PASSWORD_LENGTH: usize = 128;
 const BOOTSTRAP_PASSWORD_LENGTH: usize = 16;
+const ARGON2_MAX_CONCURRENCY: usize = 4;
 const DUMMY_PASSWORD_HASH: &str =
     "$argon2id$v=19$m=19456,t=2,p=1$pDDhKh46fVQNqRy3OeXTTw$+5qvGkvmKsilvsRWsskXT4k6fmmE4q35ntz6ME1UNBE";
 
@@ -84,12 +87,11 @@ pub async fn login(
         .as_ref()
         .map(|user| user.password_hash.as_str())
         .unwrap_or(DUMMY_PASSWORD_HASH);
-    let password_valid = req.password.chars().count() <= MAX_PASSWORD_LENGTH
-        && PasswordHash::new(password_hash).ok().is_some_and(|parsed| {
-            Argon2::default()
-                .verify_password(req.password.as_bytes(), &parsed)
-                .is_ok()
-        });
+    let password_valid = if req.password.chars().count() <= MAX_PASSWORD_LENGTH {
+        verify_login_password(&req.password, password_hash).await?
+    } else {
+        false
+    };
     let authenticated = row
         .as_ref()
         .is_some_and(|user| user.status == "active" && password_valid);
@@ -381,7 +383,7 @@ pub async fn change_password(
 
     verify_current_password(pool, user_id, &req.current_password).await?;
 
-    let password_hash = hash_password(&req.new_password)?;
+    let password_hash = hash_password_async(&req.new_password).await?;
     let mut transaction = pool.begin().await.map_err(db_error)?;
     repositories::users::update_password(&mut transaction, user_id, &password_hash)
         .await
@@ -425,11 +427,12 @@ pub async fn verify_current_password(
         .await
         .map_err(db_error)?
         .ok_or_else(ApiError::unauthorized)?;
-    let parsed = PasswordHash::new(&row.password_hash)
-        .map_err(|error| ApiError::internal(format!("invalid stored password hash: {error}")))?;
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed)
-        .map_err(|_| ApiError::validation("当前密码不正确"))
+    let password_matches = verify_password_hash(password, &row.password_hash).await?;
+    if password_matches {
+        Ok(())
+    } else {
+        Err(ApiError::validation("当前密码不正确"))
+    }
 }
 
 pub async fn permission_codes(pool: &PgPool, user_id: i64) -> Result<PermissionCodes, ApiError> {
@@ -475,7 +478,7 @@ pub async fn bootstrap_super_admin(
     let (organization_id, department_id) = repositories::organizations::default_assignment(pool)
         .await
         .map_err(db_error)?;
-    let password_hash = hash_password(password)?;
+    let password_hash = hash_password_async(password).await?;
     let mut transaction = pool.begin().await.map_err(db_error)?;
     let row = if let Some(existing) = existing {
         repositories::users::activate_bootstrap_account(
@@ -548,4 +551,66 @@ pub fn hash_password(password: &str) -> Result<String, ApiError> {
         .hash_password(password.as_bytes(), &salt)
         .map(|hash| hash.to_string())
         .map_err(|error| ApiError::internal(error.to_string()))
+}
+
+pub async fn hash_password_async(password: &str) -> Result<String, ApiError> {
+    let password = password.to_string();
+    run_argon2_task(move || hash_password(&password)).await
+}
+
+pub(crate) async fn verify_password_hash(
+    password: &str,
+    encoded_hash: &str,
+) -> Result<bool, ApiError> {
+    let password = password.to_string();
+    let encoded_hash = encoded_hash.to_string();
+    run_argon2_task(move || {
+        let parsed = PasswordHash::new(&encoded_hash).map_err(|error| {
+            ApiError::internal(format!("invalid stored password hash: {error}"))
+        })?;
+        Ok(Argon2::default()
+            .verify_password(password.as_bytes(), &parsed)
+            .is_ok())
+    })
+    .await
+}
+
+async fn verify_login_password(password: &str, encoded_hash: &str) -> Result<bool, ApiError> {
+    let password = password.to_string();
+    let encoded_hash = encoded_hash.to_string();
+    run_argon2_task(move || {
+        Ok(PasswordHash::new(&encoded_hash).ok().is_some_and(|parsed| {
+            Argon2::default()
+                .verify_password(password.as_bytes(), &parsed)
+                .is_ok()
+        }))
+    })
+    .await
+}
+
+pub(crate) async fn run_argon2_task<T, F>(task: F) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, ApiError> + Send + 'static,
+{
+    static LIMITER: OnceLock<Arc<Semaphore>> = OnceLock::new();
+    let limiter = LIMITER
+        .get_or_init(|| {
+            let permits = std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1)
+                .clamp(1, ARGON2_MAX_CONCURRENCY);
+            Arc::new(Semaphore::new(permits))
+        })
+        .clone();
+    let permit = limiter
+        .acquire_owned()
+        .await
+        .map_err(|error| ApiError::internal(format!("Argon2 limiter closed: {error}")))?;
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        task()
+    })
+    .await
+    .map_err(|error| ApiError::internal(format!("Argon2 worker failed: {error}")))?
 }

@@ -1736,6 +1736,34 @@ async fn login_and_user_crud_flow() {
         .all(|entry| entry["traceId"]
             .as_str()
             .is_some_and(|trace_id| !trace_id.is_empty())));
+    let (status, first_audit_page) = send(
+        &app,
+        Method::GET,
+        "/api/v1/audit-logs?page=1&pageSize=1",
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let first_audit_id = first_audit_page["items"][0]["id"]
+        .as_i64()
+        .expect("first audit id");
+    let next_cursor = first_audit_page["nextCursor"]
+        .as_str()
+        .expect("audit cursor");
+    let (status, second_audit_page) = send(
+        &app,
+        Method::GET,
+        &format!("/api/v1/audit-logs?page=2&pageSize=1&cursor={next_cursor}"),
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_ne!(
+        second_audit_page["items"][0]["id"].as_i64(),
+        Some(first_audit_id)
+    );
     let trace_id = audit_logs["items"][0]["traceId"]
         .as_str()
         .expect("audit trace id");

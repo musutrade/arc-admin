@@ -178,6 +178,22 @@ pub async fn challenge_for_update(
     .await
 }
 
+pub async fn challenge(
+    pool: &PgPool,
+    token_hash: &str,
+    expected_kind: &str,
+) -> Result<Option<ChallengeRow>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT id, user_id, kind, persistent, state, attempt_count, max_attempts
+         FROM auth_mfa_challenges
+         WHERE token_hash = $1 AND kind = $2 AND consumed_at IS NULL AND expires_at > now()",
+    )
+    .bind(token_hash)
+    .bind(expected_kind)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn challenge_kind(
     pool: &PgPool,
     token_hash: &str,
@@ -268,28 +284,35 @@ pub async fn replace_recovery_codes(
     Ok(())
 }
 
-pub async fn recovery_codes_for_update(
-    connection: &mut PgConnection,
+pub async fn recovery_codes(
+    pool: &PgPool,
     user_id: i64,
 ) -> Result<Vec<RecoveryCodeRow>, sqlx::Error> {
     sqlx::query_as(
         "SELECT id, code_hash FROM user_mfa_recovery_codes
-         WHERE user_id = $1 AND used_at IS NULL ORDER BY id FOR UPDATE",
+         WHERE user_id = $1 AND used_at IS NULL ORDER BY id",
     )
     .bind(user_id)
-    .fetch_all(connection)
+    .fetch_all(pool)
     .await
 }
 
 pub async fn consume_recovery_code(
     connection: &mut PgConnection,
+    user_id: i64,
     id: i64,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE user_mfa_recovery_codes SET used_at = now() WHERE id = $1")
-        .bind(id)
-        .execute(connection)
-        .await?;
-    Ok(())
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        "UPDATE user_mfa_recovery_codes
+         SET used_at = now()
+         WHERE id = $1 AND user_id = $2 AND used_at IS NULL
+         RETURNING TRUE",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(connection)
+    .await
+    .map(|consumed| consumed.unwrap_or(false))
 }
 
 pub async fn list_passkeys(pool: &PgPool, user_id: i64) -> Result<Vec<PasskeyRow>, sqlx::Error> {

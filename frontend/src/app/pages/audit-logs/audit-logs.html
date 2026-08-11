@@ -110,7 +110,7 @@
           <button
             type="button"
             (click)="goToPage(page() + 1)"
-            [disabled]="page() === totalPages()"
+            [disabled]="page() === totalPages() || !nextCursor()"
             aria-label="下一页"
           >
             <mat-icon>chevron_right</mat-icon>

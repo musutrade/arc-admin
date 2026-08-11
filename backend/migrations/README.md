@@ -26,6 +26,7 @@
 | `20260808120000_protect_audit_logs.sql` | 将审计日志设为数据库级只追加表，并为归档后的受控删除保留事务入口 |
 | `20260808065904_harden_auth_sessions.sql` | 增加服务端会话与登录失败节流表，替代浏览器可读 JWT |
 | `20260810030000_add_super_admin_mfa.sql` | 增加 MFA 设置、恢复码、通行密钥和服务端一次性挑战 |
+| `20260811033000_optimize_admin_search.sql` | 为用户目录和审计日志包含式搜索增加 trigram 索引 |
 
 迁移文件通过 `sqlx::migrate!` 宏在**编译时**嵌入二进制。`backend/build.rs` 已声明
 `migrations` 为构建输入，新增或修改迁移后，下一次 `cargo build` 会自动重新编译：

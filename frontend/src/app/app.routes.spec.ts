@@ -7,7 +7,7 @@ import {
   UrlTree,
   provideRouter,
 } from '@angular/router';
-import { authGuard, permissionGuard } from './app.routes';
+import { authGuard, permissionGuard, routes } from './app.routes';
 import { ROUTE_ACCESS } from './app.navigation';
 import { AuthService } from './core/auth.service';
 
@@ -95,5 +95,15 @@ describe('route guards', () => {
     const router = TestBed.inject(Router);
     const denied = await runPermissions();
     expect(router.serializeUrl(denied as UrlTree)).toBe('/403');
+  });
+
+  it('does not run the authentication guard twice on permission-protected routes', () => {
+    const protectedRoutes = routes
+      .flatMap((route) => route.children ?? [])
+      .filter((route) => Array.isArray(route.data?.['permissions']));
+
+    expect(protectedRoutes.length).toBeGreaterThan(0);
+    expect(protectedRoutes.every((route) => route.canActivate?.length === 1)).toBe(true);
+    expect(protectedRoutes.every((route) => route.canActivate?.[0] === permissionGuard)).toBe(true);
   });
 });

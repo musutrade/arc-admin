@@ -14,6 +14,7 @@ export interface ListAuditLogs$Params {
   pageSize?: number;
   keyword?: string;
   action?: string;
+  cursor?: string;
 }
 
 export function listAuditLogs(http: HttpClient, rootUrl: string, params?: ListAuditLogs$Params, context?: HttpContext): Observable<StrictHttpResponse<PageAuditLog>> {
@@ -23,6 +24,7 @@ export function listAuditLogs(http: HttpClient, rootUrl: string, params?: ListAu
     rb.query('pageSize', params.pageSize, {});
     rb.query('keyword', params.keyword, {});
     rb.query('action', params.action, {});
+    rb.query('cursor', params.cursor, {});
   }
 
   return http.request(

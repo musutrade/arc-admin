@@ -9,13 +9,20 @@ import { PageAuditLog } from '../../generated/api/models/page-audit-log';
 export class AuditLogApiService {
   private readonly api = inject(Api);
 
-  getAuditLogs(page: number, pageSize: number, keyword = '', action = ''): Promise<PageAuditLog> {
+  getAuditLogs(
+    page: number,
+    pageSize: number,
+    keyword = '',
+    action = '',
+    cursor?: string,
+  ): Promise<PageAuditLog> {
     const normalizedKeyword = keyword.trim();
     return this.api.invoke(listAuditLogs, {
       page,
       pageSize,
       ...(normalizedKeyword ? { keyword: normalizedKeyword } : {}),
       ...(action ? { action } : {}),
+      ...(cursor ? { cursor } : {}),
     });
   }
 }

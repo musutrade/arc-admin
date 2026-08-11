@@ -9,12 +9,11 @@ use crate::repositories;
 use sqlx::PgPool;
 
 pub async fn groups(pool: &PgPool) -> Result<Vec<PermissionGroupResponse>, ApiError> {
-    let group_rows = repositories::permissions::list_groups(pool)
-        .await
-        .map_err(db_error)?;
-    let permission_rows = repositories::permissions::list_permissions(pool)
-        .await
-        .map_err(db_error)?;
+    let (group_rows, permission_rows) = tokio::try_join!(
+        repositories::permissions::list_groups(pool),
+        repositories::permissions::list_permissions(pool),
+    )
+    .map_err(db_error)?;
 
     let mut groups: Vec<PermissionGroupResponse> = group_rows
         .into_iter()

@@ -318,14 +318,24 @@ async fn verify_totp_enrollment(
             ApiError::unauthorized()
         });
     }
+    transaction.rollback().await.map_err(db_error)?;
+    let recovery_codes = generate_recovery_codes();
+    let hashes = hash_recovery_codes(&recovery_codes).await?;
+
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let challenge = repositories::mfa::challenge_for_update(
+        &mut transaction,
+        &session_auth::token_hash(challenge_token),
+        "totp_enrollment",
+    )
+    .await
+    .map_err(db_error)?
+    .ok_or_else(ApiError::unauthorized)?;
+    let state: EnrollmentState =
+        serde_json::from_value(challenge.state.0.clone()).map_err(ApiError::internal)?;
     repositories::mfa::enable_totp(&mut transaction, challenge.user_id, &encrypted)
         .await
         .map_err(db_error)?;
-    let recovery_codes = generate_recovery_codes();
-    let hashes = recovery_codes
-        .iter()
-        .map(|code| hash_recovery_code(code))
-        .collect::<Result<Vec<_>, _>>()?;
     repositories::mfa::replace_recovery_codes(&mut transaction, challenge.user_id, &hashes)
         .await
         .map_err(db_error)?;
@@ -365,33 +375,29 @@ pub async fn verify_recovery_login(
     challenge_token: &str,
     recovery_code: &str,
 ) -> Result<LoginSessionOutcome, ApiError> {
-    let mut transaction = pool.begin().await.map_err(db_error)?;
-    let challenge = repositories::mfa::challenge_for_update(
-        &mut transaction,
-        &session_auth::token_hash(challenge_token),
-        "login",
-    )
-    .await
-    .map_err(db_error)?
-    .ok_or_else(ApiError::unauthorized)?;
-    let login: LoginContext =
-        serde_json::from_value(challenge.state.0.clone()).map_err(ApiError::internal)?;
-    let normalized = recovery_code.trim().to_ascii_uppercase();
-    let codes = repositories::mfa::recovery_codes_for_update(&mut transaction, challenge.user_id)
+    let token_hash = session_auth::token_hash(challenge_token);
+    let challenge = repositories::mfa::challenge(pool, &token_hash, "login")
+        .await
+        .map_err(db_error)?
+        .ok_or_else(ApiError::unauthorized)?;
+    let codes = repositories::mfa::recovery_codes(pool, challenge.user_id)
         .await
         .map_err(db_error)?;
-    let mut matching_id = None;
-    for code in codes {
-        let parsed = PasswordHash::new(&code.code_hash).map_err(ApiError::internal)?;
-        if Argon2::default()
-            .verify_password(normalized.as_bytes(), &parsed)
-            .is_ok()
-        {
-            matching_id = Some(code.id);
-            break;
-        }
-    }
-    let Some(matching_id) = matching_id else {
+    let matching_id = matching_recovery_code(recovery_code, codes).await?;
+
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    let challenge = repositories::mfa::challenge_for_update(&mut transaction, &token_hash, "login")
+        .await
+        .map_err(db_error)?
+        .ok_or_else(ApiError::unauthorized)?;
+    let consumed = if let Some(matching_id) = matching_id {
+        repositories::mfa::consume_recovery_code(&mut transaction, challenge.user_id, matching_id)
+            .await
+            .map_err(db_error)?
+    } else {
+        false
+    };
+    if !consumed {
         let locked = repositories::mfa::record_challenge_failure(&mut transaction, challenge.id)
             .await
             .map_err(db_error)?;
@@ -411,10 +417,9 @@ pub async fn verify_recovery_login(
         } else {
             ApiError::unauthorized()
         });
-    };
-    repositories::mfa::consume_recovery_code(&mut transaction, matching_id)
-        .await
-        .map_err(db_error)?;
+    }
+    let login: LoginContext =
+        serde_json::from_value(challenge.state.0.clone()).map_err(ApiError::internal)?;
     repositories::mfa::consume_challenge(&mut transaction, challenge.id)
         .await
         .map_err(db_error)?;
@@ -823,6 +828,34 @@ fn hash_recovery_code(code: &str) -> Result<String, ApiError> {
         .map_err(|error| ApiError::internal(format!("failed to hash recovery code: {error}")))
 }
 
+async fn hash_recovery_codes(codes: &[String]) -> Result<Vec<String>, ApiError> {
+    let codes = codes.to_vec();
+    auth_service::run_argon2_task(move || {
+        codes.iter().map(|code| hash_recovery_code(code)).collect()
+    })
+    .await
+}
+
+async fn matching_recovery_code(
+    recovery_code: &str,
+    codes: Vec<repositories::mfa::RecoveryCodeRow>,
+) -> Result<Option<i64>, ApiError> {
+    let normalized = recovery_code.trim().to_ascii_uppercase();
+    auth_service::run_argon2_task(move || {
+        for code in codes {
+            let parsed = PasswordHash::new(&code.code_hash).map_err(ApiError::internal)?;
+            if Argon2::default()
+                .verify_password(normalized.as_bytes(), &parsed)
+                .is_ok()
+            {
+                return Ok(Some(code.id));
+            }
+        }
+        Ok(None)
+    })
+    .await
+}
+
 pub(crate) async fn verify_totp_code(
     pool: &PgPool,
     mfa: &MfaConfig,
@@ -920,10 +953,7 @@ pub async fn regenerate_recovery_codes(
 ) -> Result<RecoveryCodesResponse, ApiError> {
     verify_password_and_totp(pool, mfa, user_id, &req.current_password, &req.totp_code).await?;
     let codes = generate_recovery_codes();
-    let hashes = codes
-        .iter()
-        .map(|code| hash_recovery_code(code))
-        .collect::<Result<Vec<_>, _>>()?;
+    let hashes = hash_recovery_codes(&codes).await?;
     let mut transaction = pool.begin().await.map_err(db_error)?;
     repositories::mfa::replace_recovery_codes(&mut transaction, user_id, &hashes)
         .await

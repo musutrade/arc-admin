@@ -44,33 +44,33 @@ export const routes: Routes = [
       { path: '', redirectTo: 'permissions', pathMatch: 'full' },
       {
         path: 'permissions',
-        canActivate: [authGuard, permissionGuard],
+        canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.permissionDirectory },
         loadComponent: () =>
           import('./pages/permissions/permissions').then((m) => m.PermissionsPage),
       },
       {
         path: 'users',
-        canActivate: [authGuard, permissionGuard],
+        canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.users },
         loadComponent: () => import('./pages/users/users').then((m) => m.UsersPage),
       },
       {
         path: 'roles',
-        canActivate: [authGuard, permissionGuard],
+        canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.roles },
         loadComponent: () => import('./pages/roles/roles').then((m) => m.RolesPage),
       },
       {
         path: 'role-permissions',
-        canActivate: [authGuard, permissionGuard],
+        canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.rolePermissions },
         loadComponent: () =>
           import('./pages/role-permissions/role-permissions').then((m) => m.RolePermissionsPage),
       },
       {
         path: 'audit-logs',
-        canActivate: [authGuard, permissionGuard],
+        canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.auditLogs },
         loadComponent: () => import('./pages/audit-logs/audit-logs').then((m) => m.AuditLogs),
       },

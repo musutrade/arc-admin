@@ -554,6 +554,7 @@ pub struct AuditLogQuery {
     pub page_size: Option<i64>,
     pub keyword: Option<String>,
     pub action: Option<String>,
+    pub cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -563,6 +564,7 @@ pub struct PageAuditLog {
     pub total: i64,
     pub page: i64,
     pub page_size: i64,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

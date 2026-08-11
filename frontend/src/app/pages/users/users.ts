@@ -123,6 +123,7 @@ export class UsersPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     void this.loadData();
+    void this.loadStats();
   }
 
   ngOnDestroy(): void {
@@ -136,13 +137,7 @@ export class UsersPage implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const statsRequest = this.auth.hasPermission('dashboard:analytics:read')
-        ? this.dashboardApi.getUserStats()
-        : Promise.resolve([]);
-      const [result, stats] = await Promise.all([
-        this.userApi.getUsers(this.userQuery()),
-        statsRequest,
-      ]);
+      const result = await this.userApi.getUsers(this.userQuery());
       if (requestSequence !== this.requestSequence) {
         return;
       }
@@ -150,7 +145,6 @@ export class UsersPage implements OnInit, OnDestroy {
       this.total.set(result.total);
       this.page.set(result.page);
       this.roleOptions.set(result.roleOptions);
-      this.stats.set(stats);
       this.selected.set(new Set());
     } catch (error) {
       if (requestSequence === this.requestSequence) {
@@ -160,6 +154,18 @@ export class UsersPage implements OnInit, OnDestroy {
       if (requestSequence === this.requestSequence) {
         this.loading.set(false);
       }
+    }
+  }
+
+  private async loadStats(): Promise<void> {
+    if (!this.auth.hasPermission('dashboard:analytics:read')) {
+      this.stats.set([]);
+      return;
+    }
+    try {
+      this.stats.set(await this.dashboardApi.getUserStats());
+    } catch {
+      this.stats.set([]);
     }
   }
 
@@ -497,7 +503,7 @@ export class UsersPage implements OnInit, OnDestroy {
       await action();
       await this.auth.refreshSession();
       this.snackBar.open(success, '关闭', { duration: 3000 });
-      await this.loadData();
+      await Promise.all([this.loadData(), this.loadStats()]);
     } catch (error) {
       this.showError(error, '操作失败，请稍后重试');
     } finally {

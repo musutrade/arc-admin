@@ -52,6 +52,7 @@ const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, label]) => ({ 
 export class AuditLogs implements OnInit {
   private readonly auditLogApi = inject(AuditLogApiService);
   private readonly clipboard = inject(Clipboard);
+  private requestSequence = 0;
 
   readonly logs = signal<AuditLogResponse[]>([]);
   readonly loading = signal(true);
@@ -61,9 +62,11 @@ export class AuditLogs implements OnInit {
   readonly page = signal(1);
   readonly pageSize = 20;
   readonly total = signal(0);
+  readonly nextCursor = signal<string | null>(null);
   readonly copiedTraceId = signal<string | null>(null);
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
   readonly actionOptions = ACTION_OPTIONS;
+  private readonly pageCursors = new Map<number, string | undefined>([[1, undefined]]);
 
   ngOnInit(): void {
     void this.load();
@@ -71,13 +74,13 @@ export class AuditLogs implements OnInit {
 
   search(value: string): void {
     this.keyword.set(value);
-    this.page.set(1);
+    this.resetPagination();
     void this.load();
   }
 
   filterAction(value: string): void {
     this.action.set(value);
-    this.page.set(1);
+    this.resetPagination();
     void this.load();
   }
 
@@ -85,6 +88,12 @@ export class AuditLogs implements OnInit {
     const next = Math.min(Math.max(1, page), this.totalPages());
     if (next === this.page()) {
       return;
+    }
+    if (next > this.page() && !this.nextCursor()) {
+      return;
+    }
+    if (next > this.page()) {
+      this.pageCursors.set(next, this.nextCursor() ?? undefined);
     }
     this.page.set(next);
     void this.load();
@@ -117,6 +126,7 @@ export class AuditLogs implements OnInit {
   }
 
   private async load(): Promise<void> {
+    const requestSequence = ++this.requestSequence;
     this.loading.set(true);
     this.error.set(null);
     try {
@@ -125,13 +135,29 @@ export class AuditLogs implements OnInit {
         this.pageSize,
         this.keyword(),
         this.action(),
+        this.pageCursors.get(this.page()),
       );
+      if (requestSequence !== this.requestSequence) {
+        return;
+      }
       this.logs.set(page.items);
       this.total.set(page.total);
+      this.nextCursor.set(page.nextCursor ?? null);
     } catch (error) {
-      this.error.set(apiErrorMessage(error, '审计日志加载失败，请稍后重试'));
+      if (requestSequence === this.requestSequence) {
+        this.error.set(apiErrorMessage(error, '审计日志加载失败，请稍后重试'));
+      }
     } finally {
-      this.loading.set(false);
+      if (requestSequence === this.requestSequence) {
+        this.loading.set(false);
+      }
     }
+  }
+
+  private resetPagination(): void {
+    this.page.set(1);
+    this.pageCursors.clear();
+    this.pageCursors.set(1, undefined);
+    this.nextCursor.set(null);
   }
 }

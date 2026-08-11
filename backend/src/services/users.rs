@@ -38,19 +38,17 @@ pub async fn list(
         page: requested_page,
         page_size,
     };
-    let total = repositories::users::count(pool, actor, &params)
-        .await
-        .map_err(db_error)?;
+    let (total, role_options) = tokio::try_join!(
+        repositories::users::count(pool, actor, &params),
+        repositories::users::list_role_options(pool, actor),
+    )
+    .map_err(db_error)?;
     let last_page = ((total + page_size - 1) / page_size).max(1);
     let page = requested_page.min(last_page);
     params.page = page;
     let rows = repositories::users::list(pool, actor, &params)
         .await
         .map_err(db_error)?;
-    let role_options = repositories::users::list_role_options(pool, actor)
-        .await
-        .map_err(db_error)?;
-
     let items = rows.into_iter().map(user_with_roles_response).collect();
     Ok(PageUser {
         items,
@@ -137,7 +135,7 @@ pub async fn create(
         return Err(ApiError::validation("状态只能为启用、停用或已暂停"));
     }
 
-    let hash = auth::hash_password(&req.password)?;
+    let hash = auth::hash_password_async(&req.password).await?;
     if let Some(role_ids) = &req.role_ids {
         validate_role_grant_scope(pool, actor_user_id, role_ids, can_grant_super_admin).await?;
     }
@@ -216,7 +214,7 @@ pub async fn update(
     }
     let password_hash = if let Some(password) = &req.password {
         auth::validate_password(password)?;
-        Some(auth::hash_password(password)?)
+        Some(auth::hash_password_async(password).await?)
     } else {
         None
     };

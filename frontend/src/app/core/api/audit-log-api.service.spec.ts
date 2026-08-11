@@ -23,13 +23,14 @@ describe('AuditLogApiService', () => {
   afterEach(() => http.verify());
 
   it('loads filtered audit logs with contract pagination', async () => {
-    const result = service.getAuditLogs(2, 20, ' admin ', 'user.update');
+    const result = service.getAuditLogs(2, 20, ' admin ', 'user.update', 'cursor-token');
     const request = http.expectOne(
       (candidate) =>
         candidate.url === '/api/v1/audit-logs' &&
         candidate.params.get('page') === '2' &&
         candidate.params.get('keyword') === 'admin' &&
-        candidate.params.get('action') === 'user.update',
+        candidate.params.get('action') === 'user.update' &&
+        candidate.params.get('cursor') === 'cursor-token',
     );
     request.flush({ items: [], total: 0, page: 2, pageSize: 20 });
     await expect(result).resolves.toEqual({ items: [], total: 0, page: 2, pageSize: 20 });

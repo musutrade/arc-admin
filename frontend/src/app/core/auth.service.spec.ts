@@ -111,6 +111,17 @@ describe('AuthService', () => {
     expect(service.currentUser()).toEqual(user);
   });
 
+  it('coalesces concurrent permission refreshes', async () => {
+    const first = service.refreshPermissions();
+    const second = service.refreshPermissions();
+    const requests = http.match('/api/v1/auth/me/permissions');
+
+    expect(requests).toHaveLength(1);
+    requests[0].flush({ codes: ['user:directory:read'] });
+    await Promise.all([first, second]);
+    expect(service.hasPermission('user:directory:read')).toBe(true);
+  });
+
   it('changes the password and clears in-memory session state', async () => {
     const request = {
       currentPassword: 'current-password',

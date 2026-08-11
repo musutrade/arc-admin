@@ -4,6 +4,7 @@
 import { AuditLogResponse } from '../models/audit-log-response';
 export interface PageAuditLog {
   items: Array<AuditLogResponse>;
+  nextCursor?: (string | null);
   page: number;
   pageSize: number;
   total: number;
