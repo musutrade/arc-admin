@@ -83,7 +83,7 @@ npm audit --omit=dev --audit-level=high
 - 启用 secret scanning、push protection 和 Dependabot alerts。公共仓库会额外运行 `Dependency review`；私有仓库是否可用取决于 GitHub 计划。
 - 禁止 force push 和直接删除受保护分支。
 
-CI 使用与本地相同的 `cargo flow` 命令，失败报告以 Actions artifact 保留 14 天。
+CI 使用与本地相同的 `cargo flow` 命令。Frontend verification job 会在干净 checkout 中生成仅供 runner 使用的 `backend/.env`、配置 Git hooks，并使用隔离的 PostgreSQL service 执行 `cargo flow doctor --strict --json`；Doctor 结果随其他报告以 Actions artifact 保留 14 天。任何 warning 都会阻断该 job。
 
 ## 框架升级
 

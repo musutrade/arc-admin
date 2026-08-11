@@ -99,6 +99,17 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: Prepare Doctor prerequisites
+        run: |
+          cp backend/.env.example backend/.env
+          git config core.hooksPath codex-audit-pipeline/hooks
+          mkdir -p codex-audit-pipeline/.codex/reports
+      - name: Verify CI environment
+        env:
+          TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
+        run: |
+          set -o pipefail
+          cargo flow doctor --strict --json | tee codex-audit-pipeline/.codex/reports/doctor.json
       - name: Audit production dependencies
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=high
