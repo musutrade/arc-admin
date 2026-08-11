@@ -9,7 +9,7 @@
 - [x] 注释扫描支持按扩展名配置行注释、块注释、嵌套块注释和字符串定界符。
 - [x] `cargo flow verify --all` 已通过，包括后端、前端、E2E、真实全栈 smoke 和生产构建。
 - [x] 当前审计报告为 0 blocker、0 error、0 warning。
-- [ ] `cargo flow doctor` 的测试数据库告警需在 CI 或新环境中通过 Docker / `TEST_DATABASE_URL` 消除。
+- [ ] `cargo flow doctor` 的测试数据库告警需在 CI 或新环境中通过 Docker / `TEST_DATABASE_URL` 消除（当前开发机已通过，仍待 CI / 新环境留存证据）。
 
 生产级定位：当前可用于 arc-admin 的受控技术栈，但 auditor 仍是 Clippy、ESLint、SAST 等工具之前的补充门禁，不能作为唯一安全扫描器。
 
@@ -17,24 +17,24 @@
 
 ### 审计配置版本与迁移
 
-- [ ] 为 `audit.toml` 增加明确的 schema `version`。
-- [ ] 为旧版字符串 allowlist 和缺少 `[engine]` 的配置提供迁移路径，或输出包含升级步骤的明确错误。
-- [ ] 增加旧配置、当前配置、未知版本和未知字段的兼容性测试。
-- [ ] 验收：已有项目升级 `arc-flow` 后不会静默改变规则语义；无法迁移时必须 fail closed。
+- [x] 为 `audit.toml` 增加明确的 schema `version`。
+- [x] 为旧版字符串 allowlist 和缺少 `[engine]` 的配置提供迁移路径，或输出包含升级步骤的明确错误。
+- [x] 增加旧配置、当前配置、未知版本和未知字段的兼容性测试。
+- [x] 验收：已有项目升级 `arc-flow` 后不会静默改变规则语义；无法迁移时必须 fail closed。
 
 ### 默认 preset 完整性
 
-- [ ] 在 `empty.audit.toml` 中提供 Rust、TypeScript、SQL 等常用扩展名的默认注释语法。
-- [ ] 当规则使用的扩展名没有对应 `comment_syntax` 时，配置校验应告警或拒绝运行。
-- [ ] 增加初始化新项目后添加第一条规则的端到端测试。
-- [ ] 验收：新项目不会因为遗漏注释配置而扫描注释中的示例代码。
+- [x] 在 `empty.audit.toml` 中提供 Rust、TypeScript、SQL 等常用扩展名的默认注释语法。
+- [x] 当规则使用的扩展名没有对应 `comment_syntax` 时，配置校验应告警或拒绝运行。
+- [x] 增加初始化新项目后添加第一条规则的端到端测试。
+- [x] 验收：新项目不会因为遗漏注释配置而扫描注释中的示例代码。
 
 ### 版本发布治理
 
-- [ ] 根据兼容性影响调整 `arc-flow` crate 版本。
-- [ ] 更新根目录 `CHANGELOG.md`，记录 secret config v2、显式 allowlist 和 audit engine 配置变更。
-- [ ] 在配置文档中提供旧配置到新配置的完整迁移示例。
-- [ ] 验收：发布版本、preset、文档和配置解析器声明的 schema 保持一致。
+- [x] 根据兼容性影响调整 `arc-flow` crate 版本。
+- [x] 更新根目录 `CHANGELOG.md`，记录 secret config v2、显式 allowlist 和 audit engine 配置变更。
+- [x] 在配置文档中提供旧配置到新配置的完整迁移示例。
+- [x] 验收：发布版本、preset、文档和配置解析器声明的 schema 保持一致。
 
 ## P1：通用生产模板必须完成
 

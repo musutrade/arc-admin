@@ -2,6 +2,8 @@
 # auditor 审计规则配置
 # 路径均相对于项目根目录；可用环境变量 BACKEND_DIR / FRONTEND_DIR 覆盖
 # ============================================================
+version = 2
+
 [engine]
 ignore_filename = ".auditignore"
 json_report_filename = "review_context.json"

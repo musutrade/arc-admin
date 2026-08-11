@@ -9,6 +9,9 @@ use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
+const AUDIT_CONFIG_VERSION: u32 = 2;
+const AUDIT_MIGRATION_GUIDE: &str = "codex-audit-pipeline/docs/configuration.md#audit-v2-migration";
+
 // ============================================================
 // 配置结构体（与 .codex/audit.toml 对应）
 // ============================================================
@@ -24,6 +27,7 @@ struct PathsConfig {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 struct Config {
+    version: u32,
     engine: EngineConfig,
     #[serde(default)]
     paths: PathsConfig,
@@ -31,6 +35,61 @@ struct Config {
     hard_rules: Vec<HardRule>,
     #[serde(default)]
     arch_rules: Vec<ArchRule>,
+}
+
+fn contains_legacy_string_allowlist(config: &toml::Value) -> bool {
+    ["hard_rules", "arch_rules"].iter().any(|rules_key| {
+        config
+            .get(rules_key)
+            .and_then(toml::Value::as_array)
+            .is_some_and(|rules| {
+                rules.iter().any(|rule| {
+                    rule.get("allowlist")
+                        .and_then(toml::Value::as_array)
+                        .is_some_and(|entries| entries.iter().any(toml::Value::is_str))
+                })
+            })
+    })
+}
+
+fn parse_audit_config(source: &str) -> Result<Config> {
+    let raw: toml::Value = toml::from_str(source).context("parse audit config TOML")?;
+    let table = raw
+        .as_table()
+        .context("audit config must be a top-level TOML table")?;
+    let version = match table.get("version") {
+        Some(value) => value.as_integer().context(
+            "audit config schema version must be an integer; see the audit v2 migration guide",
+        )?,
+        None => bail!(
+            "audit config schema version is missing; migrate to schema v{AUDIT_CONFIG_VERSION}: \
+             add `version = {AUDIT_CONFIG_VERSION}`, add `[engine]`, and convert string allowlist \
+             entries to explicit `path-prefix` or `regex` entries; see {AUDIT_MIGRATION_GUIDE}"
+        ),
+    };
+    if version != i64::from(AUDIT_CONFIG_VERSION) {
+        bail!(
+            "unsupported audit config schema version {version}; expected \
+             {AUDIT_CONFIG_VERSION}; see {AUDIT_MIGRATION_GUIDE}"
+        );
+    }
+    if !table.contains_key("engine") {
+        bail!(
+            "audit config schema v{AUDIT_CONFIG_VERSION} requires `[engine]`; copy the engine \
+             defaults and comment syntax from the current preset; see {AUDIT_MIGRATION_GUIDE}"
+        );
+    }
+    if contains_legacy_string_allowlist(&raw) {
+        bail!(
+            "audit config schema v{AUDIT_CONFIG_VERSION} no longer accepts string allowlist \
+             entries; replace each string with `{{ kind = \"path-prefix\", path = \"...\" }}` or \
+             `{{ kind = \"regex\", pattern = \"...\" }}`; see {AUDIT_MIGRATION_GUIDE}"
+        );
+    }
+
+    toml::from_str(source).with_context(|| {
+        format!("parse audit config schema v{AUDIT_CONFIG_VERSION}; see {AUDIT_MIGRATION_GUIDE}")
+    })
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -951,7 +1010,34 @@ fn validate_engine_config(engine: &EngineConfig) -> Result<()> {
     Ok(())
 }
 
+fn validate_rule_extensions(
+    engine: &EngineConfig,
+    extensions: &[String],
+    rule_name: &str,
+) -> Result<()> {
+    for extension in extensions {
+        if extension.trim().is_empty() {
+            bail!("audit rule {rule_name:?} contains an empty extension");
+        }
+        if !engine.comment_syntax.contains_key(extension) {
+            bail!(
+                "audit rule {rule_name:?} uses extension {extension:?} without \
+                 `[engine.comment_syntax.{extension}]`; define its comments and string delimiters \
+                 before scanning"
+            );
+        }
+    }
+    Ok(())
+}
+
 fn validate_audit_config(project_root: &Path, config: &Config) -> Result<Vec<PathBuf>> {
+    if config.version != AUDIT_CONFIG_VERSION {
+        bail!(
+            "unsupported audit config schema version {}; expected {}",
+            config.version,
+            AUDIT_CONFIG_VERSION
+        );
+    }
     validate_engine_config(&config.engine)?;
     for (alias, path) in &config.paths.aliases {
         resolve_repo_path(
@@ -984,6 +1070,7 @@ fn validate_audit_config(project_root: &Path, config: &Config) -> Result<Vec<Pat
                 rule.name
             );
         }
+        validate_rule_extensions(&config.engine, &rule.extensions, &rule.name)?;
         resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
         compile_regexes(&rule.patterns)?;
         compile_regexes(&rule.exclude_patterns)?;
@@ -1006,6 +1093,7 @@ fn validate_audit_config(project_root: &Path, config: &Config) -> Result<Vec<Pat
                 rule.name
             );
         }
+        validate_rule_extensions(&config.engine, &rule.extensions, &rule.name)?;
         resolve_rule_roots(project_root, &rule.paths, &config.paths.aliases, &rule.name)?;
         compile_regexes(&rule.forbidden_patterns)?;
         compile_regexes(&rule.allowed_patterns)?;
@@ -1048,7 +1136,7 @@ pub fn run(
 ) -> Result<AuditOutcome> {
     let config_str = fs::read_to_string(config_path)
         .with_context(|| format!("read audit config {}", config_path.display()))?;
-    let config: Config = toml::from_str(&config_str)
+    let config = parse_audit_config(&config_str)
         .with_context(|| format!("parse audit config {}", config_path.display()))?;
     let exclude_dirs = validate_audit_config(project_root, &config)?;
 
@@ -1147,7 +1235,7 @@ mod tests {
     }
 
     fn configured_audit() -> Config {
-        toml::from_str(include_str!("../../../.codex/audit.toml"))
+        parse_audit_config(include_str!("../../../.codex/audit.toml"))
             .expect("project audit config must parse")
     }
 
@@ -1157,6 +1245,129 @@ mod tests {
             .into_iter()
             .find(|rule| rule.name == name)
             .expect("configured hard rule must exist")
+    }
+
+    #[test]
+    fn audit_schema_accepts_current_config_and_rejects_incompatible_inputs() {
+        let current = include_str!("../presets/empty.audit.toml");
+        assert_eq!(
+            parse_audit_config(current)
+                .expect("current audit preset must parse")
+                .version,
+            AUDIT_CONFIG_VERSION
+        );
+
+        let missing_version = current.replacen("version = 2\n", "", 1);
+        let error = parse_audit_config(&missing_version)
+            .expect_err("an unversioned audit config must fail closed");
+        assert!(error.to_string().contains("add `version = 2`"));
+
+        let unknown_version = current.replacen("version = 2", "version = 99", 1);
+        let error = parse_audit_config(&unknown_version)
+            .expect_err("an unknown audit schema must fail closed");
+        assert!(error
+            .to_string()
+            .contains("unsupported audit config schema version 99"));
+
+        let unknown_field = format!("unknown = true\n{current}");
+        assert!(parse_audit_config(&unknown_field).is_err());
+    }
+
+    #[test]
+    fn legacy_audit_shapes_receive_actionable_migration_errors() {
+        let missing_engine = "version = 2\nhard_rules = []\narch_rules = []\n";
+        let error = parse_audit_config(missing_engine)
+            .expect_err("schema v2 requires an explicit engine configuration");
+        assert!(error.to_string().contains("requires `[engine]`"));
+
+        let legacy_allowlist = r#"
+version = 2
+
+[engine]
+ignore_filename = ".auditignore"
+json_report_filename = "review_context.json"
+markdown_report_filename = "review_context.md"
+markdown_max_bytes = 4096
+markdown_occurrences_per_rule = 3
+
+[engine.comment_syntax.rs]
+line = ["//"]
+
+[[hard_rules]]
+name = "legacy"
+severity = "error"
+paths = ["src"]
+extensions = ["rs"]
+patterns = ["forbidden"]
+allowlist = ["src/generated"]
+"#;
+        let error = parse_audit_config(legacy_allowlist)
+            .expect_err("string allowlists must require an explicit migration");
+        assert!(error
+            .to_string()
+            .contains("no longer accepts string allowlist"));
+        assert!(error.to_string().contains("kind = \"path-prefix\""));
+    }
+
+    #[test]
+    fn rule_extension_requires_configured_comment_syntax() {
+        let test_dir = TestDir::new("missing-comment-syntax");
+        let source = test_dir.child("src");
+        fs::write(source.join("sample.go"), "package sample\n").expect("write Go fixture");
+        let mut config = configured_audit();
+        config.hard_rules = vec![HardRule {
+            name: "Go rule".into(),
+            severity: "error".into(),
+            paths: vec!["src".into()],
+            extensions: vec!["go".into()],
+            patterns: vec!["forbidden".into()],
+            exclude_patterns: Vec::new(),
+            allowlist: Vec::new(),
+        }];
+        config.arch_rules.clear();
+
+        let error = validate_audit_config(&test_dir.0, &config)
+            .expect_err("an extension without lexical syntax must fail closed");
+        assert!(error.to_string().contains("[engine.comment_syntax.go]"));
+    }
+
+    #[test]
+    fn initialized_project_can_add_and_run_its_first_audit_rule() {
+        let test_dir = TestDir::new("initialized-first-rule");
+        crate::preset::init(&test_dir.0, "generic", false).expect("initialize project");
+        let source = test_dir.child("src");
+        fs::write(
+            source.join("sample.rs"),
+            "// forbidden_call()\nfn sample() { forbidden_call(); }\n",
+        )
+        .expect("write Rust fixture");
+        let config_path = test_dir.0.join(".arc-flow/audit.toml");
+        let mut config = fs::read_to_string(&config_path).expect("read initialized audit config");
+        config.push_str(
+            r#"
+
+[[hard_rules]]
+name = "first rule"
+severity = "error"
+paths = ["src"]
+extensions = ["rs"]
+patterns = ["forbidden_call"]
+allowlist = []
+exclude_patterns = []
+"#,
+        );
+        fs::write(&config_path, config).expect("append first audit rule");
+
+        let outcome = run(
+            &test_dir.0,
+            &config_path,
+            &test_dir.0.join(".arc-flow/reports"),
+            false,
+        )
+        .expect("run first audit rule");
+
+        assert_eq!(outcome.total_violations, 1);
+        assert_eq!(outcome.error_count, 1);
     }
 
     #[test]
@@ -1293,6 +1504,7 @@ mod tests {
             .expect("service SQL rule must exist");
         service_rule.paths = vec!["services".to_string()];
         let config = Config {
+            version: AUDIT_CONFIG_VERSION,
             engine: configured_audit().engine,
             paths: PathsConfig::default(),
             hard_rules: Vec::new(),
@@ -1314,6 +1526,7 @@ mod tests {
         fs::write(layout.join("layout.ts"), "HttpClient\n").expect("write layout fixture");
 
         let config = Config {
+            version: AUDIT_CONFIG_VERSION,
             engine: configured_audit().engine,
             paths: PathsConfig {
                 exclude: Vec::new(),
@@ -1429,6 +1642,7 @@ mod tests {
     fn missing_rule_root_fails_closed() {
         let test_dir = TestDir::new("missing-root");
         let config = Config {
+            version: AUDIT_CONFIG_VERSION,
             engine: configured_audit().engine,
             paths: PathsConfig::default(),
             hard_rules: vec![HardRule {
@@ -1452,6 +1666,7 @@ mod tests {
     fn rule_root_cannot_escape_project() {
         let test_dir = TestDir::new("outside-root");
         let config = Config {
+            version: AUDIT_CONFIG_VERSION,
             engine: configured_audit().engine,
             paths: PathsConfig::default(),
             hard_rules: vec![HardRule {

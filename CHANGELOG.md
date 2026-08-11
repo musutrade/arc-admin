@@ -2,6 +2,25 @@
 
 本项目遵循语义化版本。每个发布版本必须对应一个不可移动的同名 Git 标签，派生项目升级时使用标签内容作为三方合并基线。
 
+## [未发布] - arc-flow 3.0.0
+
+### 破坏性变更
+
+- audit 配置升级到 schema v2，必须显式声明 `version = 2` 和 `[engine]`；缺失或未知版本不再使用隐式默认值；
+- audit allowlist 不再接受含义不明确的字符串，必须逐项声明 `path-prefix` 或 `regex`；
+- 每条 audit 规则使用的扩展名必须配置 `engine.comment_syntax`，否则门禁 fail closed。
+
+### 工作流
+
+- Secret Scan 配置升级为独立 schema v2，规则、占位符、本地测试数据库放行条件和报告策略均由受版本控制的配置声明；
+- audit engine 的忽略文件名、报告文件名、Markdown 限制、注释和字符串定界符全部配置化；
+- 新项目 audit preset 预置 Rust、TypeScript、JavaScript、SQL、TOML 和 YAML 的词法配置，并验证初始化后添加第一条规则的完整流程。
+
+### 升级说明
+
+- 从当前 `empty.audit.toml` 复制 `[engine]` 和所需 `comment_syntax`，为旧配置补充 `version = 2`；
+- 将旧字符串 allowlist 按真实意图转换为 `{ kind = "path-prefix", path = "..." }` 或 `{ kind = "regex", pattern = "..." }`；完整示例见 `codex-audit-pipeline/docs/configuration.md` 的 Audit v2 迁移章节。
+
 ## [v2.3.0] - 2026-08-08
 
 ### 新增

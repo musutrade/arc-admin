@@ -412,8 +412,7 @@ minimum_length = 12
 `[paths].audit_config` 指向独立 TOML 文件。空规则文件可写为：
 
 ```toml
-hard_rules = []
-arch_rules = []
+version = 2
 
 [engine]
 ignore_filename = ".auditignore"
@@ -422,9 +421,77 @@ markdown_report_filename = "review_context.md"
 markdown_max_bytes = 4096
 markdown_occurrences_per_rule = 3
 
+[engine.comment_syntax.rs]
+line = ["//"]
+block = [{ start = "/*", end = "*/", nested = true }]
+strings = [
+  { start = 'r###"', end = '"###' },
+  { start = 'r##"', end = '"##' },
+  { start = 'r#"', end = '"#' },
+  { start = 'r"', end = '"' },
+  { start = '"', end = '"', escape = '\' },
+]
+
 [paths]
 exclude = ["target", "node_modules", "dist", ".git"]
 ```
+
+内置空 preset 还预置 `sql`、`ts`、`tsx`、`js`、`jsx`、`toml`、`yaml` 和 `yml` 的注释与字符串定界符。每条规则使用的扩展名都必须存在对应的 `[engine.comment_syntax.<扩展名>]`；缺少时 auditor 会拒绝运行，避免把注释示例当成真实代码。
+
+<a id="audit-v2-migration"></a>
+
+### Audit v2 迁移
+
+audit v2 是 `arc-flow` 3.0.0 的破坏性配置升级。旧配置不会被静默套用新语义：缺少 `version`、缺少 `[engine]`、未知版本、未知字段或字符串 allowlist 都会 fail closed，并在错误中指向本节。
+
+旧配置可能依赖隐式 engine 默认值，并让字符串内容同时承担路径和正则语义：
+
+```toml
+[[hard_rules]]
+name = "SQL writes stay in repositories"
+severity = "blocker"
+paths = ["api"]
+extensions = ["rs"]
+patterns = ['(?i)INSERT\s+INTO']
+allowlist = ["services/api/src/repositories", "^services/api/generated/.*\.rs$"]
+```
+
+迁移时先加入 `version = 2`，从当前 `empty.audit.toml` 复制完整 `[engine]` 和所需扩展名的 `comment_syntax`，再逐项明确 allowlist 类型：
+
+```toml
+version = 2
+
+[engine]
+ignore_filename = ".auditignore"
+json_report_filename = "review_context.json"
+markdown_report_filename = "review_context.md"
+markdown_max_bytes = 4096
+markdown_occurrences_per_rule = 3
+
+[engine.comment_syntax.rs]
+line = ["//"]
+block = [{ start = "/*", end = "*/", nested = true }]
+strings = [
+  { start = 'r###"', end = '"###' },
+  { start = 'r##"', end = '"##' },
+  { start = 'r#"', end = '"#' },
+  { start = 'r"', end = '"' },
+  { start = '"', end = '"', escape = '\' },
+]
+
+[[hard_rules]]
+name = "SQL writes stay in repositories"
+severity = "blocker"
+paths = ["api"]
+extensions = ["rs"]
+patterns = ['(?i)INSERT\s+INTO']
+allowlist = [
+  { kind = "path-prefix", path = "services/api/src/repositories" },
+  { kind = "regex", pattern = '^services/api/generated/.*\.rs$' },
+]
+```
+
+字符串 allowlist 无法可靠推断原意，因此不自动迁移。完成转换后运行 `arc-flow config check` 和 `arc-flow audit`，确认路径引用、正则和报告配置有效。
 
 ### 13.1 Hard rule
 
@@ -434,7 +501,7 @@ name = "SQL writes stay in repositories"
 severity = "blocker"
 paths = ["api"]
 extensions = ["rs", "sql"]
-patterns = ['(?i)INSERT\\s+INTO', '\\.execute\\s*\\(']
+patterns = ['(?i)INSERT\s+INTO', '\.execute\s*\(']
 allowlist = [
   { kind = "path-prefix", path = "services/api/src/repositories" },
   { kind = "path-prefix", path = "services/api/migrations" },

@@ -6,7 +6,7 @@
 
 | 模块 | 已完成内容 |
 | --- | --- |
-| 工作流 | `cargo flow verify` 统一执行范围检测、secret scan、架构审计和测试；流程 Shell 已由 Rust CLI 替代 |
+| 工作流 | `cargo flow verify` 统一执行范围检测、secret scan、架构审计和测试；流程 Shell 已由 Rust CLI 替代；audit schema v2 迁移、默认词法 preset 和兼容性门禁已完成 |
 | 变更范围 | `cargo flow scope` 支持 working-tree、staged、base 和 all，并输出 backend/frontend/workflow components |
 | 后端安全 | 固定密码管理员已禁用，改为显式 `bootstrap_admin`；每个请求复核账号状态与权限码；超级管理员有最后账号和不可变权限保护 |
 | 后端数据 | 用户-角色、角色-权限写入使用事务；用户和角色列表已改为聚合查询，避免 N+1 |
@@ -35,7 +35,7 @@ cargo flow verify --all
 2. 在应用故障域之外配置独立 HTTP 心跳，并验证整个入口、TLS、代理和应用链路。
 3. GitHub 仓库设置中启用 `main` 分支保护、required checks、secret scanning 与 push protection；私有仓库还需启用 GitHub Code Security 才能运行 CodeQL。
 4. 高合规项目上线前把审计归档、SBOM 和备份放入权限独立的不可变存储。
-5. 按[代码审计模板生产化待办](audit-template-production-todo.md)完成配置迁移、默认 preset、词法边界、稳健性和性能验收。
+5. 按[代码审计模板生产化待办](audit-template-production-todo.md)继续完成 P1 词法边界、稳健性和性能验收；P0 已完成。
 
 ## 已知残余风险
 
