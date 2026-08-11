@@ -1,15 +1,17 @@
 :host {
   display: block;
   height: 100vh;
+  height: 100dvh;
 }
 
 .login-page {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--ui-space-4);
   overflow: auto;
   background: var(--ui-color-surface-page);
 }
@@ -24,10 +26,10 @@
 
 .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: var(--ui-space-8);
 
   h1 {
-    margin: 16px 0 4px;
+    margin: var(--ui-space-4) 0 var(--ui-space-1);
     font-size: 30px;
     font-weight: 600;
     line-height: 38px;
@@ -63,19 +65,19 @@
   border: 1px solid var(--ui-color-border);
   border-radius: var(--ui-radius-lg);
   box-shadow: var(--mat-sys-elevation-level1);
-  padding: 32px;
+  padding: var(--ui-space-8);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--ui-space-5);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ui-space-2);
 
   label {
     font-size: 14px;
@@ -97,7 +99,7 @@
 
   mat-icon {
     position: absolute;
-    left: 12px;
+    left: var(--ui-space-3);
     color: var(--ui-color-text-tertiary);
     font-size: 20px;
     width: 20px;
@@ -107,7 +109,7 @@
 
   input {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px var(--ui-space-3);
     padding-left: 40px;
     border: none;
     background: transparent;
@@ -136,12 +138,12 @@
 
 .eye-btn {
   position: absolute;
-  right: 8px;
+  right: var(--ui-space-2);
   border: none;
   background: transparent;
   color: var(--ui-color-text-tertiary);
   cursor: pointer;
-  padding: 4px;
+  padding: var(--ui-space-1);
   border-radius: var(--ui-radius-md);
   display: flex;
   align-items: center;
@@ -167,8 +169,8 @@
 .login-error {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--ui-space-2);
+  padding: 10px var(--ui-space-3);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-color-error-soft);
   border: 1px solid var(--ui-color-error-border);
@@ -185,7 +187,7 @@
 .remember-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-2);
   width: fit-content;
   font-size: 13px;
   color: var(--ui-color-text-secondary);
@@ -202,7 +204,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--ui-space-2);
   width: 100%;
   padding: 14px 0;
   border: none;
@@ -219,11 +221,11 @@
     transform var(--ui-duration-fast) var(--ui-ease-standard);
   box-shadow: var(--mat-sys-elevation-level1);
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--ui-color-primary-hover);
     color: var(--ui-color-on-primary);
   }
-  &:active {
+  &:active:not(:disabled) {
     transform: scale(0.98);
   }
   &:disabled {
@@ -254,10 +256,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--ui-space-2);
   width: 100%;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--ui-color-hover);
   }
 
@@ -281,13 +283,13 @@
 .recovery-codes-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ui-space-3);
 }
 
 .enrollment-block {
   display: grid;
   justify-items: center;
-  gap: 16px;
+  gap: var(--ui-space-4);
 }
 
 .totp-qr {
@@ -307,7 +309,7 @@
 
   code {
     overflow-wrap: anywhere;
-    padding: 10px 12px;
+    padding: 10px var(--ui-space-3);
     border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-radius-md);
     background: var(--ui-color-surface-subtle);
@@ -319,8 +321,8 @@
 .recovery-warning {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--ui-space-2);
+  padding: 10px var(--ui-space-3);
   border: 1px solid var(--ui-color-warning-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-color-warning-soft);
@@ -337,10 +339,10 @@
 .recovery-code-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--ui-space-2);
 
   code {
-    padding: 8px;
+    padding: var(--ui-space-2);
     border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-radius-md);
     background: var(--ui-color-surface-subtle);
@@ -352,11 +354,11 @@
 
 @media (max-width: 480px) {
   .login-panel {
-    padding: 24px 20px;
+    padding: var(--ui-space-6) var(--ui-space-5);
   }
 
   .login-header {
-    margin-bottom: 24px;
+    margin-bottom: var(--ui-space-6);
   }
 
   .recovery-code-grid {

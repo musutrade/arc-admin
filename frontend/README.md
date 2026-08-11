@@ -45,7 +45,7 @@ npm run build         # 输出到 dist/arc-admin
 | `/users`             | 用户增删改、密码重置、角色分配、筛选和批量操作 | `arco_style_3`           |
 | `/roles`             | 角色增删改和权限分配                           | `arco_style_4`           |
 | `/role-permissions`  | 角色权限矩阵和 `mat-dialog` 分配流程           | `arco_style_5`           |
-| `/403` `/404` `/500` | 错误页                                         | `403/404/500_arco_style` |
+| `/403` `/404` `/500` | 由路由数据驱动的统一懒加载错误页               | `403/404/500_arco_style` |
 
 - 未登录访问主页面会被 `authGuard` 重定向到 `/login`。
 - 顶栏 `contrast` 按钮切换暗色模式,偏好持久化到 `localStorage('arc-theme')`,并支持 `[data-theme="dark"]` 手动覆盖。
@@ -61,6 +61,7 @@ npm run build         # 输出到 dist/arc-admin
 | `--ui-color-surface-*`                             | 页面、面板和弱化背景  | `--ui-color-surface-panel`  |
 | `--ui-color-text-*`                                | 主、次、辅助文本      | `--ui-color-text-secondary` |
 | `--ui-color-{success,warning,error,info,feature}*` | 状态及其弱背景、边框  | `--ui-color-error-soft`     |
+| `--ui-space-*`                                      | 统一间距尺度          | `--ui-space-4`              |
 | `--ui-radius-*`                                    | 2px 至 8px 的统一圆角 | `--ui-radius-lg`            |
 | `--ui-shadow-*` / `--ui-focus-ring`                | 层级和键盘焦点        | `--ui-shadow-md`            |
 | `--ui-duration-*` / `--ui-ease-*`                  | 交互动效              | `--ui-duration-fast`        |

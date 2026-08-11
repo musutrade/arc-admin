@@ -122,32 +122,6 @@
   .perm-desc {
     color: var(--ui-color-text-secondary);
   }
-
-  .row-btn {
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: var(--ui-radius-md);
-    background: transparent;
-    color: var(--ui-color-text-tertiary);
-    cursor: pointer;
-    transition:
-      color var(--ui-duration-fast) var(--ui-ease-standard),
-      background-color var(--ui-duration-fast) var(--ui-ease-standard);
-
-    mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-    &:hover {
-      color: var(--mat-sys-primary);
-      background: var(--ui-color-hover);
-    }
-    &.danger:hover {
-      color: var(--mat-sys-error);
-    }
-  }
 }
 
 /* 类型徽章(Arco 语义色) */

@@ -353,55 +353,6 @@
     text-align: right;
     white-space: nowrap;
   }
-
-  .row-btn {
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: var(--ui-radius-md);
-    background: transparent;
-    color: var(--ui-color-text-secondary);
-    cursor: pointer;
-    transition:
-      color var(--ui-duration-fast) var(--ui-ease-standard),
-      background-color var(--ui-duration-fast) var(--ui-ease-standard);
-
-    mat-icon {
-      width: 20px;
-      height: 20px;
-      font-size: 20px;
-    }
-
-    &:hover:not(:disabled) {
-      background: var(--mat-sys-surface-container);
-      color: var(--mat-sys-primary);
-    }
-
-    &.danger:hover:not(:disabled) {
-      background: var(--ui-color-error-soft);
-      color: var(--mat-sys-error);
-    }
-
-    &.status-action {
-      color: var(--mat-sys-warning);
-
-      &:hover:not(:disabled) {
-        background: var(--ui-color-warning-soft);
-      }
-
-      &.is-activate {
-        color: var(--mat-sys-success);
-
-        &:hover:not(:disabled) {
-          background: var(--ui-color-success-soft);
-        }
-      }
-    }
-
-    &:disabled {
-      opacity: 0.55;
-    }
-  }
 }
 
 .role-total {

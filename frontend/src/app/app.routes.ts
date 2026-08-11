@@ -8,6 +8,8 @@ import { ROUTE_ACCESS } from './app.navigation';
 /** 无需登录即可访问的错误页 */
 const PUBLIC_PATHS = new Set(['403', '404', '500']);
 
+const loadErrorPage = () => import('./pages/errors/error-page').then((m) => m.ErrorPage);
+
 /** 未登录跳转到 /login;错误页始终放行 */
 export const authGuard: CanActivateFn = (route) => {
   const router = inject(Router);
@@ -81,15 +83,21 @@ export const routes: Routes = [
       },
       {
         path: '403',
-        loadComponent: () => import('./pages/errors/error-403').then((m) => m.Error403Page),
+        title: '403 - 无权访问',
+        data: { status: 403 },
+        loadComponent: loadErrorPage,
       },
       {
         path: '404',
-        loadComponent: () => import('./pages/errors/error-404').then((m) => m.Error404Page),
+        title: '404 - 页面不存在',
+        data: { status: 404 },
+        loadComponent: loadErrorPage,
       },
       {
         path: '500',
-        loadComponent: () => import('./pages/errors/error-500').then((m) => m.Error500Page),
+        title: '500 - 服务器内部错误',
+        data: { status: 500 },
+        loadComponent: loadErrorPage,
       },
     ],
   },

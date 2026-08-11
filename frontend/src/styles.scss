@@ -205,8 +205,8 @@ body {
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--ui-space-4);
+  margin-bottom: var(--ui-space-6);
 
   h1 {
     margin: 0;
@@ -217,7 +217,7 @@ body {
   }
 
   p {
-    margin: 4px 0 0;
+    margin: var(--ui-space-1) 0 0;
     font-size: 14px;
     color: var(--ui-color-text-secondary);
   }
@@ -226,7 +226,7 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-2);
   flex-wrap: wrap;
 }
 
@@ -235,7 +235,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--ui-space-2);
   min-height: var(--ui-control-md);
   padding: 0 var(--ui-space-5);
   border: none;
@@ -258,12 +258,12 @@ body {
     height: 20px;
   }
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--ui-color-primary-hover);
     color: var(--ui-color-on-primary);
     box-shadow: var(--ui-shadow-md);
   }
-  &:active {
+  &:active:not(:disabled) {
     background: var(--ui-color-primary-active);
     transform: translateY(1px);
   }
@@ -277,7 +277,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--ui-space-2);
   min-height: var(--ui-control-md);
   padding: 0 var(--ui-space-4);
   border: 1px solid var(--ui-color-border-strong);
@@ -298,13 +298,69 @@ body {
     height: 20px;
   }
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--ui-color-hover);
     border-color: var(--ui-color-text-tertiary);
   }
 
   &:disabled {
     opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+/* 表格行操作在多个页面共用，状态规则集中维护。 */
+.row-btn {
+  width: var(--ui-control-sm);
+  height: var(--ui-control-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--ui-color-text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--ui-duration-fast) var(--ui-ease-standard),
+    background-color var(--ui-duration-fast) var(--ui-ease-standard);
+
+  mat-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--mat-sys-surface-container);
+    color: var(--mat-sys-primary);
+  }
+
+  &.danger:hover:not(:disabled) {
+    background: var(--ui-color-error-soft);
+    color: var(--mat-sys-error);
+  }
+
+  &.status-action {
+    color: var(--mat-sys-warning);
+
+    &:hover:not(:disabled) {
+      background: var(--ui-color-warning-soft);
+    }
+
+    &.is-activate {
+      color: var(--mat-sys-success);
+
+      &:hover:not(:disabled) {
+        background: var(--ui-color-success-soft);
+      }
+    }
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 }
 
@@ -313,9 +369,9 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 24px;
-  padding: 16px;
-  margin-bottom: 24px;
+  gap: var(--ui-space-6);
+  padding: var(--ui-space-4);
+  margin-bottom: var(--ui-space-6);
   background: var(--ui-color-surface-panel);
   border: 1px solid var(--ui-color-border);
   border-radius: var(--ui-radius-lg);
@@ -331,7 +387,7 @@ body {
 
   mat-icon {
     position: absolute;
-    left: 12px;
+    left: var(--ui-space-3);
     color: var(--ui-color-text-tertiary);
     font-size: 20px;
     width: 20px;
@@ -367,7 +423,7 @@ body {
 .filter-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--ui-space-4);
 }
 
 .filter-select {
@@ -426,7 +482,7 @@ body {
   text-align: left;
 
   thead th {
-    padding: 12px 16px;
+    padding: var(--ui-space-3) var(--ui-space-4);
     background: var(--mat-sys-surface-container-low);
     border-bottom: 1px solid var(--ui-color-border);
     font-size: 12px;
@@ -448,7 +504,7 @@ body {
       }
     }
     td {
-      padding: 14px 16px;
+      padding: 14px var(--ui-space-4);
       border-bottom: 1px solid var(--ui-color-border);
       font-size: 14px;
       color: var(--ui-color-text-primary);
@@ -464,7 +520,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 64px 0;
+  padding: var(--ui-space-16) 0;
 }
 
 .empty-state {
@@ -472,8 +528,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 64px 0;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-16) 0;
   color: var(--ui-color-text-tertiary);
 
   mat-icon {
@@ -493,8 +549,8 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 16px 24px;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-4) var(--ui-space-6);
   border-top: 1px solid var(--ui-color-border);
   background: var(--ui-color-surface-panel);
 }
@@ -507,7 +563,7 @@ body {
 .pagination {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ui-space-1);
 
   .page-btn {
     width: 32px;
@@ -539,7 +595,7 @@ body {
   .page-num {
     min-width: 32px;
     height: 32px;
-    padding: 0 4px;
+    padding: 0 var(--ui-space-1);
     display: flex;
     align-items: center;
     justify-content: center;

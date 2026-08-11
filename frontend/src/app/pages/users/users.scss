@@ -141,44 +141,6 @@
     text-align: right;
     white-space: nowrap;
   }
-
-  .row-btn {
-    width: 32px;
-    height: 32px;
-    border: none;
-    border-radius: var(--ui-radius-md);
-    background: transparent;
-    color: var(--ui-color-text-secondary);
-    cursor: pointer;
-    transition:
-      color var(--ui-duration-fast) var(--ui-ease-standard),
-      background-color var(--ui-duration-fast) var(--ui-ease-standard);
-
-    mat-icon {
-      font-size: 20px;
-      width: 20px;
-      height: 20px;
-    }
-    &:hover {
-      background: var(--mat-sys-surface-container);
-      color: var(--mat-sys-primary);
-    }
-    &.status-action {
-      color: var(--mat-sys-warning);
-
-      &:hover {
-        background: var(--ui-color-warning-soft);
-      }
-
-      &.is-activate {
-        color: var(--mat-sys-success);
-
-        &:hover {
-          background: var(--ui-color-success-soft);
-        }
-      }
-    }
-  }
 }
 
 /* 批量操作 */
