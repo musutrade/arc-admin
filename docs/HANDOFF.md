@@ -1,4 +1,4 @@
-# 会话交接文档（2026-08-08）
+# 会话交接文档（2026-08-11）
 
 > 用途：保存当前进度，供下次会话直接续接。长期约定以 `AGENTS.md`、`docs/development.md`、`docs/architecture.md` 和生成的 `docs/openapi.json` 为准。
 
@@ -35,6 +35,7 @@ cargo flow verify --all
 2. 在应用故障域之外配置独立 HTTP 心跳，并验证整个入口、TLS、代理和应用链路。
 3. GitHub 仓库设置中启用 `main` 分支保护、required checks、secret scanning 与 push protection；私有仓库还需启用 GitHub Code Security 才能运行 CodeQL。
 4. 高合规项目上线前把审计归档、SBOM 和备份放入权限独立的不可变存储。
+5. 按[代码审计模板生产化待办](audit-template-production-todo.md)完成配置迁移、默认 preset、词法边界、稳健性和性能验收。
 
 ## 已知残余风险
 
