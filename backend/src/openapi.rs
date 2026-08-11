@@ -6,17 +6,18 @@
 
 use crate::error::ErrorEnvelope;
 use crate::models::{
-    AssignRolesRequest, AuditLogQuery, ChangePasswordRequest, CreateRoleRequest, CreateUserRequest,
-    DashboardStats, DataScopeSchema, HealthResponse, LoginRequest, LoginResponse,
-    LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema,
-    MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
-    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
-    MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
+    AssignRolesRequest, AuditLogQuery, ChangePasswordRequest, CreateDepartmentRequest,
+    CreateRoleRequest, CreateUserRequest, DashboardStats, DataScopeSchema, DepartmentResponse,
+    DepartmentStatusSchema, HealthResponse, LoginRequest, LoginResponse, LoginStatusSchema,
+    MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest,
+    MfaPasskeyAuthenticationStartRequest, MfaPasskeyRegistrationFinishRequest,
+    MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse, MfaStatusResponse,
+    MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
     RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
-    StepUpRequest, StepUpResponse, UpdateRolePermissionsRequest, UpdateRoleRequest,
-    UpdateUserRequest, UserResponse, UserSortBySchema, UserStatusSchema,
+    StepUpRequest, StepUpResponse, UpdateDepartmentRequest, UpdateRolePermissionsRequest,
+    UpdateRoleRequest, UpdateUserRequest, UserResponse, UserSortBySchema, UserStatusSchema,
 };
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -534,6 +535,95 @@ fn update_role_permissions() {}
 
 #[utoipa::path(
     get,
+    path = "/departments",
+    operation_id = "listDepartments",
+    tag = "departments",
+    security(("cookieAuth" = [])),
+    responses(
+        (status = 200, description = "可见部门层级列表", body = [DepartmentResponse]),
+        (status = 403, description = "无权查看部门", body = ErrorEnvelope)
+    )
+)]
+fn list_departments() {}
+
+#[utoipa::path(
+    post,
+    path = "/departments",
+    operation_id = "createDepartment",
+    tag = "departments",
+    security(("cookieAuth" = [])),
+    params(
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "部门管理再认证凭据")
+    ),
+    request_body = CreateDepartmentRequest,
+    responses(
+        (status = 201, description = "部门已创建", body = DepartmentResponse),
+        (status = 403, description = "无权创建部门", body = ErrorEnvelope),
+        (status = 409, description = "部门编码冲突", body = ErrorEnvelope),
+        (status = 422, description = "请求无效", body = ErrorEnvelope)
+    )
+)]
+fn create_department() {}
+
+#[utoipa::path(
+    get,
+    path = "/departments/{id}",
+    operation_id = "getDepartment",
+    tag = "departments",
+    security(("cookieAuth" = [])),
+    params(("id" = i64, Path, description = "部门 ID")),
+    responses(
+        (status = 200, description = "部门详情", body = DepartmentResponse),
+        (status = 404, description = "部门不存在或不可见", body = ErrorEnvelope)
+    )
+)]
+fn get_department() {}
+
+#[utoipa::path(
+    put,
+    path = "/departments/{id}",
+    operation_id = "updateDepartment",
+    tag = "departments",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "部门 ID"),
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "部门管理再认证凭据")
+    ),
+    request_body = UpdateDepartmentRequest,
+    responses(
+        (status = 200, description = "部门已更新", body = DepartmentResponse),
+        (status = 403, description = "无权更新部门", body = ErrorEnvelope),
+        (status = 404, description = "部门不存在或不可见", body = ErrorEnvelope),
+        (status = 409, description = "部门编码冲突", body = ErrorEnvelope),
+        (status = 422, description = "请求无效", body = ErrorEnvelope)
+    )
+)]
+fn update_department() {}
+
+#[utoipa::path(
+    delete,
+    path = "/departments/{id}",
+    operation_id = "deleteDepartment",
+    tag = "departments",
+    security(("cookieAuth" = [])),
+    params(
+        ("id" = i64, Path, description = "部门 ID"),
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "部门删除再认证凭据")
+    ),
+    responses(
+        (status = 204, description = "部门已删除"),
+        (status = 403, description = "根部门不可删除", body = ErrorEnvelope),
+        (status = 404, description = "部门不存在或不可见", body = ErrorEnvelope),
+        (status = 409, description = "部门仍有成员或下级部门", body = ErrorEnvelope)
+    )
+)]
+fn delete_department() {}
+
+#[utoipa::path(
+    get,
     path = "/permissions/groups",
     operation_id = "listPermissionGroups",
     tag = "permissions",
@@ -606,6 +696,11 @@ fn list_audit_logs() {}
         delete_role,
         get_role_permissions,
         update_role_permissions,
+        list_departments,
+        create_department,
+        get_department,
+        update_department,
+        delete_department,
         list_permission_groups,
         dashboard_stats,
         list_audit_logs
@@ -613,6 +708,7 @@ fn list_audit_logs() {}
     components(schemas(
         ErrorEnvelope,
         UserStatusSchema,
+        DepartmentStatusSchema,
         DataScopeSchema,
         RoleColorSchema,
         PermissionTypeSchema,
@@ -621,6 +717,7 @@ fn list_audit_logs() {}
         HealthResponse,
         ReadinessResponse,
         UserResponse,
+        DepartmentResponse,
         RoleResponse,
         PermissionResponse,
         PermissionGroupResponse,
@@ -648,6 +745,8 @@ fn list_audit_logs() {}
         PageAuditLog,
         CreateUserRequest,
         UpdateUserRequest,
+        CreateDepartmentRequest,
+        UpdateDepartmentRequest,
         AssignRolesRequest,
         CreateRoleRequest,
         UpdateRoleRequest,

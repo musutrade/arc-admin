@@ -58,6 +58,13 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/users/users').then((m) => m.UsersPage),
       },
       {
+        path: 'departments',
+        canActivate: [permissionGuard],
+        data: { permissions: ROUTE_ACCESS.departments },
+        loadComponent: () =>
+          import('./pages/departments/departments').then((m) => m.DepartmentsPage),
+      },
+      {
         path: 'roles',
         canActivate: [permissionGuard],
         data: { permissions: ROUTE_ACCESS.roles },

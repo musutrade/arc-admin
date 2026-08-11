@@ -4,6 +4,7 @@
 import { UserStatus } from '../models/user-status';
 export interface UserResponse {
   createdAt: string;
+  departmentId: (number | null);
   displayName: string;
   email: (string | null);
   id: number;

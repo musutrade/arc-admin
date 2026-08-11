@@ -15,7 +15,7 @@ concurrency:
 jobs:
   quality:
     name: Quality gate
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -40,7 +40,7 @@ jobs:
 
   backend:
     name: Backend verification
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 20
     services:
       postgres:
@@ -73,7 +73,7 @@ jobs:
 
   frontend:
     name: Frontend verification
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 20
     services:
       postgres:
@@ -132,7 +132,7 @@ jobs:
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request' && github.event.repository.private == false
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6

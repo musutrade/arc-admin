@@ -375,6 +375,13 @@ async fn validate_permission_dependencies(
             "分配角色权限管理能力时，必须同时授予角色读取和权限目录读取权限",
         ));
     }
+    if codes.contains("organization:department:write")
+        && !codes.contains("organization:department:read")
+    {
+        return Err(ApiError::validation(
+            "分配部门管理能力时，必须同时授予部门目录读取权限",
+        ));
+    }
     Ok(codes)
 }
 

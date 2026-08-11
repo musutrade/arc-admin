@@ -41,6 +41,25 @@
       }
     </div>
 
+    @if (data.canManageDepartment) {
+      <div class="form-field">
+        <label for="user-department">所属部门</label>
+        <select id="user-department" formControlName="departmentId">
+          @for (department of data.departments; track department.id) {
+            <option
+              [ngValue]="department.id"
+              [disabled]="
+                department.status !== 'active' && department.id !== data.user?.departmentId
+              "
+            >
+              {{ '　'.repeat(department.depth) }}{{ department.name }}
+              {{ department.status === 'inactive' ? '（已停用）' : '' }}
+            </option>
+          }
+        </select>
+      </div>
+    }
+
     @if (data.canManageStatus) {
       <div class="form-field">
         <label for="user-status">状态</label>

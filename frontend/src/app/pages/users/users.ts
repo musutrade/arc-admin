@@ -23,6 +23,8 @@ import { apiErrorMessage } from '../../core/api-error';
 import { ConfirmDialog } from '../../core/confirm.dialog';
 import { ModuleUnlockService } from '../../core/module-unlock.service';
 import { StepUpCredentials, StepUpDialog } from '../../core/step-up.dialog';
+import { DepartmentApiService } from '../../features/departments/data-access/department-api.service';
+import { DEPARTMENT_PERMISSIONS } from '../../features/departments/departments.permissions';
 import { PasswordDialog } from './password.dialog';
 import { RoleSelectionDialog } from './role-selection.dialog';
 import { UserEditorDialog, UserEditorResult } from './user-editor.dialog';
@@ -67,6 +69,7 @@ export class UsersPage implements OnInit, OnDestroy {
   private requestSequence = 0;
 
   private readonly dashboardApi = inject(DashboardApiService);
+  private readonly departmentApi = inject(DepartmentApiService);
   private readonly roleApi = inject(RoleApiService);
   private readonly userApi = inject(UserApiService);
   private readonly auth = inject(AuthService);
@@ -80,6 +83,9 @@ export class UsersPage implements OnInit, OnDestroy {
   readonly canManageStatus = computed(() => this.canWrite() && this.canDeactivate());
   readonly canManageRoles = computed(() => this.auth.hasPermission('user:roles:write'));
   readonly canGrantSuperAdmin = computed(() => this.auth.hasPermission('user:super_admin:grant'));
+  readonly canManageDepartment = computed(() =>
+    this.auth.hasPermission(DEPARTMENT_PERMISSIONS.read),
+  );
 
   /** 状态展示元数据暴露给模板 */
   readonly statusMeta = STATUS_META;
@@ -395,11 +401,25 @@ export class UsersPage implements OnInit, OnDestroy {
       const canManageRoles = this.canManageRoles();
       const canManageStatus = this.canManageStatus();
       const canResetPassword = this.canResetPassword();
-      const roles = canManageRoles ? this.filterGrantableRoles(await this.roleApi.getRoles()) : [];
+      const canManageDepartment = this.canManageDepartment();
+      const [loadedRoles, departments] = await Promise.all([
+        canManageRoles ? this.roleApi.getRoles() : Promise.resolve([]),
+        canManageDepartment ? this.departmentApi.list() : Promise.resolve([]),
+      ]);
+      const roles = this.filterGrantableRoles(loadedRoles);
       const result: UserEditorResult | undefined = await firstValueFrom(
         this.dialog
           .open(UserEditorDialog, {
-            data: { user, roles, canManageRoles, canManageStatus, canResetPassword },
+            data: {
+              user,
+              roles,
+              departments,
+              defaultDepartmentId: this.auth.currentUser()?.departmentId ?? null,
+              canManageRoles,
+              canManageStatus,
+              canResetPassword,
+              canManageDepartment,
+            },
           })
           .afterClosed(),
       );
@@ -411,6 +431,10 @@ export class UsersPage implements OnInit, OnDestroy {
         const basicChanged = result.displayName !== user.name || (email ?? '') !== user.email;
         const statusChanged = canManageStatus && result.status !== user.status;
         const passwordChanged = canResetPassword && Boolean(result.password);
+        const departmentChanged =
+          canManageDepartment &&
+          result.departmentId > 0 &&
+          result.departmentId !== user.departmentId;
         const currentRoleIds = roles
           .filter((role) => user.roles.includes(role.name))
           .map((role) => role.id);
@@ -420,14 +444,15 @@ export class UsersPage implements OnInit, OnDestroy {
           email,
           ...(statusChanged ? { status: result.status } : {}),
           ...(passwordChanged ? { password: result.password } : {}),
+          ...(departmentChanged ? { departmentId: result.departmentId } : {}),
         };
-        const updateNeeded = basicChanged || statusChanged || passwordChanged;
-        const updateNeedsStepUp = statusChanged || passwordChanged;
+        const updateNeeded = basicChanged || statusChanged || passwordChanged || departmentChanged;
+        const updateNeedsStepUp = statusChanged || passwordChanged || departmentChanged;
         const updateToken = updateNeedsStepUp
           ? await this.stepUp(
               'users.sensitive',
               '敏感操作需要再认证',
-              '修改用户密码或状态前，请验证当前管理员身份。',
+              '修改用户密码、状态或所属部门前，请验证当前管理员身份。',
             )
           : undefined;
         if (updateNeedsStepUp && !updateToken) {
@@ -463,6 +488,11 @@ export class UsersPage implements OnInit, OnDestroy {
           }
         }, `已更新 ${result.displayName}`);
       } else {
+        const currentDepartmentId = this.auth.currentUser()?.departmentId ?? null;
+        const departmentChanged =
+          canManageDepartment &&
+          result.departmentId > 0 &&
+          result.departmentId !== currentDepartmentId;
         const createRequest = {
           username: result.username,
           password: result.password,
@@ -470,15 +500,19 @@ export class UsersPage implements OnInit, OnDestroy {
           email: result.email || null,
           ...(canManageStatus ? { status: result.status } : {}),
           ...(canManageRoles ? { roleIds: result.roleIds.map(Number) } : {}),
+          ...(canManageDepartment && result.departmentId > 0
+            ? { departmentId: result.departmentId }
+            : {}),
         };
         const createNeedsStepUp =
           (canManageStatus && result.status !== 'active') ||
-          (canManageRoles && result.roleIds.length > 0);
+          (canManageRoles && result.roleIds.length > 0) ||
+          departmentChanged;
         const createToken = createNeedsStepUp
           ? await this.stepUp(
               'users.sensitive',
               '敏感操作需要再认证',
-              '创建带有角色或非启用状态的用户前，请验证当前管理员身份。',
+              '创建带有角色、非启用状态或跨部门归属的用户前，请验证当前管理员身份。',
             )
           : undefined;
         if (createNeedsStepUp && !createToken) {

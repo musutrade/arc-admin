@@ -51,6 +51,8 @@ const USER_ROLES_PATH: &str = "/api/v1/users/{id}/roles";
 const ROLES_PATH: &str = "/api/v1/roles";
 const ROLE_PATH: &str = "/api/v1/roles/{id}";
 const ROLE_PERMISSIONS_PATH: &str = "/api/v1/roles/{id}/permissions";
+const DEPARTMENTS_PATH: &str = "/api/v1/departments";
+const DEPARTMENT_PATH: &str = "/api/v1/departments/{id}";
 const PERMISSION_GROUPS_PATH: &str = "/api/v1/permissions/groups";
 const DASHBOARD_STATS_PATH: &str = "/api/v1/dashboard/stats";
 const AUDIT_LOGS_PATH: &str = "/api/v1/audit-logs";
@@ -83,6 +85,8 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (ROLES_PATH, &["get", "post"]),
     (ROLE_PATH, &["get", "put", "delete"]),
     (ROLE_PERMISSIONS_PATH, &["get", "put"]),
+    (DEPARTMENTS_PATH, &["get", "post"]),
+    (DEPARTMENT_PATH, &["get", "put", "delete"]),
     (PERMISSION_GROUPS_PATH, &["get"]),
     (DASHBOARD_STATS_PATH, &["get"]),
     (AUDIT_LOGS_PATH, &["get"]),
@@ -191,6 +195,16 @@ fn base_router(state: AppState) -> Router {
         .route(
             ROLE_PERMISSIONS_PATH,
             get(handlers::roles::get_permissions).put(handlers::roles::put_permissions),
+        )
+        .route(
+            DEPARTMENTS_PATH,
+            get(handlers::departments::list).post(handlers::departments::create),
+        )
+        .route(
+            DEPARTMENT_PATH,
+            get(handlers::departments::get)
+                .put(handlers::departments::update)
+                .delete(handlers::departments::delete),
         )
         .route(PERMISSION_GROUPS_PATH, get(handlers::permissions::groups))
         .route(DASHBOARD_STATS_PATH, get(handlers::dashboard::stats))

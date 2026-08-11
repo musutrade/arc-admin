@@ -7,7 +7,7 @@ use crate::models::{
     PageQuery, PageUser, UpdateUserRequest, UserResponse,
 };
 use crate::repositories;
-use crate::services::auth;
+use crate::services::{auth, departments};
 use serde_json::json;
 use sqlx::PgPool;
 
@@ -108,6 +108,7 @@ pub async fn create(
     actor: &ActorContext,
     req: &CreateUserRequest,
     can_grant_super_admin: bool,
+    can_assign_department: bool,
 ) -> Result<UserResponse, ApiError> {
     if !actor.can_create_peer() {
         return Err(ApiError::forbidden("当前数据范围不允许创建其他用户"));
@@ -139,6 +140,16 @@ pub async fn create(
     if let Some(role_ids) = &req.role_ids {
         validate_role_grant_scope(pool, actor_user_id, role_ids, can_grant_super_admin).await?;
     }
+    let department_id = match req.department_id {
+        Some(department_id) => {
+            if !can_assign_department {
+                return Err(ApiError::forbidden("缺少查看部门目录的权限"));
+            }
+            departments::validate_assignment(pool, actor, department_id).await?;
+            Some(department_id)
+        }
+        None => actor.department_id,
+    };
     let user = repositories::users::NewUser {
         username: username.to_string(),
         password_hash: hash,
@@ -146,7 +157,7 @@ pub async fn create(
         email: req.email.clone(),
         status,
         organization_id: actor.organization_id,
-        department_id: actor.department_id,
+        department_id,
     };
     let mut transaction = pool.begin().await.map_err(db_error)?;
     let row = repositories::users::create(&mut transaction, &user)
@@ -166,6 +177,7 @@ pub async fn create(
         json!({
             "username": username,
             "status": &user.status,
+            "departmentId": user.department_id,
             "roleIds": req.role_ids.as_deref().unwrap_or_default(),
         }),
     )
@@ -184,9 +196,24 @@ pub async fn update(
     actor: Option<&ActorContext>,
     req: &UpdateUserRequest,
     can_grant_super_admin: bool,
+    can_assign_department: bool,
 ) -> Result<UserResponse, ApiError> {
     ensure_actor_can_access(pool, actor, id).await?;
     let actor_user_id = actor.map(|context| context.user_id);
+    let department_id = match (actor, req.department_id) {
+        (Some(actor), Some(department_id)) => {
+            if !can_assign_department {
+                return Err(ApiError::forbidden("缺少查看部门目录的权限"));
+            }
+            if actor.user_id == id && actor.department_id != Some(department_id) {
+                return Err(ApiError::forbidden("不能调整当前登录账号所属部门"));
+            }
+            departments::validate_assignment(pool, actor, department_id).await?;
+            Some(department_id)
+        }
+        (None, Some(department_id)) => Some(department_id),
+        (_, None) => None,
+    };
     let display_name = req
         .display_name
         .as_ref()
@@ -246,6 +273,7 @@ pub async fn update(
         email_is_set,
         email,
         req.status.clone(),
+        department_id,
     )
     .await
     .map_err(db_error)?
@@ -278,6 +306,7 @@ pub async fn update(
             "displayNameChanged": req.display_name.is_some(),
             "emailChanged": !matches!(req.email, crate::models::NullablePatch::Missing),
             "status": req.status,
+            "departmentId": req.department_id,
             "passwordReset": req.password.is_some(),
         }),
     )

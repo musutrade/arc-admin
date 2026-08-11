@@ -72,6 +72,7 @@ function mapUser(user: UserResponse): User {
     username: user.username,
     name: user.displayName,
     email: user.email ?? '',
+    departmentId: user.departmentId,
     roles: user.roles,
     status: user.status,
     lastLogin: user.lastLoginAt,

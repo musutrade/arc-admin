@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DashboardApiService } from '../../core/api/dashboard-api.service';
+import { DepartmentApiService } from '../../features/departments/data-access/department-api.service';
 import { RoleApiService } from '../../core/api/role-api.service';
 import { UserApiService } from '../../core/api/user-api.service';
 import { AuthService } from '../../core/auth.service';
@@ -12,6 +13,7 @@ const USERS: User[] = Array.from({ length: 12 }, (_, index) => ({
   username: index === 0 ? 'sarah' : `user${index + 1}`,
   name: index === 0 ? 'Sarah Jenkins' : `User ${index + 1}`,
   email: index === 0 ? 'sarah@example.com' : `user${index + 1}@example.com`,
+  departmentId: 1,
   roles: [index === 0 ? 'Auditor' : index % 2 === 0 ? 'Viewer' : 'Editor'],
   status: index === 1 ? 'suspended' : index % 3 === 0 ? 'inactive' : 'active',
   lastLogin: '2026-08-01T00:00:00Z',
@@ -63,6 +65,7 @@ describe('UsersPage', () => {
         { provide: UserApiService, useValue: userApiStub },
         { provide: DashboardApiService, useValue: dashboardApiStub },
         { provide: RoleApiService, useValue: {} },
+        { provide: DepartmentApiService, useValue: { list: vi.fn(async () => []) } },
         { provide: AuthService, useValue: authServiceStub },
       ],
     }).compileComponents();

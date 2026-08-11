@@ -25,6 +25,7 @@ describe('application navigation', () => {
     const accessByRoute = new Map<string, readonly string[]>([
       ['/permissions', ROUTE_ACCESS.permissionDirectory],
       ['/users', ROUTE_ACCESS.users],
+      ['/departments', ROUTE_ACCESS.departments],
       ['/roles', ROUTE_ACCESS.roles],
       ['/role-permissions', ROUTE_ACCESS.rolePermissions],
       ['/audit-logs', ROUTE_ACCESS.auditLogs],

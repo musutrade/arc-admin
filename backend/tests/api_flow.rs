@@ -138,10 +138,15 @@ fn sensitive_scope(method: &Method, uri: &str, body: Option<&Value>) -> Option<&
                 .and_then(|value| value.get("status"))
                 .and_then(Value::as_str)
                 .is_some_and(|status| status != "active");
-            (has_roles || has_inactive_status).then_some("users.sensitive")
+            let has_department = object.is_some_and(|value| value.contains_key("departmentId"));
+            (has_roles || has_inactive_status || has_department).then_some("users.sensitive")
         }
         (&Method::PUT, path) if path.starts_with("/api/v1/users/") => object
-            .is_some_and(|value| value.contains_key("password") || value.contains_key("status"))
+            .is_some_and(|value| {
+                value.contains_key("password")
+                    || value.contains_key("status")
+                    || value.contains_key("departmentId")
+            })
             .then_some("users.sensitive"),
         (&Method::DELETE, path) if path.starts_with("/api/v1/roles/") => {
             (!path.ends_with("/permissions")).then_some("roles.delete")
@@ -161,6 +166,13 @@ fn sensitive_scope(method: &Method, uri: &str, body: Option<&Value>) -> Option<&
         (&Method::PUT, path) if path.starts_with("/api/v1/roles/") => object
             .is_some_and(|value| value.contains_key("dataScope") || value.contains_key("isActive"))
             .then_some("roles.sensitive"),
+        (&Method::POST, "/api/v1/departments") => Some("departments.write"),
+        (&Method::PUT, path) if path.starts_with("/api/v1/departments/") => {
+            Some("departments.write")
+        }
+        (&Method::DELETE, path) if path.starts_with("/api/v1/departments/") => {
+            Some("departments.delete")
+        }
         _ => None,
     }
 }
@@ -952,11 +964,15 @@ async fn login_and_user_crud_flow() {
     assert_eq!(groups[0]["name"], "仪表盘模块");
     assert_eq!(groups[1]["name"], "身份与访问模块");
     assert_eq!(groups[2]["name"], "审计与合规模块");
+    assert_eq!(groups[3]["name"], "组织管理");
     let group_codes = groups
         .iter()
         .filter_map(|group| group["code"].as_str())
         .collect::<Vec<_>>();
-    assert_eq!(group_codes, vec!["dashboard", "identity", "audit"]);
+    assert_eq!(
+        group_codes,
+        vec!["dashboard", "identity", "audit", "organization"]
+    );
     let view_permissions = groups
         .iter()
         .flat_map(|group| group["permissions"].as_array().into_iter().flatten())
@@ -978,6 +994,8 @@ async fn login_and_user_crud_flow() {
         BTreeSet::from([
             "dashboard:analytics:read",
             "audit:logs:read",
+            "organization:department:read",
+            "organization:department:write",
             "permission:directory:read",
             "role:directory:read",
             "role:permissions:write",
@@ -1005,6 +1023,158 @@ async fn login_and_user_crud_flow() {
     let role_write_id = permission_id("role:write");
     let role_permission_write_id = permission_id("role:permissions:write");
     let permission_read_id = permission_id("permission:directory:read");
+
+    let (status, departments) =
+        send(&app, Method::GET, "/api/v1/departments", Some(token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let root_department_id = departments[0]["id"].as_i64().expect("root department id");
+    assert_eq!(departments[0]["name"], "根部门");
+    assert_eq!(departments[0]["depth"], 0);
+
+    let (status, _) = send(
+        &app,
+        Method::DELETE,
+        &format!("/api/v1/departments/{root_department_id}"),
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, engineering) = send(
+        &app,
+        Method::POST,
+        "/api/v1/departments",
+        Some(token),
+        Some(json!({
+            "parentId": root_department_id,
+            "code": "engineering",
+            "name": "研发中心"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let engineering_id = engineering["id"].as_i64().expect("engineering id");
+    assert_eq!(engineering["depth"], 1);
+
+    let (status, _) = send(
+        &app,
+        Method::POST,
+        "/api/v1/departments",
+        Some(token),
+        Some(json!({
+            "parentId": root_department_id,
+            "code": "engineering",
+            "name": "重复研发中心"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    let (status, platform) = send(
+        &app,
+        Method::POST,
+        "/api/v1/departments",
+        Some(token),
+        Some(json!({
+            "parentId": engineering_id,
+            "code": "platform",
+            "name": "平台部"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let platform_id = platform["id"].as_i64().expect("platform id");
+    assert_eq!(platform["depth"], 2);
+
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/departments/{engineering_id}"),
+        Some(token),
+        Some(json!({"parentId": platform_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, department_member) = send(
+        &app,
+        Method::POST,
+        "/api/v1/users",
+        Some(token),
+        Some(json!({
+            "username": "department_member",
+            "password": "integration-pass",
+            "displayName": "部门成员",
+            "departmentId": engineering_id
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(department_member["departmentId"], engineering_id);
+    let department_member_id = department_member["id"]
+        .as_i64()
+        .expect("department member id");
+
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{department_member_id}"),
+        Some(token),
+        Some(json!({"departmentId": platform_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, departments) =
+        send(&app, Method::GET, "/api/v1/departments", Some(token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let engineering = departments
+        .as_array()
+        .expect("department array")
+        .iter()
+        .find(|department| department["id"] == engineering_id)
+        .expect("engineering department");
+    let platform = departments
+        .as_array()
+        .expect("department array")
+        .iter()
+        .find(|department| department["id"] == platform_id)
+        .expect("platform department");
+    assert_eq!(engineering["childCount"], 1);
+    assert_eq!(engineering["memberCount"], 0);
+    assert_eq!(platform["memberCount"], 1);
+
+    let (status, _) = send(
+        &app,
+        Method::DELETE,
+        &format!("/api/v1/departments/{engineering_id}"),
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    let (status, _) = send(
+        &app,
+        Method::DELETE,
+        &format!("/api/v1/users/{department_member_id}"),
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    for department_id in [platform_id, engineering_id] {
+        let (status, _) = send(
+            &app,
+            Method::DELETE,
+            &format!("/api/v1/departments/{department_id}"),
+            Some(token),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
 
     let (status, roles) = send(&app, Method::GET, "/api/v1/roles", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -1879,13 +2049,14 @@ async fn login_and_user_crud_flow() {
         display_name: None,
         email: NullablePatch::Missing,
         status: Some("inactive".to_string()),
+        department_id: None,
         password: None,
     };
     let first_request = deactivate();
     let second_request = deactivate();
     let (first, second) = tokio::join!(
-        services::users::update(&pool, admin_id, None, &first_request, false),
-        services::users::update(&pool, second_admin_id, None, &second_request, false),
+        services::users::update(&pool, admin_id, None, &first_request, false, false),
+        services::users::update(&pool, second_admin_id, None, &second_request, false, false),
     );
     assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
 

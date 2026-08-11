@@ -3,13 +3,17 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { Role, User, UserStatus } from '../../core/models';
+import { Department } from '../../features/departments/models/department.model';
 
 export interface UserEditorData {
   user?: User;
   roles: Role[];
+  departments: Department[];
+  defaultDepartmentId: number | null;
   canResetPassword: boolean;
   canManageStatus: boolean;
   canManageRoles: boolean;
+  canManageDepartment: boolean;
 }
 
 export interface UserEditorResult {
@@ -19,6 +23,7 @@ export interface UserEditorResult {
   email: string;
   status: UserStatus;
   roleIds: string[];
+  departmentId: number;
 }
 
 @Component({
@@ -46,6 +51,7 @@ export class UserEditorDialog {
     ],
     displayName: [this.data.user?.name ?? '', [Validators.required, Validators.maxLength(128)]],
     email: [this.data.user?.email ?? '', [Validators.email]],
+    departmentId: [this.data.user?.departmentId ?? this.data.defaultDepartmentId ?? 0],
     status: [this.data.user?.status ?? ('active' as UserStatus), [Validators.required]],
     roleIds: [
       this.data.roles

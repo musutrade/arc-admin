@@ -7,6 +7,7 @@ export interface User {
   username: string;
   name: string;
   email: string;
+  departmentId: number | null;
   roles: string[];
   status: UserStatus;
   lastLogin: string | null;

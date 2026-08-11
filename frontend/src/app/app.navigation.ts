@@ -1,6 +1,9 @@
+import { DEPARTMENT_ROUTE_ACCESS } from './features/departments/departments.permissions';
+
 export const ROUTE_ACCESS = {
   permissionDirectory: ['permission:directory:read'],
   users: ['user:directory:read'],
+  departments: DEPARTMENT_ROUTE_ACCESS,
   roles: ['role:directory:read'],
   rolePermissions: ['role:permissions:write', 'role:directory:read', 'permission:directory:read'],
   auditLogs: ['audit:logs:read'],
@@ -42,6 +45,14 @@ export const APP_NAVIGATION = [
         permissions: ROUTE_ACCESS.users,
       },
     ],
+  },
+  {
+    kind: 'link',
+    id: 'departments',
+    label: '部门管理',
+    icon: 'account_tree',
+    route: '/departments',
+    permissions: ROUTE_ACCESS.departments,
   },
   {
     kind: 'link',

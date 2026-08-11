@@ -2,6 +2,8 @@
 
 use crate::auth::PermissionRequirement;
 
+pub mod departments;
+
 macro_rules! define_permission {
     ($name:ident, $code:literal) => {
         pub struct $name;

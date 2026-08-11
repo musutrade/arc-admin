@@ -30,6 +30,7 @@ pub struct UserWithRolesRow {
     pub display_name: String,
     pub email: Option<String>,
     pub status: String,
+    pub department_id: Option<i64>,
     pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub roles: Vec<String>,
@@ -62,6 +63,21 @@ pub struct RoleWithPermissionsRow {
     pub is_active: bool,
     pub members: i64,
     pub permission_group_ids: Vec<i64>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct DepartmentRow {
+    pub id: i64,
+    pub organization_id: i64,
+    pub parent_id: Option<i64>,
+    pub code: String,
+    pub name: String,
+    pub status: String,
+    pub depth: i32,
+    pub member_count: i64,
+    pub child_count: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -129,6 +145,14 @@ pub enum UserStatusSchema {
     Active,
     Inactive,
     Suspended,
+}
+
+#[derive(Debug, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[schema(as = DepartmentStatus)]
+pub enum DepartmentStatusSchema {
+    Active,
+    Inactive,
 }
 
 #[derive(Debug, utoipa::ToSchema)]
@@ -204,6 +228,8 @@ pub struct UserResponse {
     pub email: Option<String>,
     #[schema(value_type = UserStatusSchema)]
     pub status: String,
+    #[schema(required = true, nullable = true)]
+    pub department_id: Option<i64>,
     pub roles: Vec<String>,
     #[schema(required = true, nullable = true)]
     pub last_login_at: Option<DateTime<Utc>>,
@@ -217,6 +243,7 @@ pub fn user_response(row: UserRow, roles: Vec<String>) -> UserResponse {
         display_name: row.display_name,
         email: row.email,
         status: row.status,
+        department_id: row.department_id,
         roles,
         last_login_at: row.last_login_at,
         created_at: row.created_at,
@@ -230,9 +257,46 @@ pub fn user_with_roles_response(row: UserWithRolesRow) -> UserResponse {
         display_name: row.display_name,
         email: row.email,
         status: row.status,
+        department_id: row.department_id,
         roles: row.roles,
         last_login_at: row.last_login_at,
         created_at: row.created_at,
+    }
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DepartmentResponse {
+    pub id: i64,
+    pub organization_id: i64,
+    #[schema(required = true, nullable = true)]
+    pub parent_id: Option<i64>,
+    pub code: String,
+    pub name: String,
+    #[schema(value_type = DepartmentStatusSchema)]
+    pub status: String,
+    pub depth: i32,
+    pub member_count: i64,
+    pub child_count: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<DepartmentRow> for DepartmentResponse {
+    fn from(row: DepartmentRow) -> Self {
+        Self {
+            id: row.id,
+            organization_id: row.organization_id,
+            parent_id: row.parent_id,
+            code: row.code,
+            name: row.name,
+            status: row.status,
+            depth: row.depth,
+            member_count: row.member_count,
+            child_count: row.child_count,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
     }
 }
 
@@ -576,6 +640,7 @@ pub struct CreateUserRequest {
     pub email: Option<String>,
     #[schema(value_type = Option<UserStatusSchema>)]
     pub status: Option<String>,
+    pub department_id: Option<i64>,
     pub role_ids: Option<Vec<i64>>,
 }
 
@@ -588,7 +653,28 @@ pub struct UpdateUserRequest {
     pub email: NullablePatch<String>,
     #[schema(value_type = Option<UserStatusSchema>)]
     pub status: Option<String>,
+    pub department_id: Option<i64>,
     pub password: Option<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateDepartmentRequest {
+    pub parent_id: i64,
+    pub code: String,
+    pub name: String,
+    #[schema(value_type = Option<DepartmentStatusSchema>)]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDepartmentRequest {
+    pub parent_id: Option<i64>,
+    pub code: Option<String>,
+    pub name: Option<String>,
+    #[schema(value_type = Option<DepartmentStatusSchema>)]
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]

@@ -39,6 +39,16 @@ export type { VerifyMfaTotp$Params as VerifyMfaTotp$Params } from './fn/auth/ver
 export { verifyMfaTotp as verifyMfaTotp } from './fn/auth/verify-mfa-totp';
 export type { GetDashboardStats$Params as GetDashboardStats$Params } from './fn/dashboard/get-dashboard-stats';
 export { getDashboardStats as getDashboardStats } from './fn/dashboard/get-dashboard-stats';
+export type { ListDepartments$Params as ListDepartments$Params } from './fn/departments/list-departments';
+export { listDepartments as listDepartments } from './fn/departments/list-departments';
+export type { CreateDepartment$Params as CreateDepartment$Params } from './fn/departments/create-department';
+export { createDepartment as createDepartment } from './fn/departments/create-department';
+export type { GetDepartment$Params as GetDepartment$Params } from './fn/departments/get-department';
+export { getDepartment as getDepartment } from './fn/departments/get-department';
+export type { UpdateDepartment$Params as UpdateDepartment$Params } from './fn/departments/update-department';
+export { updateDepartment as updateDepartment } from './fn/departments/update-department';
+export type { DeleteDepartment$Params as DeleteDepartment$Params } from './fn/departments/delete-department';
+export { deleteDepartment as deleteDepartment } from './fn/departments/delete-department';
 export type { HealthCheck$Params as HealthCheck$Params } from './fn/system/health-check';
 export { healthCheck as healthCheck } from './fn/system/health-check';
 export type { ReadinessCheck$Params as ReadinessCheck$Params } from './fn/system/readiness-check';

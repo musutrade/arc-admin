@@ -3,6 +3,7 @@
 
 import { UserStatus } from '../models/user-status';
 export interface CreateUserRequest {
+  departmentId?: (number | null);
   displayName: string;
   email?: (string | null);
   password: string;

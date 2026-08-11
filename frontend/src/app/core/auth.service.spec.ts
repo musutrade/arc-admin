@@ -11,6 +11,7 @@ const user: ApiUser = {
   username: 'admin',
   displayName: 'Administrator',
   email: 'admin@example.test',
+  departmentId: 1,
   status: 'active',
   roles: ['Super Admin'],
   lastLoginAt: null,

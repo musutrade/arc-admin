@@ -135,7 +135,7 @@ pub async fn list(
              WHERE child.organization_id = $2
          )
          SELECT u.id, u.username, u.display_name, u.email, u.status,
-                u.last_login_at, u.created_at,
+                u.department_id, u.last_login_at, u.created_at,
                 COALESCE(
                     array_agg(DISTINCT r.name ORDER BY r.name) FILTER (WHERE r.id IS NOT NULL),
                     ARRAY[]::text[]
@@ -328,12 +328,14 @@ pub async fn update_profile(
     email_is_set: bool,
     email: Option<String>,
     status: Option<String>,
+    department_id: Option<i64>,
 ) -> Result<Option<UserRow>, sqlx::Error> {
     sqlx::query_as::<_, UserRow>(AssertSqlSafe(format!(
         "UPDATE users
          SET display_name = COALESCE($2, display_name),
              email = CASE WHEN $3 THEN $4 ELSE email END,
              status = COALESCE($5, status),
+             department_id = COALESCE($6, department_id),
              updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL
          RETURNING {USER_COLUMNS}"
@@ -343,6 +345,7 @@ pub async fn update_profile(
     .bind(email_is_set)
     .bind(email)
     .bind(status)
+    .bind(department_id)
     .fetch_optional(&mut *connection)
     .await
 }

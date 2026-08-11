@@ -8,6 +8,7 @@ const user = {
   username: 'support',
   name: '支持人员',
   email: 'support@example.com',
+  departmentId: 3,
   roles: ['二线支持'],
   status: 'active' as const,
   lastLogin: null,
@@ -35,9 +36,12 @@ describe('UserEditorDialog', () => {
     const fixture = await create({
       user,
       roles: [],
+      departments: [],
+      defaultDepartmentId: 1,
       canResetPassword: false,
       canManageStatus: false,
       canManageRoles: false,
+      canManageDepartment: false,
     });
     const text = fixture.nativeElement.textContent as string;
     expect(text).not.toContain('新密码');
@@ -49,13 +53,31 @@ describe('UserEditorDialog', () => {
     const fixture = await create({
       user,
       roles: [],
+      departments: [
+        {
+          id: 3,
+          organizationId: 1,
+          parentId: 1,
+          code: 'support',
+          name: '支持部',
+          status: 'active',
+          depth: 1,
+          memberCount: 1,
+          childCount: 0,
+          createdAt: '2026-08-08T00:00:00Z',
+          updatedAt: '2026-08-08T00:00:00Z',
+        },
+      ],
+      defaultDepartmentId: 1,
       canResetPassword: true,
       canManageStatus: true,
       canManageRoles: true,
+      canManageDepartment: true,
     });
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('新密码');
     expect(text).toContain('状态');
     expect(text).toContain('角色');
+    expect(text).toContain('所属部门');
   });
 });

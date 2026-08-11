@@ -1,0 +1,178 @@
+<div class="page departments-page">
+  <div class="page-header">
+    <div>
+      <h1>部门管理</h1>
+      <p>维护组织层级、部门状态及用户归属。</p>
+    </div>
+    @if (canWrite()) {
+      <button class="btn-primary" type="button" (click)="onCreate()" [disabled]="busy()">
+        <mat-icon>add_circle</mat-icon>
+        <span>新建部门</span>
+      </button>
+    }
+  </div>
+
+  <div class="department-summary" aria-label="部门概览">
+    <div>
+      <span>部门总数</span>
+      <strong>{{ departments().length }}</strong>
+    </div>
+    <div>
+      <span>启用部门</span>
+      <strong>{{ activeCount() }}</strong>
+    </div>
+    <div>
+      <span>部门成员</span>
+      <strong>{{ memberCount() }}</strong>
+    </div>
+  </div>
+
+  <div class="department-toolbar">
+    <label class="search-field" for="department-search">
+      <mat-icon>search</mat-icon>
+      <input
+        id="department-search"
+        type="search"
+        placeholder="搜索部门名称或编码"
+        [value]="search()"
+        (input)="setSearch($any($event.target).value)"
+      />
+    </label>
+    <label class="status-filter" for="department-status-filter">
+      <span>状态</span>
+      <select
+        id="department-status-filter"
+        [value]="statusFilter()"
+        (change)="setStatus($any($event.target).value)"
+      >
+        <option value="all">全部</option>
+        <option value="active">启用</option>
+        <option value="inactive">停用</option>
+      </select>
+    </label>
+  </div>
+
+  @if (error()) {
+    <div class="empty-state">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() }}</p>
+    </div>
+  } @else if (loading()) {
+    <div class="loading-wrap"><mat-progress-spinner diameter="32" mode="indeterminate" /></div>
+  } @else {
+    <div class="table-card">
+      <div class="table-scroll">
+        <table class="data-table department-table">
+          <thead>
+            <tr>
+              <th>部门</th>
+              <th>编码</th>
+              <th>成员</th>
+              <th>下级部门</th>
+              <th>状态</th>
+              <th class="th-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (department of visibleDepartments(); track department.id) {
+              <tr>
+                <td>
+                  <div
+                    class="department-name-cell"
+                    [style.padding-left.px]="12 + department.depth * 28"
+                  >
+                    @if (department.childCount > 0) {
+                      <button
+                        type="button"
+                        class="tree-toggle"
+                        (click)="toggle(department)"
+                        [attr.aria-label]="
+                          (collapsed().has(department.id) ? '展开 ' : '收起 ') + department.name
+                        "
+                        [title]="collapsed().has(department.id) ? '展开下级部门' : '收起下级部门'"
+                      >
+                        <mat-icon>{{
+                          collapsed().has(department.id) ? 'chevron_right' : 'expand_more'
+                        }}</mat-icon>
+                      </button>
+                    } @else {
+                      <span class="tree-spacer"></span>
+                    }
+                    <span class="department-icon" [class.root]="isRoot(department)">
+                      <mat-icon>{{ isRoot(department) ? 'domain' : 'account_tree' }}</mat-icon>
+                    </span>
+                    <span class="department-identity">
+                      <strong>{{ department.name }}</strong>
+                      @if (isRoot(department)) {
+                        <small>组织根部门</small>
+                      }
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <code>{{ department.code }}</code>
+                </td>
+                <td>{{ department.memberCount }}</td>
+                <td>{{ department.childCount }}</td>
+                <td>
+                  <span class="status-badge" [class.active]="department.status === 'active'">
+                    <span></span>
+                    {{ department.status === 'active' ? '启用' : '停用' }}
+                  </span>
+                </td>
+                <td class="td-actions">
+                  @if (canWrite()) {
+                    <button
+                      type="button"
+                      class="row-btn"
+                      (click)="onCreate(department)"
+                      [disabled]="busy() || department.status !== 'active'"
+                      [attr.aria-label]="'在 ' + department.name + ' 下新建部门'"
+                      [title]="
+                        department.status === 'active' ? '新建下级部门' : '停用部门不能新增下级'
+                      "
+                    >
+                      <mat-icon>add</mat-icon>
+                    </button>
+                    @if (!isRoot(department)) {
+                      <button
+                        type="button"
+                        class="row-btn"
+                        (click)="onEdit(department)"
+                        [disabled]="busy()"
+                        [attr.aria-label]="'编辑部门 ' + department.name"
+                        title="编辑部门"
+                      >
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button
+                        type="button"
+                        class="row-btn danger"
+                        (click)="onDelete(department)"
+                        [disabled]="
+                          busy() || department.childCount > 0 || department.memberCount > 0
+                        "
+                        [attr.aria-label]="'删除部门 ' + department.name"
+                        [title]="
+                          department.childCount > 0 || department.memberCount > 0
+                            ? '请先迁移下级部门和成员'
+                            : '删除部门'
+                        "
+                      >
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="table-empty">没有符合条件的部门</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>

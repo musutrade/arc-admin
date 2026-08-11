@@ -5,6 +5,7 @@ use crate::error::ApiError;
 use crate::models::{
     AssignRolesRequest, CreateUserRequest, PageQuery, PageUser, UpdateUserRequest, UserResponse,
 };
+use crate::permissions::departments::READ_PERMISSION_CODE as DEPARTMENT_READ_PERMISSION_CODE;
 use crate::permissions::{UserDeactivate, UserRead, UserRoleWrite, UserWrite};
 use crate::services;
 use crate::AppState;
@@ -50,11 +51,17 @@ pub async fn create(
     {
         auth.require("user:admin:deactivate")?;
     }
+    if req.department_id.is_some() {
+        auth.require(DEPARTMENT_READ_PERMISSION_CODE)?;
+    }
     let needs_step_up = req.role_ids.as_ref().is_some_and(|ids| !ids.is_empty())
         || req
             .status
             .as_deref()
-            .is_some_and(|status| status != "active");
+            .is_some_and(|status| status != "active")
+        || req
+            .department_id
+            .is_some_and(|department_id| auth.department_id != Some(department_id));
     if needs_step_up {
         services::step_up::consume(
             &state.pool,
@@ -73,9 +80,15 @@ pub async fn create(
         )
         .await?;
     }
-    services::users::create(&state.pool, &auth, &req, auth.has("user:super_admin:grant"))
-        .await
-        .map(|user| (StatusCode::CREATED, Json(user)))
+    services::users::create(
+        &state.pool,
+        &auth,
+        &req,
+        auth.has("user:super_admin:grant"),
+        auth.has(DEPARTMENT_READ_PERMISSION_CODE),
+    )
+    .await
+    .map(|user| (StatusCode::CREATED, Json(user)))
 }
 
 pub async fn update(
@@ -91,7 +104,10 @@ pub async fn update(
     if req.status.is_some() {
         auth.require("user:admin:deactivate")?;
     }
-    if req.password.is_some() || req.status.is_some() {
+    if req.department_id.is_some() {
+        auth.require(DEPARTMENT_READ_PERMISSION_CODE)?;
+    }
+    if req.password.is_some() || req.status.is_some() || req.department_id.is_some() {
         services::step_up::consume(
             &state.pool,
             auth.session_id,
@@ -115,6 +131,7 @@ pub async fn update(
         Some(&auth),
         &req,
         auth.has("user:super_admin:grant"),
+        auth.has(DEPARTMENT_READ_PERMISSION_CODE),
     )
     .await
     .map(Json)

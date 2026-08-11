@@ -41,7 +41,9 @@ export type StepUpScope =
   | 'users.delete'
   | 'roles.sensitive'
   | 'roles.permissions.write'
-  | 'roles.delete';
+  | 'roles.delete'
+  | 'departments.write'
+  | 'departments.delete';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {

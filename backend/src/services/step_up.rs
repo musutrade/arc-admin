@@ -19,6 +19,8 @@ pub const USERS_DELETE_SCOPE: &str = "users.delete";
 pub const ROLES_SENSITIVE_SCOPE: &str = "roles.sensitive";
 pub const ROLES_PERMISSIONS_SCOPE: &str = "roles.permissions.write";
 pub const ROLES_DELETE_SCOPE: &str = "roles.delete";
+pub const DEPARTMENTS_WRITE_SCOPE: &str = "departments.write";
+pub const DEPARTMENTS_DELETE_SCOPE: &str = "departments.delete";
 const TOKEN_TTL_SECS: i64 = 300;
 
 const VALID_SCOPES: &[&str] = &[
@@ -29,6 +31,8 @@ const VALID_SCOPES: &[&str] = &[
     ROLES_SENSITIVE_SCOPE,
     ROLES_PERMISSIONS_SCOPE,
     ROLES_DELETE_SCOPE,
+    DEPARTMENTS_WRITE_SCOPE,
+    DEPARTMENTS_DELETE_SCOPE,
 ];
 
 pub fn is_valid_scope(scope: &str) -> bool {

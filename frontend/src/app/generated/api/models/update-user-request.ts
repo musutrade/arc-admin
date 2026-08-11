@@ -3,6 +3,7 @@
 
 import { UserStatus } from '../models/user-status';
 export interface UpdateUserRequest {
+  departmentId?: (number | null);
   displayName?: (string | null);
   email?: (string | null);
   password?: (string | null);
