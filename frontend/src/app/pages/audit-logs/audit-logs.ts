@@ -38,6 +38,9 @@ const ACTION_LABELS: Record<string, string> = {
   'role.update': '更新角色',
   'role.delete': '删除角色',
   'role.permissions.update': '变更角色权限',
+  'department.create': '创建部门',
+  'department.update': '更新部门',
+  'department.delete': '删除部门',
 };
 
 const ACTION_OPTIONS = Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label }));
@@ -84,6 +87,10 @@ export class AuditLogs implements OnInit {
     void this.load();
   }
 
+  retry(): void {
+    void this.load();
+  }
+
   goToPage(page: number): void {
     const next = Math.min(Math.max(1, page), this.totalPages());
     if (next === this.page()) {
@@ -105,7 +112,13 @@ export class AuditLogs implements OnInit {
 
   targetLabel(log: AuditLogResponse): string {
     const type =
-      log.targetType === 'user' ? '用户' : log.targetType === 'role' ? '角色' : log.targetType;
+      log.targetType === 'user'
+        ? '用户'
+        : log.targetType === 'role'
+          ? '角色'
+          : log.targetType === 'department'
+            ? '部门'
+            : log.targetType;
     return log.targetId === null ? type : `${type} #${log.targetId}`;
   }
 

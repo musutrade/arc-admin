@@ -70,20 +70,23 @@ export class PermissionsPage implements OnInit {
   );
 
   ngOnInit(): void {
-    this.loadGroups();
+    void this.loadGroups();
   }
 
-  private loadGroups(): void {
-    this.permissionApi
-      .getPermissionGroups()
-      .then((groups) => {
-        this.groups.set(groups);
-        this.loading.set(false);
-      })
-      .catch(() => {
-        this.error.set('权限数据加载失败，请稍后重试');
-        this.loading.set(false);
-      });
+  retry(): void {
+    void this.loadGroups();
+  }
+
+  private async loadGroups(): Promise<void> {
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      this.groups.set(await this.permissionApi.getPermissionGroups());
+    } catch {
+      this.error.set('权限数据加载失败，请稍后重试');
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   toggleGroup(id: string): void {

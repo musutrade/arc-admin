@@ -82,4 +82,18 @@ describe('DepartmentsPage', () => {
     page.setSearch('platform');
     expect(page.visibleDepartments().map((department) => department.id)).toEqual([1, 2, 3]);
   });
+
+  it('explains why a child department cannot be created under an inactive department', async () => {
+    const snackBar = (page as unknown as { snackBar: MatSnackBar }).snackBar;
+    const open = vi.spyOn(snackBar, 'open').mockImplementation(() => null as never);
+
+    await page.onCreate(DEPARTMENTS[2]);
+
+    expect(open).toHaveBeenCalledWith(
+      '停用部门不能新增下级部门，请先启用该部门',
+      '关闭',
+      expect.objectContaining({ duration: 5000 }),
+    );
+    open.mockRestore();
+  });
 });

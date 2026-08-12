@@ -208,7 +208,7 @@
   color: var(--ui-color-text-tertiary);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .department-summary {
     grid-template-columns: 1fr;
 
@@ -225,5 +225,24 @@
 
   .status-filter {
     justify-content: space-between;
+  }
+
+  .department-table {
+    .th-actions,
+    .td-actions {
+      position: sticky;
+      z-index: 1;
+      right: 0;
+      background: var(--ui-color-surface-panel);
+      box-shadow: -1px 0 0 var(--ui-color-border);
+    }
+
+    .th-actions {
+      background: var(--ui-color-surface-subtle);
+    }
+
+    tbody tr:hover .td-actions {
+      background: var(--ui-color-hover);
+    }
   }
 }

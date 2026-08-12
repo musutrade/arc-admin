@@ -155,6 +155,13 @@ describe('UsersPage', () => {
     );
   });
 
+  it('keeps page gaps explicit for long result sets', () => {
+    page.total.set(200);
+    page.page.set(10);
+
+    expect(page.pageNumbers()).toEqual([1, 9, 10, 11, 20]);
+  });
+
   it('tracks row selection', () => {
     const first = USERS[0];
     page.toggleRow(first.id, true);

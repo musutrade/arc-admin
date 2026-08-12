@@ -541,6 +541,10 @@ body {
     margin: 0;
     font-size: 14px;
   }
+
+  .btn-outline {
+    margin-top: var(--ui-space-2);
+  }
 }
 
 /* 表格底部(分页) */

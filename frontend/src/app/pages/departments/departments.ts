@@ -112,7 +112,15 @@ export class DepartmentsPage implements OnInit {
   }
 
   async onCreate(parent?: Department): Promise<void> {
+    if (parent && parent.status !== 'active') {
+      this.snackBar.open('停用部门不能新增下级部门，请先启用该部门', '关闭', { duration: 5000 });
+      return;
+    }
     await this.openEditor(null, parent?.id);
+  }
+
+  retry(): void {
+    void this.loadDepartments();
   }
 
   async onEdit(department: Department): Promise<void> {

@@ -127,6 +127,11 @@ export class UsersPage implements OnInit, OnDestroy {
     return [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
   });
 
+  retry(): void {
+    void this.loadData();
+    void this.loadStats();
+  }
+
   ngOnInit(): void {
     void this.loadData();
     void this.loadStats();

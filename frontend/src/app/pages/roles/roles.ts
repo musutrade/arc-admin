@@ -60,6 +60,10 @@ export class RolesPage implements OnInit {
     void this.loadRoles();
   }
 
+  retry(): void {
+    void this.loadRoles();
+  }
+
   private async loadRoles(): Promise<void> {
     this.loading.set(true);
     this.error.set(null);

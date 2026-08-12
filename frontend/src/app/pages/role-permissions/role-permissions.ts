@@ -46,6 +46,10 @@ export class RolePermissionsPage implements OnInit {
     void this.loadRows();
   }
 
+  retry(): void {
+    void this.loadRows();
+  }
+
   private async loadRows(): Promise<void> {
     this.loading.set(true);
     this.error.set(null);

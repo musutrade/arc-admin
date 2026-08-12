@@ -62,6 +62,10 @@ describe('AuditLogs', () => {
     expect(fixture.nativeElement.textContent).toContain('用户 #7');
     expect(fixture.nativeElement.textContent).toContain('audit-trace-1');
     expect(component.actionLabel('auth.session.revoked')).toBe('撤销认证会话');
+    expect(component.actionLabel('department.create')).toBe('创建部门');
+    expect(component.targetLabel({ ...auditPage().items[0], targetType: 'department' })).toBe(
+      '部门 #7',
+    );
   });
 
   it('copies the trace id for incident lookup', async () => {
