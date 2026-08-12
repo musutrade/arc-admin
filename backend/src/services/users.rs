@@ -3,8 +3,9 @@
 use crate::access::ActorContext;
 use crate::error::{db_error, ApiError};
 use crate::models::{
-    nullable_patch, user_response, user_with_roles_response, AssignRolesRequest, CreateUserRequest,
-    PageQuery, PageUser, UpdateUserRequest, UserResponse,
+    nullable_patch, user_response, user_with_roles_response, AssignRolesRequest,
+    BatchAssignRolesRequest, BatchUserIdsRequest, CreateUserRequest, PageQuery, PageUser,
+    UpdateUserRequest, UserResponse,
 };
 use crate::repositories;
 use crate::services::{auth, departments};
@@ -361,6 +362,56 @@ pub async fn delete(pool: &PgPool, id: i64, actor: Option<&ActorContext>) -> Res
     Ok(())
 }
 
+pub async fn delete_many(
+    pool: &PgPool,
+    actor: Option<&ActorContext>,
+    req: &BatchUserIdsRequest,
+) -> Result<(), ApiError> {
+    let actor = actor.ok_or_else(|| ApiError::forbidden("需要认证用户"))?;
+    validate_batch_user_ids(&req.user_ids, actor.user_id)?;
+    for &user_id in &req.user_ids {
+        ensure_actor_can_access(pool, Some(actor), user_id).await?;
+    }
+
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    for &user_id in &req.user_ids {
+        protect_last_super_admin(&mut transaction, user_id).await?;
+        let previous_role_ids = repositories::users::role_ids_by_user(pool, user_id)
+            .await
+            .map_err(db_error)?;
+        let deleted = repositories::users::soft_delete(&mut transaction, user_id)
+            .await
+            .map_err(db_error)?;
+        if !deleted {
+            return Err(ApiError::not_found("用户不存在"));
+        }
+        let revoked_sessions =
+            repositories::auth_sessions::revoke_all_for_user(&mut transaction, user_id)
+                .await
+                .map_err(db_error)?;
+        auth::record_session_revocation(
+            &mut transaction,
+            Some(actor.user_id),
+            user_id,
+            "account_deleted",
+            revoked_sessions,
+        )
+        .await?;
+        repositories::audit_logs::record(
+            &mut transaction,
+            Some(actor.user_id),
+            "user.delete",
+            "user",
+            Some(user_id),
+            json!({ "previousRoleIds": previous_role_ids }),
+        )
+        .await
+        .map_err(db_error)?;
+    }
+    transaction.commit().await.map_err(db_error)?;
+    Ok(())
+}
+
 pub async fn assign_roles(
     pool: &PgPool,
     actor: Option<&ActorContext>,
@@ -417,6 +468,73 @@ pub async fn assign_roles(
     Ok(())
 }
 
+pub async fn assign_roles_many(
+    pool: &PgPool,
+    actor: Option<&ActorContext>,
+    req: &BatchAssignRolesRequest,
+    can_grant_super_admin: bool,
+) -> Result<(), ApiError> {
+    let actor = actor.ok_or_else(|| ApiError::forbidden("需要认证用户"))?;
+    validate_batch_user_ids(&req.user_ids, actor.user_id)?;
+    validate_role_grant_scope(
+        pool,
+        Some(actor.user_id),
+        &req.role_ids,
+        can_grant_super_admin,
+    )
+    .await?;
+    for &user_id in &req.user_ids {
+        ensure_actor_can_access(pool, Some(actor), user_id).await?;
+    }
+
+    let super_admin_role_id = repositories::roles::id_by_code(pool, "super_admin")
+        .await
+        .map_err(db_error)?;
+    let mut transaction = pool.begin().await.map_err(db_error)?;
+    for &user_id in &req.user_ids {
+        let previous_role_ids = repositories::users::role_ids_by_user(pool, user_id)
+            .await
+            .map_err(db_error)?;
+        if !super_admin_role_id.is_some_and(|id| req.role_ids.contains(&id)) {
+            protect_last_super_admin(&mut transaction, user_id).await?;
+        }
+        repositories::users::assign_roles(&mut transaction, user_id, &req.role_ids)
+            .await
+            .map_err(db_error)?;
+        if let Some(super_admin_role_id) = super_admin_role_id {
+            let was_required = previous_role_ids.contains(&super_admin_role_id);
+            let is_required = req.role_ids.contains(&super_admin_role_id);
+            if was_required != is_required {
+                repositories::audit_logs::record(
+                    &mut transaction,
+                    Some(actor.user_id),
+                    "auth.mfa.policy.changed",
+                    "user",
+                    Some(user_id),
+                    json!({"required": is_required}),
+                )
+                .await
+                .map_err(db_error)?;
+            }
+        }
+        repositories::audit_logs::record(
+            &mut transaction,
+            Some(actor.user_id),
+            "user.roles.update",
+            "user",
+            Some(user_id),
+            json!({
+                "previousRoleIds": previous_role_ids,
+                "roleIds": req.role_ids,
+            }),
+        )
+        .await
+        .map_err(db_error)?;
+    }
+    transaction.commit().await.map_err(db_error)?;
+    Ok(())
+}
+
 async fn ensure_actor_can_access(
     pool: &PgPool,
     actor: Option<&ActorContext>,
@@ -431,12 +549,42 @@ async fn ensure_actor_can_access(
     Ok(())
 }
 
+fn validate_batch_user_ids(user_ids: &[i64], actor_user_id: i64) -> Result<(), ApiError> {
+    if user_ids.is_empty() {
+        return Err(ApiError::validation("至少需要选择一个用户"));
+    }
+    let unique_ids = user_ids
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    if unique_ids.len() != user_ids.len() {
+        return Err(ApiError::validation("用户列表不能包含重复项"));
+    }
+    if unique_ids.contains(&actor_user_id) {
+        return Err(ApiError::forbidden("不能批量操作当前登录账号"));
+    }
+    Ok(())
+}
+
 async fn validate_role_grant_scope(
     pool: &PgPool,
     actor_user_id: Option<i64>,
     role_ids: &[i64],
     can_grant_super_admin: bool,
 ) -> Result<(), ApiError> {
+    let unique_role_ids = role_ids
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    if unique_role_ids.len() != role_ids.len() {
+        return Err(ApiError::validation("角色列表不能包含重复项"));
+    }
+    let active_role_ids = repositories::roles::active_ids_by_ids(pool, role_ids)
+        .await
+        .map_err(db_error)?;
+    if active_role_ids.len() != unique_role_ids.len() {
+        return Err(ApiError::validation("角色列表中包含不存在或已停用的角色"));
+    }
     let super_admin_role_id = repositories::roles::id_by_code(pool, "super_admin")
         .await
         .map_err(db_error)?;

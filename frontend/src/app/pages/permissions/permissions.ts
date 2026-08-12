@@ -40,6 +40,7 @@ export class PermissionsPage implements OnInit {
   readonly typeMeta = TYPE_META;
 
   readonly typeOptions: ('all' | PermissionType)[] = ['all', 'menu', 'button', 'api'];
+  private requestSequence = 0;
 
   private readonly permissionApi = inject(PermissionApiService);
 
@@ -78,14 +79,23 @@ export class PermissionsPage implements OnInit {
   }
 
   private async loadGroups(): Promise<void> {
+    const requestSequence = ++this.requestSequence;
     this.loading.set(true);
     this.error.set(null);
     try {
-      this.groups.set(await this.permissionApi.getPermissionGroups());
+      const groups = await this.permissionApi.getPermissionGroups();
+      if (requestSequence !== this.requestSequence) {
+        return;
+      }
+      this.groups.set(groups);
     } catch {
-      this.error.set('权限数据加载失败，请稍后重试');
+      if (requestSequence === this.requestSequence) {
+        this.error.set('权限数据加载失败，请稍后重试');
+      }
     } finally {
-      this.loading.set(false);
+      if (requestSequence === this.requestSequence) {
+        this.loading.set(false);
+      }
     }
   }
 

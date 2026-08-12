@@ -3,6 +3,8 @@
 
 export type { AssignRolesRequest } from './models/assign-roles-request';
 export type { AuditLogResponse } from './models/audit-log-response';
+export type { BatchAssignRolesRequest } from './models/batch-assign-roles-request';
+export type { BatchUserIdsRequest } from './models/batch-user-ids-request';
 export type { ChangePasswordRequest } from './models/change-password-request';
 export type { CreateDepartmentRequest } from './models/create-department-request';
 export type { CreateRoleRequest } from './models/create-role-request';

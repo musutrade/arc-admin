@@ -685,6 +685,19 @@ pub struct AssignRolesRequest {
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct BatchUserIdsRequest {
+    pub user_ids: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchAssignRolesRequest {
+    pub user_ids: Vec<i64>,
+    pub role_ids: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateRoleRequest {
     pub code: String,
     pub name: String,

@@ -47,6 +47,8 @@ const MFA_PASSKEY_PATH: &str = "/api/v1/auth/me/mfa/passkey/{id}";
 const MFA_RECOVERY_CODES_PATH: &str = "/api/v1/auth/me/mfa/recovery-codes";
 const USERS_PATH: &str = "/api/v1/users";
 const USER_PATH: &str = "/api/v1/users/{id}";
+const USERS_BATCH_DELETE_PATH: &str = "/api/v1/users/batch-delete";
+const USERS_BATCH_ROLES_PATH: &str = "/api/v1/users/batch-roles";
 const USER_ROLES_PATH: &str = "/api/v1/users/{id}/roles";
 const ROLES_PATH: &str = "/api/v1/roles";
 const ROLE_PATH: &str = "/api/v1/roles/{id}";
@@ -81,6 +83,8 @@ pub const API_ROUTE_CONTRACT: &[(&str, &[&str])] = &[
     (MFA_RECOVERY_CODES_PATH, &["post"]),
     (USERS_PATH, &["get", "post"]),
     (USER_PATH, &["get", "put", "delete"]),
+    (USERS_BATCH_DELETE_PATH, &["post"]),
+    (USERS_BATCH_ROLES_PATH, &["put"]),
     (USER_ROLES_PATH, &["put"]),
     (ROLES_PATH, &["get", "post"]),
     (ROLE_PATH, &["get", "put", "delete"]),
@@ -180,6 +184,11 @@ fn base_router(state: AppState) -> Router {
             get(handlers::users::get)
                 .put(handlers::users::update)
                 .delete(handlers::users::delete),
+        )
+        .route(USERS_BATCH_DELETE_PATH, post(handlers::users::batch_delete))
+        .route(
+            USERS_BATCH_ROLES_PATH,
+            put(handlers::users::batch_assign_roles),
         )
         .route(USER_ROLES_PATH, put(handlers::users::assign_roles))
         .route(

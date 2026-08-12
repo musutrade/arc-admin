@@ -3,7 +3,8 @@
 use crate::auth::RequirePermission;
 use crate::error::ApiError;
 use crate::models::{
-    AssignRolesRequest, CreateUserRequest, PageQuery, PageUser, UpdateUserRequest, UserResponse,
+    AssignRolesRequest, BatchAssignRolesRequest, BatchUserIdsRequest, CreateUserRequest, PageQuery,
+    PageUser, UpdateUserRequest, UserResponse,
 };
 use crate::permissions::departments::READ_PERMISSION_CODE as DEPARTMENT_READ_PERMISSION_CODE;
 use crate::permissions::{UserDeactivate, UserRead, UserRoleWrite, UserWrite};
@@ -155,6 +156,24 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn batch_delete(
+    State(state): State<AppState>,
+    auth: RequirePermission<UserDeactivate>,
+    headers: HeaderMap,
+    Json(req): Json<BatchUserIdsRequest>,
+) -> Result<StatusCode, ApiError> {
+    services::step_up::consume(
+        &state.pool,
+        auth.session_id,
+        auth.user_id,
+        &headers,
+        services::step_up::USERS_DELETE_SCOPE,
+    )
+    .await?;
+    services::users::delete_many(&state.pool, Some(&auth), &req).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn assign_roles(
     State(state): State<AppState>,
     auth: RequirePermission<UserRoleWrite>,
@@ -174,6 +193,30 @@ pub async fn assign_roles(
         &state.pool,
         Some(&auth),
         id,
+        &req,
+        auth.has("user:super_admin:grant"),
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn batch_assign_roles(
+    State(state): State<AppState>,
+    auth: RequirePermission<UserRoleWrite>,
+    headers: HeaderMap,
+    Json(req): Json<BatchAssignRolesRequest>,
+) -> Result<StatusCode, ApiError> {
+    services::step_up::consume(
+        &state.pool,
+        auth.session_id,
+        auth.user_id,
+        &headers,
+        services::step_up::USERS_ROLES_SCOPE,
+    )
+    .await?;
+    services::users::assign_roles_many(
+        &state.pool,
+        Some(&auth),
         &req,
         auth.has("user:super_admin:grant"),
     )

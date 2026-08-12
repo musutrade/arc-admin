@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { Api } from '../../generated/api/api';
 import { assignUserRoles } from '../../generated/api/fn/users/assign-user-roles';
+import { batchAssignUserRoles } from '../../generated/api/fn/users/batch-assign-user-roles';
+import { batchDeleteUsers } from '../../generated/api/fn/users/batch-delete-users';
 import { createUser } from '../../generated/api/fn/users/create-user';
 import { deleteUser } from '../../generated/api/fn/users/delete-user';
 import { listUsers, ListUsers$Params } from '../../generated/api/fn/users/list-users';
@@ -62,6 +64,24 @@ export class UserApiService {
       body: {
         roleIds: roleIds.map(Number),
       },
+    });
+  }
+
+  async batchDeleteUsers(ids: readonly string[], stepUpToken: string): Promise<void> {
+    await this.api.invoke(batchDeleteUsers, {
+      'X-Step-Up-Token': stepUpToken,
+      body: { userIds: ids.map(Number) },
+    });
+  }
+
+  async batchAssignUserRoles(
+    ids: readonly string[],
+    roleIds: readonly string[],
+    stepUpToken: string,
+  ): Promise<void> {
+    await this.api.invoke(batchAssignUserRoles, {
+      'X-Step-Up-Token': stepUpToken,
+      body: { userIds: ids.map(Number), roleIds: roleIds.map(Number) },
     });
   }
 }

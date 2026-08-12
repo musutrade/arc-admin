@@ -35,6 +35,7 @@ export class DepartmentsPage implements OnInit {
   readonly statusFilter = signal<'all' | Department['status']>('all');
   readonly collapsed = signal<ReadonlySet<number>>(new Set());
   readonly busy = signal(false);
+  private requestSequence = 0;
 
   private readonly departmentApi = inject(DepartmentApiService);
   private readonly auth = inject(AuthService);
@@ -166,14 +167,23 @@ export class DepartmentsPage implements OnInit {
   }
 
   private async loadDepartments(): Promise<void> {
+    const requestSequence = ++this.requestSequence;
     this.loading.set(true);
     this.error.set(null);
     try {
-      this.departments.set(await this.departmentApi.list());
+      const departments = await this.departmentApi.list();
+      if (requestSequence !== this.requestSequence) {
+        return;
+      }
+      this.departments.set(departments);
     } catch (error) {
-      this.error.set(apiErrorMessage(error, '部门数据加载失败，请稍后重试'));
+      if (requestSequence === this.requestSequence) {
+        this.error.set(apiErrorMessage(error, '部门数据加载失败，请稍后重试'));
+      }
     } finally {
-      this.loading.set(false);
+      if (requestSequence === this.requestSequence) {
+        this.loading.set(false);
+      }
     }
   }
 

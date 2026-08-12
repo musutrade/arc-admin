@@ -31,8 +31,11 @@ export class DepartmentEditorDialog {
 
   readonly parentOptions = computed(() => {
     const blocked = this.descendantIds(this.data.department?.id);
+    const currentParentId = this.data.department?.parentId;
     return this.data.departments.filter(
-      (department) => department.status === 'active' && !blocked.has(department.id),
+      (department) =>
+        !blocked.has(department.id) &&
+        (department.status === 'active' || department.id === currentParentId),
     );
   });
   readonly canChangeParent =

@@ -12,6 +12,9 @@
           @for (department of parentOptions(); track department.id) {
             <option [ngValue]="department.id">
               {{ '　'.repeat(department.depth) }}{{ department.name }}
+              @if (department.status === 'inactive') {
+                （当前已停用）
+              }
             </option>
           }
         </select>

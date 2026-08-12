@@ -101,7 +101,9 @@ pub async fn update(
     }
 
     let parent_id = req.parent_id;
-    if let Some(parent_id) = parent_id {
+    let parent_changed = parent_id.is_some_and(|parent_id| current.parent_id != Some(parent_id));
+    if parent_changed {
+        let parent_id = parent_id.expect("parent_changed implies parent_id is present");
         validate_parent(pool, actor, parent_id, Some(id)).await?;
         if repositories::departments::parent_would_create_cycle(
             pool,

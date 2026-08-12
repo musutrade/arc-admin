@@ -99,12 +99,12 @@ export class UsersPage implements OnInit, OnDestroy {
   readonly selectedCount = computed(() => this.selected().size);
 
   readonly allChecked = computed(() => {
-    const rows = this.users();
+    const rows = this.users().filter((user) => !this.isCurrentUser(user));
     return rows.length > 0 && rows.every((u) => this.selected().has(u.id));
   });
 
   readonly someChecked = computed(() => {
-    const rows = this.users();
+    const rows = this.users().filter((user) => !this.isCurrentUser(user));
     return rows.some((u) => this.selected().has(u.id)) && !this.allChecked();
   });
 
@@ -225,6 +225,9 @@ export class UsersPage implements OnInit, OnDestroy {
   }
 
   toggleRow(id: string, checked: boolean): void {
+    if (this.isCurrentUserId(id)) {
+      return;
+    }
     this.selected.update((s) => {
       const next = new Set(s);
       if (checked) {
@@ -240,6 +243,9 @@ export class UsersPage implements OnInit, OnDestroy {
     this.selected.update((s) => {
       const next = new Set(s);
       this.users().forEach((u) => {
+        if (this.isCurrentUser(u)) {
+          return;
+        }
         if (checked) {
           next.add(u.id);
         } else {
@@ -340,9 +346,12 @@ export class UsersPage implements OnInit, OnDestroy {
   }
 
   async deleteSelected(): Promise<void> {
-    const ids = [...this.selected()];
+    const ids = [...this.selected()].filter((id) => !this.isCurrentUserId(id));
+    if (ids.length === 0) {
+      this.snackBar.open('请选择可删除的用户，当前登录账号不能删除', '关闭', { duration: 5000 });
+      return;
+    }
     if (
-      ids.length === 0 ||
       !(await this.confirm('删除所选用户', `确定删除选中的 ${ids.length} 个账号吗？`, '删除用户'))
     ) {
       return;
@@ -354,16 +363,12 @@ export class UsersPage implements OnInit, OnDestroy {
     if (!credentials) {
       return;
     }
-    await this.runMutation(async () => {
-      for (const id of ids) {
-        const token = await this.auth.issueStepUp(
-          'users.delete',
-          credentials.currentPassword,
-          credentials.totpCode,
-        );
-        await this.userApi.deleteUser(id, token.token);
-      }
-    }, `已删除 ${ids.length} 个用户`);
+    await this.runBatchMutation(
+      'users.delete',
+      credentials,
+      (token) => this.userApi.batchDeleteUsers(ids, token),
+      `已删除 ${ids.length} 个用户`,
+    );
   }
 
   async changeSelectedRoles(): Promise<void> {
@@ -386,16 +391,12 @@ export class UsersPage implements OnInit, OnDestroy {
       if (!credentials) {
         return;
       }
-      await this.runMutation(async () => {
-        for (const id of ids) {
-          const token = await this.auth.issueStepUp(
-            'users.roles.write',
-            credentials.currentPassword,
-            credentials.totpCode,
-          );
-          await this.userApi.assignUserRoles(id, roleIds, token.token);
-        }
-      }, `已更新 ${ids.length} 个用户的角色`);
+      await this.runBatchMutation(
+        'users.roles.write',
+        credentials,
+        (token) => this.userApi.batchAssignUserRoles(ids, roleIds, token),
+        `已更新 ${ids.length} 个用户的角色`,
+      );
     } catch (error) {
       this.showError(error, '角色数据加载失败');
     }
@@ -542,6 +543,7 @@ export class UsersPage implements OnInit, OnDestroy {
       await action();
       await this.auth.refreshSession();
       this.snackBar.open(success, '关闭', { duration: 3000 });
+      await this.auth.refreshSession();
       await Promise.all([this.loadData(), this.loadStats()]);
     } catch (error) {
       this.showError(error, '操作失败，请稍后重试');
@@ -597,7 +599,33 @@ export class UsersPage implements OnInit, OnDestroy {
   }
 
   private filterGrantableRoles(roles: Role[]): Role[] {
-    return this.canGrantSuperAdmin() ? roles : roles.filter((role) => role.code !== 'super_admin');
+    return roles.filter(
+      (role) => role.isActive && (this.canGrantSuperAdmin() || role.code !== 'super_admin'),
+    );
+  }
+
+  private async runBatchMutation(
+    scope: import('../../core/auth.service').StepUpScope,
+    credentials: StepUpCredentials,
+    action: (token: string) => Promise<unknown>,
+    success: string,
+  ): Promise<void> {
+    this.busy.set(true);
+    try {
+      const token = await this.auth.issueStepUp(
+        scope,
+        credentials.currentPassword,
+        credentials.totpCode,
+      );
+      await action(token.token);
+      await this.auth.refreshSession();
+      await Promise.all([this.loadData(), this.loadStats()]);
+      this.snackBar.open(success, '关闭', { duration: 3000 });
+    } catch (error) {
+      this.showError(error, '批量操作失败，未保存任何变更');
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   private confirm(
@@ -617,6 +645,10 @@ export class UsersPage implements OnInit, OnDestroy {
 
   private showError(error: unknown, fallback: string): void {
     this.snackBar.open(apiErrorMessage(error, fallback), '关闭', { duration: 5000 });
+  }
+
+  private isCurrentUserId(id: string): boolean {
+    return String(this.auth.currentUser()?.id ?? '') === id;
   }
 
   initials(name: string): string {

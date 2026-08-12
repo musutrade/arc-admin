@@ -119,6 +119,8 @@ fn sensitive_scope(method: &Method, uri: &str, body: Option<&Value>) -> Option<&
     let object = body.and_then(Value::as_object);
     match (method, path) {
         (&Method::PUT, "/api/v1/auth/me/password") => Some("auth.password.change"),
+        (&Method::POST, "/api/v1/users/batch-delete") => Some("users.delete"),
+        (&Method::PUT, "/api/v1/users/batch-roles") => Some("users.roles.write"),
         (&Method::DELETE, path) if path.starts_with("/api/v1/users/") => {
             if path.ends_with("/roles") {
                 None
@@ -1092,6 +1094,35 @@ async fn login_and_user_crud_flow() {
         Method::PUT,
         &format!("/api/v1/departments/{engineering_id}"),
         Some(token),
+        Some(json!({"status": "inactive"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, updated_platform) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/departments/{platform_id}"),
+        Some(token),
+        Some(json!({"parentId": engineering_id, "name": "平台部（已调整）"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated_platform["name"], "平台部（已调整）");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/departments/{engineering_id}"),
+        Some(token),
+        Some(json!({"status": "active"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/departments/{engineering_id}"),
+        Some(token),
         Some(json!({"parentId": platform_id})),
     )
     .await;
@@ -1332,6 +1363,38 @@ async fn login_and_user_crud_flow() {
     .await;
     assert_eq!(status, StatusCode::CREATED);
     let support_id = support["id"].as_i64().expect("support user id");
+    let (status, inactive_role) = send(
+        &app,
+        Method::POST,
+        "/api/v1/roles",
+        Some(token),
+        Some(json!({"code": "inactive_assignment", "name": "停用分配测试角色"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let inactive_role_id = inactive_role["id"].as_i64().expect("inactive role id");
+    let (status, _) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/roles/{inactive_role_id}"),
+        Some(token),
+        Some(json!({"isActive": false})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, error) = send(
+        &app,
+        Method::PUT,
+        &format!("/api/v1/users/{support_id}/roles"),
+        Some(token),
+        Some(json!({"roleIds": [inactive_role_id]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        error["error"]["message"],
+        "角色列表中包含不存在或已停用的角色"
+    );
     let (status, _) = send(
         &app,
         Method::PUT,

@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DashboardApiService } from '../../core/api/dashboard-api.service';
 import { DepartmentApiService } from '../../features/departments/data-access/department-api.service';
@@ -49,6 +49,7 @@ const dashboardApiStub: Partial<DashboardApiService> = {
 };
 const authServiceStub: Partial<AuthService> = {
   hasPermission: (code) => code === 'dashboard:analytics:read',
+  currentUser: signal(null),
 };
 
 describe('UsersPage', () => {

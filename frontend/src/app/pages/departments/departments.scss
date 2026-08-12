@@ -111,6 +111,27 @@
   }
 }
 
+@media (max-width: 1200px) {
+  .department-table {
+    .th-actions,
+    .td-actions {
+      position: sticky;
+      z-index: 1;
+      right: 0;
+      background: var(--ui-color-surface-panel);
+      box-shadow: -1px 0 0 var(--ui-color-border);
+    }
+
+    .th-actions {
+      background: var(--ui-color-surface-subtle);
+    }
+
+    tbody tr:hover .td-actions {
+      background: var(--ui-color-hover);
+    }
+  }
+}
+
 .department-name-cell {
   min-height: 42px;
   display: flex;
@@ -225,24 +246,5 @@
 
   .status-filter {
     justify-content: space-between;
-  }
-
-  .department-table {
-    .th-actions,
-    .td-actions {
-      position: sticky;
-      z-index: 1;
-      right: 0;
-      background: var(--ui-color-surface-panel);
-      box-shadow: -1px 0 0 var(--ui-color-border);
-    }
-
-    .th-actions {
-      background: var(--ui-color-surface-subtle);
-    }
-
-    tbody tr:hover .td-actions {
-      background: var(--ui-color-hover);
-    }
   }
 }

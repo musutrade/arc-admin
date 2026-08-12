@@ -108,6 +108,7 @@
                 <td>
                   <mat-checkbox
                     [checked]="selected().has(u.id)"
+                    [disabled]="isCurrentUser(u) || busy()"
                     (change)="toggleRow(u.id, $event.checked)"
                     color="primary"
                   />

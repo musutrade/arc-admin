@@ -33,6 +33,7 @@ export class RolePermissionsPage implements OnInit {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly busy = signal(false);
+  private requestSequence = 0;
   private readonly permissionApi = inject(PermissionApiService);
   private readonly roleApi = inject(RoleApiService);
   private readonly dialog = inject(MatDialog);
@@ -51,14 +52,23 @@ export class RolePermissionsPage implements OnInit {
   }
 
   private async loadRows(): Promise<void> {
+    const requestSequence = ++this.requestSequence;
     this.loading.set(true);
     this.error.set(null);
     try {
-      this.rows.set(await this.roleApi.getRolePermissionRows());
+      const rows = await this.roleApi.getRolePermissionRows();
+      if (requestSequence !== this.requestSequence) {
+        return;
+      }
+      this.rows.set(rows);
     } catch (error) {
-      this.error.set(apiErrorMessage(error, '角色权限数据加载失败，请稍后重试'));
+      if (requestSequence === this.requestSequence) {
+        this.error.set(apiErrorMessage(error, '角色权限数据加载失败，请稍后重试'));
+      }
     } finally {
-      this.loading.set(false);
+      if (requestSequence === this.requestSequence) {
+        this.loading.set(false);
+      }
     }
   }
 

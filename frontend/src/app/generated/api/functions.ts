@@ -73,6 +73,10 @@ export type { ListUsers$Params as ListUsers$Params } from './fn/users/list-users
 export { listUsers as listUsers } from './fn/users/list-users';
 export type { CreateUser$Params as CreateUser$Params } from './fn/users/create-user';
 export { createUser as createUser } from './fn/users/create-user';
+export type { BatchDeleteUsers$Params as BatchDeleteUsers$Params } from './fn/users/batch-delete-users';
+export { batchDeleteUsers as batchDeleteUsers } from './fn/users/batch-delete-users';
+export type { BatchAssignUserRoles$Params as BatchAssignUserRoles$Params } from './fn/users/batch-assign-user-roles';
+export { batchAssignUserRoles as batchAssignUserRoles } from './fn/users/batch-assign-user-roles';
 export type { GetUser$Params as GetUser$Params } from './fn/users/get-user';
 export { getUser as getUser } from './fn/users/get-user';
 export type { UpdateUser$Params as UpdateUser$Params } from './fn/users/update-user';

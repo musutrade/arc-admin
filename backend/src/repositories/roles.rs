@@ -106,6 +106,17 @@ pub async fn id_by_code(pool: &PgPool, code: &str) -> Result<Option<i64>, sqlx::
         .await
 }
 
+pub async fn active_ids_by_ids(pool: &PgPool, role_ids: &[i64]) -> Result<Vec<i64>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT id FROM roles
+         WHERE id = ANY($1::bigint[]) AND is_active = TRUE
+         ORDER BY id",
+    )
+    .bind(role_ids)
+    .fetch_all(pool)
+    .await
+}
+
 pub(crate) async fn update(
     connection: &mut PgConnection,
     id: i64,

@@ -6,13 +6,13 @@
 
 use crate::error::ErrorEnvelope;
 use crate::models::{
-    AssignRolesRequest, AuditLogQuery, ChangePasswordRequest, CreateDepartmentRequest,
-    CreateRoleRequest, CreateUserRequest, DashboardStats, DataScopeSchema, DepartmentResponse,
-    DepartmentStatusSchema, HealthResponse, LoginRequest, LoginResponse, LoginStatusSchema,
-    MfaCodeRequest, MfaFactorRevokeRequest, MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest,
-    MfaPasskeyAuthenticationStartRequest, MfaPasskeyRegistrationFinishRequest,
-    MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse, MfaStatusResponse,
-    MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
+    AssignRolesRequest, AuditLogQuery, BatchAssignRolesRequest, BatchUserIdsRequest,
+    ChangePasswordRequest, CreateDepartmentRequest, CreateRoleRequest, CreateUserRequest,
+    DashboardStats, DataScopeSchema, DepartmentResponse, DepartmentStatusSchema, HealthResponse,
+    LoginRequest, LoginResponse, LoginStatusSchema, MfaCodeRequest, MfaFactorRevokeRequest,
+    MfaMethodSchema, MfaPasskeyAuthenticationFinishRequest, MfaPasskeyAuthenticationStartRequest,
+    MfaPasskeyRegistrationFinishRequest, MfaPasskeyRegistrationStartRequest, MfaPasskeyResponse,
+    MfaStatusResponse, MfaWebauthnChallengeResponse, ModuleUnlockRequest, ModuleUnlockScopeSchema,
     ModuleUnlockStatusResponse, PageAuditLog, PageQuery, PageUser, PermissionCodes,
     PermissionGroupResponse, PermissionResponse, PermissionTypeSchema, ReadinessResponse,
     RecoveryCodesResponse, RoleColorSchema, RolePermissions, RoleResponse, SortDirectionSchema,
@@ -393,6 +393,25 @@ fn update_user() {}
 fn delete_user() {}
 
 #[utoipa::path(
+    post,
+    path = "/users/batch-delete",
+    operation_id = "batchDeleteUsers",
+    tag = "users",
+    security(("cookieAuth" = [])),
+    params(
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "用户删除再认证凭据")
+    ),
+    request_body = BatchUserIdsRequest,
+    responses(
+        (status = 204, description = "用户已批量删除"),
+        (status = 403, description = "无权批量删除用户", body = ErrorEnvelope),
+        (status = 422, description = "用户列表无效", body = ErrorEnvelope)
+    )
+)]
+fn batch_delete_users() {}
+
+#[utoipa::path(
     put,
     path = "/users/{id}/roles",
     operation_id = "assignUserRoles",
@@ -412,6 +431,25 @@ fn delete_user() {}
     )
 )]
 fn assign_user_roles() {}
+
+#[utoipa::path(
+    put,
+    path = "/users/batch-roles",
+    operation_id = "batchAssignUserRoles",
+    tag = "users",
+    security(("cookieAuth" = [])),
+    params(
+        ("X-CSRF-Token" = String, Header, description = "当前会话的 CSRF Token"),
+        ("X-Step-Up-Token" = String, Header, description = "角色分配再认证凭据")
+    ),
+    request_body = BatchAssignRolesRequest,
+    responses(
+        (status = 204, description = "用户角色已批量更新"),
+        (status = 403, description = "无权批量分配角色", body = ErrorEnvelope),
+        (status = 422, description = "用户或角色列表无效", body = ErrorEnvelope)
+    )
+)]
+fn batch_assign_user_roles() {}
 
 #[utoipa::path(
     get,
@@ -688,7 +726,9 @@ fn list_audit_logs() {}
         get_user,
         update_user,
         delete_user,
+        batch_delete_users,
         assign_user_roles,
+        batch_assign_user_roles,
         list_roles,
         create_role,
         get_role,
@@ -748,6 +788,8 @@ fn list_audit_logs() {}
         CreateDepartmentRequest,
         UpdateDepartmentRequest,
         AssignRolesRequest,
+        BatchUserIdsRequest,
+        BatchAssignRolesRequest,
         CreateRoleRequest,
         UpdateRoleRequest,
         RolePermissions,

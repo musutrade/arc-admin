@@ -24,7 +24,7 @@ const departments: Department[] = [
     parentId: 1,
     code: 'engineering',
     name: '研发部',
-    status: 'active',
+    status: 'inactive',
     depth: 1,
     memberCount: 0,
     childCount: 1,
@@ -48,6 +48,7 @@ const departments: Department[] = [
 
 describe('DepartmentEditorDialog', () => {
   let fixture: ComponentFixture<DepartmentEditorDialog>;
+  let close: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -56,18 +57,24 @@ describe('DepartmentEditorDialog', () => {
         provideZonelessChangeDetection(),
         {
           provide: MAT_DIALOG_DATA,
-          useValue: { department: departments[1], departments },
+          useValue: { department: departments[2], departments },
         },
         { provide: MatDialogRef, useValue: { close: vi.fn() } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(DepartmentEditorDialog);
+    close = TestBed.inject(MatDialogRef).close as ReturnType<typeof vi.fn>;
     await fixture.whenStable();
   });
 
-  it('excludes the current department and descendants from parent choices', () => {
+  it('keeps an inactive current parent while excluding the current department and descendants', () => {
     expect(fixture.componentInstance.parentOptions().map((department) => department.id)).toEqual([
-      1,
+      1, 2,
     ]);
+  });
+
+  it('submits the unchanged inactive parent so the server can preserve it', () => {
+    fixture.componentInstance.submit();
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ parentId: 2 }));
   });
 });
