@@ -31,7 +31,7 @@ jobs:
         run: cargo flow verify --components workflow
       - name: Upload quality reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: quality-reports
           path: codex-audit-pipeline/.codex/reports/
@@ -64,7 +64,7 @@ jobs:
         run: cargo flow verify --components backend
       - name: Upload backend report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: backend-report
           path: codex-audit-pipeline/.codex/reports/
@@ -123,7 +123,7 @@ jobs:
         run: cargo flow verify --components frontend
       - name: Upload frontend report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-report
           path: codex-audit-pipeline/.codex/reports/
