@@ -35,6 +35,9 @@ jobs:
       - name: Check licenses, sources, duplicates, and advisories
         if: always()
         uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        env:
+          # The action runs in Alpine with this musl toolchain preinstalled.
+          RUSTUP_TOOLCHAIN: 1.85.0-x86_64-unknown-linux-musl
         with:
           manifest-path: backend/Cargo.toml
           command: check
