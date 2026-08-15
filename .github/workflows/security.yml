@@ -24,7 +24,7 @@ jobs:
       contents: read
       checks: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Audit RustSec advisories
         uses: rustsec/audit-check@v2.0.0
         with:
@@ -58,7 +58,7 @@ jobs:
             dockerfile: frontend/Dockerfile
             artifact: arc-admin-frontend.spdx.json
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Build production image
         id: build-image
         run: docker build --file "${{ matrix.dockerfile }}" --tag "${{ matrix.image }}" .
