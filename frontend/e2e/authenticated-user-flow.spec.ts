@@ -14,6 +14,7 @@ const administrator: ApiUser = {
   username: 'admin',
   displayName: '管理员',
   email: 'admin@example.test',
+  departmentId: 1,
   status: 'active',
   roles: ['超级管理员'],
   lastLoginAt: '2026-08-01T00:00:00Z',
@@ -22,6 +23,7 @@ const administrator: ApiUser = {
 
 const permissions = [
   'dashboard:analytics:read',
+  'organization:department:read',
   'permission:directory:read',
   'role:directory:read',
   'role:permissions:write',
@@ -70,7 +72,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   let users: ApiUser[] = [administrator];
   let createdRequest: Record<string, unknown> | null = null;
   let passwordChangeRequest: ChangePasswordRequest | null = null;
-  let stepUpRequests: StepUpRequest[] = [];
+  const stepUpRequests: StepUpRequest[] = [];
   let roleStatusUpdateRequest: UpdateRoleRequest | null = null;
   let statusUpdateRequest: UpdateUserRequest | null = null;
 
@@ -152,6 +154,24 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
           json: { token: 'step-up-token', expiresAt: '2026-08-01T00:05:00Z' },
         });
       }
+    } else if (path === '/api/v1/departments') {
+      await route.fulfill({
+        json: [
+          {
+            id: 1,
+            organizationId: 1,
+            parentId: null,
+            code: 'headquarters',
+            name: '总部',
+            status: 'active',
+            depth: 0,
+            memberCount: 1,
+            childCount: 0,
+            createdAt: '2026-08-01T00:00:00Z',
+            updatedAt: '2026-08-01T00:00:00Z',
+          },
+        ],
+      });
     } else if (path === '/api/v1/auth/me/password' && request.method() === 'PUT') {
       passwordChangeRequest = request.postDataJSON() as ChangePasswordRequest;
       await route.fulfill({ status: 204 });
@@ -206,6 +226,7 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
         username: payload.username,
         displayName: payload.displayName,
         email: payload.email ?? null,
+        departmentId: payload.departmentId ?? null,
         status: payload.status ?? 'active',
         roles: ['查看者'],
         lastLoginAt: null,
