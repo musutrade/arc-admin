@@ -269,7 +269,7 @@ impl AppConfig {
             bail!("SERVICE_NAME must be 1-64 ASCII letters, digits, '.', '_' or '-'");
         }
 
-        let mfa_encryption_key = match mfa_encryption_key {
+        let mfa_encryption_key = match mfa_encryption_key.filter(|value| !value.is_empty()) {
             Some(value) => STANDARD
                 .decode(value)
                 .context("MFA_ENCRYPTION_KEY must be base64 encoded")?,
@@ -427,6 +427,22 @@ mod tests {
         assert_eq!(config.login_ip_max_failures, 50);
         assert!(config.auto_migrate);
         assert!(config.trusted_proxy_cidrs.is_empty());
+    }
+
+    #[test]
+    fn empty_mfa_encryption_key_uses_non_production_default() {
+        let config = AppConfig::from_values(ConfigValues {
+            database_url: Some("postgres://localhost/test".to_string()),
+            app_env: Some("test".to_string()),
+            mfa_encryption_key: Some(String::new()),
+            ..ConfigValues::default()
+        })
+        .expect("empty non-production MFA key should use the default");
+
+        assert_eq!(
+            config.mfa_encryption_key,
+            Sha256::digest(b"arc-admin-development-only-mfa-key").to_vec()
+        );
     }
 
     #[test]
