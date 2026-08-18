@@ -308,7 +308,9 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeVisible();
   await confirmPassword.fill('updated-safe-password');
   await confirmPassword.blur();
+  await expect(changePasswordDialog.getByText('两次输入的新密码不一致')).toBeHidden();
   await totpCode.fill('000000');
+  await totpCode.blur();
   const savePassword = changePasswordDialog.getByRole('button', { name: '保存修改' });
   await expect(savePassword).toBeEnabled({ timeout: 10_000 });
 

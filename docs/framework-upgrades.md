@@ -16,6 +16,14 @@ arc-admin 使用语义化版本和不可移动的 Git 标签发布。业务仓�
 
 ## 升级业务仓库
 
+对于已经存在、但尚未生成 `.arc-project.json` 的业务仓库，先在框架仓库执行一次登记。登记命令只写入版本元数据，不会覆盖业务代码、README、运行时配置或本地环境文件：
+
+```bash
+../arc-admin-framework/scripts/adopt-project.sh --target "$PWD" --slug devflow --title DevFlow --short-name "研发流程 Agent 平台" --database devflow --permission-prefix devflow
+```
+
+登记前必须保证业务仓库工作区干净。`Aisix-Panel` 使用自己的 slug、数据库名和权限前缀；不要用初始化脚本代替登记，因为初始化脚本会生成环境文件并改写项目头部。
+
 先取得包含完整标签历史的新版本模板。以下示例把业务项目从当前版本升级到 `v1.2.0`：
 
 ```bash
