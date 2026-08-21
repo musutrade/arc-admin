@@ -44,7 +44,9 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
   --permission-prefix stock
 ```
 
-命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成 `backend/.env` 和带随机 Grafana 管理密码的 `observability/.env`，更新运行时产品配置与 README，并写入 `.arc-project.json`。本地 `.env` 受 `.gitignore` 保护，不会进入版本库。
+命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成 `backend/.env`、`observability/.env` 和生产部署环境文件，带随机 Grafana 管理密码，并同步数据库、服务、镜像、监控网络和 WebAuthn 产品标识；同时更新运行时产品配置与 README，并写入 `.arc-project.json`。本地环境文件受 `.gitignore` 保护，不会进入版本库。
+
+生成的生产部署环境文件仍保留空白密钥和示例域名，部署前必须按[最小生产部署](docs/production-deployment.md)补齐并校验。
 
 查看所有参数：
 

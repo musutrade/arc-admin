@@ -16,6 +16,11 @@
 - audit engine 的忽略文件名、报告文件名、Markdown 限制、注释和字符串定界符全部配置化；
 - 新项目 audit preset 预置 Rust、TypeScript、JavaScript、SQL、TOML 和 YAML 的词法配置，并验证初始化后添加第一条规则的完整流程。
 
+### 改进
+
+- 项目初始化同步开发、可观测性与生产部署的数据库、服务、镜像、监控网络和 WebAuthn 标识，并加强 API 基址与框架源仓库保护；
+- 前端补齐键盘跳转、移动导航焦点、加载状态、表格与筛选控件的无障碍语义，统一焦点样式并优化移动端交互。
+
 ### 升级说明
 
 - 从当前 `empty.audit.toml` 复制 `[engine]` 和所需 `comment_syntax`，为旧配置补充 `version = 2`；

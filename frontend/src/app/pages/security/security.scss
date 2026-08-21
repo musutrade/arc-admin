@@ -143,10 +143,14 @@ input {
   background: var(--ui-color-surface-panel);
   color: var(--ui-color-text-primary);
   font: inherit;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
   &:focus {
-    outline: none;
     border-color: var(--ui-color-primary);
     box-shadow: var(--ui-focus-ring);
+  }
+  &:focus-visible {
+    outline-color: var(--ui-color-primary);
   }
 }
 .form-error {

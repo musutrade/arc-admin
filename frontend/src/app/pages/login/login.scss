@@ -113,10 +113,15 @@
     padding-left: 40px;
     border: none;
     background: transparent;
-    outline: none;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     font-family: inherit;
     font-size: 14px;
     color: var(--ui-color-text-primary);
+
+    &:focus-visible {
+      outline-color: var(--ui-color-primary);
+    }
 
     &::placeholder {
       color: var(--ui-color-text-tertiary);

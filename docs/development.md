@@ -12,7 +12,7 @@ git config core.hooksPath codex-audit-pipeline/hooks
 cargo flow doctor
 ```
 
-从模板创建的业务项目应先运行 `scripts/init-project.sh`，它会生成 `backend/.env`。直接开发框架源仓库时，上述命令仅在文件不存在时复制示例配置。运行后端前确认 `DATABASE_URL` 指向本地开发库；`APP_ENV=production` 时会强制认证 Cookie 使用 `Secure` 与 `__Host-` 前缀，并要求设置明确的 `CORS_ALLOWED_ORIGINS`。前后端应部署在同一站点下，跨 origin 部署还必须使用 HTTPS 并允许凭据请求。
+从模板创建的业务项目应先运行 `scripts/init-project.sh`，它会生成 `backend/.env`、`observability/.env` 和 `deployment/.env.production`，并同步项目标识。直接开发框架源仓库时，上述命令仅在文件不存在时复制开发环境示例配置。运行后端前确认 `DATABASE_URL` 指向本地开发库；生产部署文件仍须填写域名、数据库密码、完整连接串和 MFA 密钥。`APP_ENV=production` 时会强制认证 Cookie 使用 `Secure` 与 `__Host-` 前缀，并要求设置明确的 `CORS_ALLOWED_ORIGINS`。前后端应部署在同一站点下，跨 origin 部署还必须使用 HTTPS 并允许凭据请求。
 
 数据库迁移不会留下可登录的默认账号。首次部署先显式初始化管理员，密码至少 16 字符：
 
