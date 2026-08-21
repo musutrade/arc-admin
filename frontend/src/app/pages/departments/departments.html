@@ -1,4 +1,4 @@
-<div class="page departments-page">
+<div class="page">
   <div class="page-header">
     <div>
       <h1>部门管理</h1>
@@ -12,44 +12,38 @@
     }
   </div>
 
-  <div class="department-summary" aria-label="部门概览">
-    <div>
-      <span>部门总数</span>
-      <strong>{{ departments().length }}</strong>
-    </div>
-    <div>
-      <span>启用部门</span>
-      <strong>{{ activeCount() }}</strong>
-    </div>
-    <div>
-      <span>部门成员</span>
-      <strong>{{ memberCount() }}</strong>
-    </div>
-  </div>
-
-  <div class="department-toolbar">
-    <label class="search-field" for="department-search">
+  <div class="filter-bar">
+    <label class="filter-search" for="department-search">
       <mat-icon>search</mat-icon>
       <input
         id="department-search"
         type="search"
         placeholder="搜索部门名称或编码"
+        aria-label="搜索部门名称或编码"
         [value]="search()"
         (input)="setSearch($any($event.target).value)"
       />
     </label>
-    <label class="status-filter" for="department-status-filter">
-      <span>状态</span>
-      <select
-        id="department-status-filter"
-        [value]="statusFilter()"
-        (change)="setStatus($any($event.target).value)"
+    <div class="filter-right">
+      <label class="filter-select-group" for="department-status-filter">
+        <span>状态：</span>
+        <select
+          id="department-status-filter"
+          class="filter-select"
+          aria-label="按状态筛选部门"
+          [value]="statusFilter()"
+          (change)="setStatus($any($event.target).value)"
+        >
+          <option value="all">全部状态</option>
+          <option value="active">启用</option>
+          <option value="inactive">停用</option>
+        </select>
+      </label>
+      <div class="filter-divider"></div>
+      <span class="filter-count"
+        >显示 <b>{{ visibleDepartments().length }}</b> 个部门</span
       >
-        <option value="all">全部</option>
-        <option value="active">启用</option>
-        <option value="inactive">停用</option>
-      </select>
-    </label>
+    </div>
   </div>
 
   @if (error()) {
@@ -66,9 +60,6 @@
     <div class="table-card">
       <div class="table-scroll" role="region" tabindex="0" aria-label="部门列表，可横向滚动">
         <table class="data-table department-table">
-          <caption class="visually-hidden">
-            部门列表
-          </caption>
           <caption class="visually-hidden">
             组织部门列表
           </caption>
@@ -124,8 +115,12 @@
                 <td>{{ department.memberCount }}</td>
                 <td>{{ department.childCount }}</td>
                 <td>
-                  <span class="status-badge" [class.active]="department.status === 'active'">
-                    <span></span>
+                  <span
+                    class="status-badge"
+                    [class.st-active]="department.status === 'active'"
+                    [class.st-suspended]="department.status !== 'active'"
+                  >
+                    <span class="status-dot"></span>
                     {{ department.status === 'active' ? '启用' : '停用' }}
                   </span>
                 </td>
@@ -181,5 +176,29 @@
         </table>
       </div>
     </div>
+  }
+
+  @if (!loading() && !error()) {
+    <section class="stats-grid" aria-label="部门概览">
+      <article class="stat-card">
+        <p class="stat-label">部门总数</p>
+        <div class="stat-value-row">
+          <h3>{{ departments().length }}</h3>
+        </div>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">启用部门</p>
+        <div class="stat-value-row">
+          <h3>{{ activeCount() }}</h3>
+          <span class="stat-pulse" aria-hidden="true"></span>
+        </div>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">部门成员</p>
+        <div class="stat-value-row">
+          <h3>{{ memberCount() }}</h3>
+        </div>
+      </article>
+    </section>
   }
 </div>

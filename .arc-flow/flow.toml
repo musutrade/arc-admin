@@ -186,6 +186,7 @@ patterns = [
   ".arc-framework/**",
   ".arc-project.json",
   "docs/**",
+  "extracted/**",
   "codex-audit-pipeline/README.md",
   "codex-audit-pipeline/docs/**",
   ".github/**",

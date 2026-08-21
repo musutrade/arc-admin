@@ -130,6 +130,10 @@
   font-size: 13px;
 }
 
+.audit-mobile-list {
+  display: none;
+}
+
 .page-actions {
   display: flex;
   gap: 6px;
@@ -163,6 +167,66 @@
   }
 
   .audit-table {
-    min-width: 1120px;
+    display: none;
+  }
+
+  .audit-mobile-list {
+    display: grid;
+  }
+
+  .audit-mobile-card {
+    padding: var(--ui-space-4);
+    border-bottom: 1px solid var(--ui-color-border);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--ui-space-3);
+      margin-bottom: var(--ui-space-4);
+    }
+
+    time {
+      color: var(--ui-color-text-tertiary);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--ui-space-3) var(--ui-space-4);
+      margin: 0;
+    }
+
+    dl > div {
+      min-width: 0;
+    }
+
+    dt {
+      margin-bottom: var(--ui-space-1);
+      color: var(--ui-color-text-tertiary);
+      font-size: 12px;
+    }
+
+    dd {
+      min-width: 0;
+      margin: 0;
+      color: var(--ui-color-text-primary);
+      overflow-wrap: anywhere;
+    }
+
+    .audit-mobile-details {
+      grid-column: 1 / -1;
+
+      code {
+        color: var(--ui-color-text-secondary);
+        font-size: 12px;
+      }
+    }
   }
 }

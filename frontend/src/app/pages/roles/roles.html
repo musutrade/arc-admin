@@ -57,7 +57,11 @@
               <mat-icon>{{ r.icon }}</mat-icon>
             </div>
             <div class="role-card-meta">
-              <span class="role-status-badge" [class.st-active]="r.isActive">
+              <span
+                class="status-badge"
+                [class.st-active]="r.isActive"
+                [class.st-suspended]="!r.isActive"
+              >
                 <span class="status-dot"></span>
                 {{ r.isActive ? '启用' : '停用' }}
               </span>
@@ -124,9 +128,6 @@
       >
         <table class="data-table roles-table">
           <caption class="visually-hidden">
-            角色列表
-          </caption>
-          <caption class="visually-hidden">
             系统角色列表
           </caption>
           <thead>
@@ -162,7 +163,11 @@
                 </td>
                 <td>{{ dataScopeLabel(r.dataScope) }}</td>
                 <td>
-                  <span class="role-status-badge" [class.st-active]="r.isActive">
+                  <span
+                    class="status-badge"
+                    [class.st-active]="r.isActive"
+                    [class.st-suspended]="!r.isActive"
+                  >
                     <span class="status-dot"></span>
                     {{ r.isActive ? '启用' : '停用' }}
                   </span>

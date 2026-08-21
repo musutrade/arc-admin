@@ -2,13 +2,21 @@
   <section class="page-header">
     <div>
       <h1>账号安全</h1>
-      <p>管理二次验证、通行密钥和恢复码</p>
+      <p>管理二次验证、通行密钥和恢复码。</p>
     </div>
   </section>
 
   @if (loading()) {
-    <div class="loading-state" role="status" aria-live="polite" aria-label="正在加载账号安全设置">
+    <div class="loading-wrap" role="status" aria-live="polite" aria-label="正在加载账号安全设置">
       <mat-progress-spinner diameter="28" mode="indeterminate" />
+    </div>
+  } @else if (error() && !status()) {
+    <div class="table-card">
+      <div class="empty-state" role="alert">
+        <mat-icon>error</mat-icon>
+        <p>{{ error() }}</p>
+        <button type="button" class="btn-outline" (click)="retry()">重新加载</button>
+      </div>
     </div>
   } @else if (recoveryCodes().length > 0) {
     <section class="recovery-result" aria-live="polite">
@@ -38,12 +46,12 @@
     </section>
   } @else if (status(); as mfa) {
     @if (error()) {
-      <div class="feedback error">
+      <div class="feedback error" role="alert">
         <mat-icon>error</mat-icon><span>{{ error() }}</span>
       </div>
     }
     @if (message()) {
-      <div class="feedback success">
+      <div class="feedback success" role="status" aria-live="polite">
         <mat-icon>check_circle</mat-icon><span>{{ message() }}</span>
       </div>
     }
@@ -97,7 +105,9 @@
               </button>
             </article>
           } @empty {
-            <div class="empty-state"><mat-icon>key_off</mat-icon><span>尚未添加通行密钥</span></div>
+            <div class="passkey-empty">
+              <mat-icon>key_off</mat-icon><span>尚未添加通行密钥</span>
+            </div>
           }
         </div>
 
