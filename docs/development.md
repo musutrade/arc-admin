@@ -57,6 +57,14 @@ cargo flow verify --all
 桌面与移动端 E2E，以及前端生产构建。Rust CLI 为每一步记录耗时和独立日志；报告位于
 `codex-audit-pipeline/.codex/reports/`，同时提供 JSON 和末行带 `TEST_SUMMARY` 的 Markdown。
 
+涉及页面、样式或交互的变更还必须按 [UI 与 CSS 规范](ui-design-system.md) 在 Desktop Chrome
+和 Pixel 7 视口复核。需要保存本地审计截图时执行：
+
+```bash
+cd frontend
+VISUAL_REVIEW=1 npm run e2e -- --project=chromium --project=mobile-chromium
+```
+
 后端集成测试仅允许使用临时容器或显式的隔离测试库：
 
 ```bash
@@ -78,7 +86,7 @@ npm audit --omit=dev --audit-level=high
 ## Git 与 GitHub
 
 - HTTPS remote 不能包含用户名、token 或密码；优先使用 `gh auth login` 与 `gh auth setup-git` 管理凭据。
-- 自动化只允许本地提交，禁止自动 push；由开发者人工执行 push 或创建 PR。
+- 自动化默认只允许本地提交；只有仓库维护者在当前任务中明确授权时，才能推送非受保护分支并创建 PR。禁止直接推送 `main`。
 - 在 GitHub 仓库设置中保护 `main`，要求 `Quality gate`、`Backend verification`、`Frontend verification` 通过并至少一人审核。
 - 启用 secret scanning、push protection 和 Dependabot alerts。公共仓库会额外运行 `Dependency review`；私有仓库是否可用取决于 GitHub 计划。
 - 禁止 force push 和直接删除受保护分支。

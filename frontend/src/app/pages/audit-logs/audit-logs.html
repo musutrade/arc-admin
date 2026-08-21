@@ -101,6 +101,57 @@
             }
           </tbody>
         </table>
+        <div class="audit-mobile-list" role="list" aria-label="审计日志列表">
+          @for (log of logs(); track log.id) {
+            <article class="audit-mobile-card" role="listitem">
+              <header>
+                <span class="action-badge">{{ actionLabel(log.action) }}</span>
+                <time [attr.datetime]="log.createdAt">{{
+                  log.createdAt | date: 'MM-dd HH:mm' : '+0800'
+                }}</time>
+              </header>
+              <dl>
+                <div>
+                  <dt>操作者</dt>
+                  <dd>{{ log.actorUsername ?? '系统任务' }}</dd>
+                </div>
+                <div>
+                  <dt>对象</dt>
+                  <dd>{{ targetLabel(log) }}</dd>
+                </div>
+                <div>
+                  <dt>追踪号</dt>
+                  <dd>
+                    @if (log.traceId) {
+                      <div class="trace-cell">
+                        <code [title]="log.traceId">{{ log.traceId }}</code>
+                        <button
+                          type="button"
+                          class="copy-trace"
+                          (click)="copyTraceId(log.traceId)"
+                          [attr.aria-label]="'复制追踪号 ' + log.traceId"
+                          [title]="copiedTraceId() === log.traceId ? '已复制' : '复制追踪号'"
+                        >
+                          <mat-icon>{{
+                            copiedTraceId() === log.traceId ? 'check' : 'content_copy'
+                          }}</mat-icon>
+                        </button>
+                      </div>
+                    } @else {
+                      <span class="trace-empty">系统任务</span>
+                    }
+                  </dd>
+                </div>
+                <div class="audit-mobile-details">
+                  <dt>变更详情</dt>
+                  <dd>
+                    <code>{{ detailText(log.details) }}</code>
+                  </dd>
+                </div>
+              </dl>
+            </article>
+          }
+        </div>
       </div>
       <div class="audit-footer">
         <span>第 {{ page() }} / {{ totalPages() }} 页</span>

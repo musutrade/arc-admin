@@ -2,32 +2,183 @@
 
 # arc-admin
 
-RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后端。
+面向生产环境的 RBAC 管理后台与全栈工程基线。前端使用 Angular 22 + Angular Material，后端使用 Rust（Axum + SQLX），数据存储为 PostgreSQL 16。
 <!-- ARC_PROJECT_HEADER_END -->
+
+当前框架版本为 `v2.3.0`。仓库内置身份认证、组织与部门、用户、角色、权限目录、权限分配、审计日志、`super_admin` MFA，以及开发、测试、部署和可观测性工具链。
+
+## 核心能力
+
+| 领域       | 已实现能力                                                                          |
+| ---------- | ----------------------------------------------------------------------------------- |
+| 身份认证   | HttpOnly Cookie 服务端会话、CSRF、防暴力破解、会话上限、密码修改与强制撤销          |
+| 多因素认证 | `super_admin` 强制 TOTP，支持通行密钥、一次性恢复码和敏感操作二次认证               |
+| 权限模型   | 用户、层级部门、角色、权限目录、角色授权、组织/部门/本人数据范围                    |
+| 安全审计   | 登录与权限变更审计、追踪号检索、数据库只追加保护、归档与校验清单                    |
+| 前端体验   | Angular 22 standalone、signals、zoneless、OnPush、亮/暗主题、响应式布局与键盘无障碍 |
+| 工程质量   | OpenAPI 生成客户端、Vitest、Playwright 桌面/移动端 E2E、Rust 集成测试、统一质量门禁 |
+| 生产运维   | 非 root 容器、TLS/Nginx、独立迁移任务、Prometheus/Loki/Grafana、备份与 PITR 指南    |
+
+## 页面与访问控制
+
+| 路由                   | 页面             | 访问要求                         |
+| ---------------------- | ---------------- | -------------------------------- |
+| `/login`               | 登录与 MFA 验证  | 公开                             |
+| `/permissions`         | 权限目录         | `permission:directory:read`      |
+| `/users`               | 用户管理         | `user:directory:read`            |
+| `/departments`         | 部门管理         | `organization:department:read`   |
+| `/roles`               | 角色管理         | `role:directory:read`            |
+| `/role-permissions`    | 角色权限分配     | 角色、权限目录读取及角色授权权限 |
+| `/audit-logs`          | 审计日志         | `audit:logs:read`                |
+| `/security`            | 当前账号安全设置 | 已登录                           |
+| `/403`、`/404`、`/500` | 统一错误页       | 公开                             |
+
+前端守卫和按钮显隐只负责交互反馈；所有受保护 API 都由后端重新校验当前会话、账号状态、权限码和数据范围。
+
+## 技术栈
+
+- Angular `22.1`、Angular Material `22.1`、TypeScript、SCSS；
+- Rust `1.97.1`、Axum、SQLX、utoipa；
+- PostgreSQL `16`；
+- Node.js `24.18.0`；
+- Vitest、Playwright、Clippy、ESLint、Prettier；
+- Docker Compose、Nginx、Prometheus、Loki、Alloy、Grafana，可选 OpenTelemetry/Tempo。
+
+工具链版本由 `.node-version` 和 `rust-toolchain.toml` 固定。升级依赖前先阅读 [开发指南](docs/development.md) 和 [框架升级说明](docs/framework-upgrades.md)。
 
 ## 目录结构
 
-```
+```text
 .
-├── AGENTS.md                  # Codex 全局公约（会话启动自动加载）
-├── frontend/                  # Angular 22 + Material M3 前端
+├── frontend/                  # Angular 22 管理端
 │   └── src/app/{core,features,layout,pages}
-├── backend/                   # Rust + Axum + SQLX 后端
-│   ├── src/lib.rs             # 应用路由与可测试的 AppState
-│   ├── src/main.rs            # 配置、连接池、迁移与监听入口
-│   ├── migrations/            # SQLX 迁移（不可变，只增不改）
-│   └── .env.example
-├── observability/             # Prometheus + Blackbox + Loki + Alloy + Grafana
-├── docs/openapi.json          # 从 Rust 类型生成的 OpenAPI 契约
-├── scripts/                   # 业务项目初始化命令及测试
-├── FRAMEWORK_VERSION          # 模板版本标识
-├── .arc-flow/                 # 可复用工作流 schema v2 配置
-├── codex-audit-pipeline/      # Codex 工作流工具（自包含）
-│   ├── .codex/                # 审计规则 / 模板 / 报告产物
-│   ├── hooks/                 # pre-commit（仅启动 arc-flow）
-│   └── tools/arc-flow/        # Rust 工作流 CLI
-└── .github/                   # CI 与 Dependabot 配置
+├── backend/                   # Axum API、领域分层和 SQLX 迁移
+│   ├── src/{handlers,services,repositories}
+│   └── migrations/            # 只增不改的数据库迁移
+├── docs/                      # 架构、UI、安全、部署与运维文档
+├── deployment/                # 生产环境示例配置和 TLS 挂载目录
+├── observability/             # Prometheus、Blackbox、Loki、Alloy、Grafana、Tempo
+├── codex-audit-pipeline/      # arc-flow 工作流与架构审计工具
+├── scripts/                   # 项目初始化、框架升级和质量检查脚本
+├── compose.production.yaml    # 最小生产部署
+├── FRAMEWORK_VERSION          # 当前框架版本
+└── .github/workflows/         # CI、CodeQL 与供应链安全工作流
 ```
+
+## 本地启动
+
+需要 Git、Docker，以及仓库固定版本的 Node.js 和 Rust。
+
+```bash
+# 一次性准备
+cd frontend && npm ci && cd ..
+[[ -f backend/.env ]] || cp backend/.env.example backend/.env
+docker pull postgres:16-alpine
+git config core.hooksPath codex-audit-pipeline/hooks
+cargo flow doctor
+
+# 前后端一键启动；Ctrl+C 会同时停止两个服务
+./start.sh
+```
+
+默认访问地址：
+
+- 前端：`http://localhost:4200`；
+- 后端存活检查：`http://localhost:8080/api/v1/healthz`；
+- 后端就绪检查：`http://localhost:8080/api/v1/readyz`。
+
+数据库迁移不会创建可登录的默认账号。首次运行时显式初始化管理员，密码至少 16 个字符：
+
+```bash
+BOOTSTRAP_ADMIN_PASSWORD='replace-with-a-strong-password' \
+  cargo run --manifest-path backend/Cargo.toml --bin bootstrap_admin
+```
+
+也可以分别运行 `cd frontend && npm start` 和 `cd backend && cargo run`。`backend/.env` 中的 `DATABASE_URL` 必须指向本地开发数据库，不得复用生产数据库。
+
+## 开发与验证
+
+所有 `cargo flow` 命令从仓库根执行：
+
+```bash
+# 查看工作区变更影响范围
+cargo flow scope
+
+# 验证受影响组件
+cargo flow verify
+
+# 合并或创建 PR 前执行全部组件
+cargo flow verify --all
+```
+
+前端定向检查：
+
+```bash
+cd frontend
+npm run lint
+npm run format:check
+npm run test:ci
+npm run e2e
+npm run build
+```
+
+`cargo flow verify --all` 固定先执行凭据扫描和架构审计，再运行格式、lint、编译、单元/集成测试、桌面与移动端 E2E、真实全栈 smoke 和生产构建。后端测试默认使用一次性 PostgreSQL 容器；如提供 `TEST_DATABASE_URL`，它必须指向明确隔离且以 `_test` 或 `-test` 结尾的测试库。
+
+## API 契约
+
+[backend/src/openapi.rs](backend/src/openapi.rs) 与后端 DTO 是 HTTP 契约的可编辑来源。[docs/openapi.json](docs/openapi.json) 和 `frontend/src/app/generated/api/` 均为生成产物，禁止手工修改。
+
+修改接口后执行：
+
+```bash
+cd frontend
+npm run generate:api:all
+```
+
+开发服务器把 `/api/v1` 代理到 `http://127.0.0.1:8080`。前端使用 `HttpClient`、HttpOnly Cookie 会话与 CSRF interceptor 访问 API；运行时 API 根路径可通过公开配置覆盖。
+
+## 运行时产品配置
+
+前端启动时读取 `frontend/public/config.js`，修改后无需重新构建：
+
+```javascript
+window.__ARC_ADMIN_CONFIG__ = {
+  appName: "RBAC 管理中心",
+  appShortName: "RBAC",
+  appSlug: "arc-admin",
+  apiBaseUrl: "/api/v1",
+  themeStorageKey: "arc-admin-theme",
+};
+```
+
+该文件会控制浏览器标题、登录页、导航品牌、API 地址和主题存储键。它会被浏览器直接读取，禁止写入 API 密钥、会话凭据、数据库连接串或其他秘密。
+
+## 生产部署
+
+最小生产拓扑由 `compose.production.yaml` 提供 PostgreSQL、一次性 migration、Axum API 和 Angular/Nginx。上线前必须完成真实 TLS、数据库与 MFA 密钥、CORS、备份、告警通知和外部心跳配置。
+
+从 [最小生产部署](docs/production-deployment.md) 开始，并按 [多因素认证运维](docs/mfa-operations.md)、[日志与故障定位](docs/observability.md) 和 [PostgreSQL 备份与恢复](docs/postgresql-backup-recovery.md) 完成验收。示例配置不是生产密钥文件，也不构成合规认证。
+
+## 文档导航
+
+- [开发指南](docs/development.md)：环境、日常开发、质量门禁与 Git 约束；
+- [架构说明](docs/architecture.md)：前后端分层、权限模型、数据范围和 API 契约；
+- [UI 与 CSS 规范](docs/ui-design-system.md)：设计 token、页面结构、响应式、交互和无障碍检查清单；
+- [前端说明](frontend/README.md)：Angular 目录、认证交互、页面与定向验证命令；
+- [业务模块扩展指南](docs/business-extension.md)：新业务域的前后端接入边界；
+- [业务权限模板](docs/business-permissions.md)：SQL、Rust、Angular 三端权限声明；
+- [安全能力状态](docs/security-roadmap.md)：已实现的高权限认证控制和生产责任；
+- [多因素认证运维](docs/mfa-operations.md)：MFA 密钥、WebAuthn、恢复与撤销演练；
+- [审计日志保留](docs/audit-retention.md)：只追加保护、归档、校验与恢复；
+- [日志与故障定位](docs/observability.md)：指标、日志、告警、心跳与链路追踪；
+- [Grafana 告警通知](docs/grafana-alert-notifications.md)：联系点、通知策略和送达验收；
+- [供应链安全](docs/supply-chain-security.md)：依赖审计、CodeQL、镜像扫描与 SBOM；
+- [最小生产部署](docs/production-deployment.md)：Compose、TLS、发布和回滚；
+- [PostgreSQL 备份与恢复](docs/postgresql-backup-recovery.md)：备份、PITR、RPO/RTO 与演练；
+- [高合规部署基线](docs/high-compliance.md)：需要在项目层补齐的独立控制；
+- [框架版本与派生项目升级](docs/framework-upgrades.md)：版本标签、三方合并和冲突处理；
+- [当前项目状态](docs/HANDOFF.md)：最新能力、验证基线和剩余生产事项；
+- [arc-flow 操作手册](codex-audit-pipeline/README.md) 与 [schema v2 参考](codex-audit-pipeline/docs/configuration.md)。
 
 <!-- ARC_TEMPLATE_USAGE_START -->
 
@@ -44,134 +195,19 @@ RBAC 管理后台：Angular + Angular Material 前端，Rust (Axum + SQLX) 后�
   --permission-prefix stock
 ```
 
-命令要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会生成 `backend/.env`、`observability/.env` 和生产部署环境文件，带随机 Grafana 管理密码，并同步数据库、服务、镜像、监控网络和 WebAuthn 产品标识；同时更新运行时产品配置与 README，并写入 `.arc-project.json`。本地环境文件受 `.gitignore` 保护，不会进入版本库。
+初始化要求 Git 工作区干净，并会拒绝在框架源仓库或已初始化项目中执行。它会同步运行时产品配置、数据库、服务、镜像、监控网络和 WebAuthn 标识，生成受 `.gitignore` 保护的本地环境文件，并写入 `.arc-project.json`。
 
-生成的生产部署环境文件仍保留空白密钥和示例域名，部署前必须按[最小生产部署](docs/production-deployment.md)补齐并校验。
-
-查看所有参数：
-
-```bash
-./scripts/init-project.sh --help
-```
+生成的 `deployment/.env.production` 仍包含空白密钥和示例域名。部署前必须按 [最小生产部署](docs/production-deployment.md) 补齐并校验。使用 `./scripts/init-project.sh --help` 查看所有参数。
 
 <!-- ARC_TEMPLATE_USAGE_END -->
 
-## 升级框架
+## 升级派生项目
 
-派生项目不会自动获得模板后续修复。框架发布新版本后，应从新版本模板克隆中运行三方合并升级命令：
+派生项目不会自动获得框架后续修复。框架发布新版本后，从检出目标正式标签的模板仓库先预检，再执行三方合并：
 
 ```bash
 ../arc-admin-framework/scripts/upgrade-framework.sh --check
 ../arc-admin-framework/scripts/upgrade-framework.sh
 ```
 
-升级器只处理清单中的框架文件，保留业务新增文件，冲突时不会写入；成功写入后自动执行环境体检和全量验证。完整流程见[框架版本与派生项目升级](docs/framework-upgrades.md)。
-
-## 快速开始
-
-```bash
-# 一次性准备
-cd frontend && npm ci && cd ..
-[[ -f backend/.env ]] || cp backend/.env.example backend/.env
-docker pull postgres:16-alpine
-git config core.hooksPath codex-audit-pipeline/hooks
-cargo flow doctor
-
-# 前后端一键启动（Ctrl+C 会同时停止两个服务）
-./start.sh
-
-# 也可以分别启动
-# 前端（新终端）
-cd frontend && npm start                  # http://localhost:4200
-
-# 首次初始化管理员（密码至少 16 字符，不会写入迁移或日志）
-BOOTSTRAP_ADMIN_PASSWORD='replace-with-a-strong-password' \
-  cargo run --manifest-path backend/Cargo.toml --bin bootstrap_admin
-
-# 后端（新终端，先创建 DATABASE_URL 指向的本地数据库）
-cd backend && cargo run                    # http://localhost:8080/api/v1/healthz
-```
-
-首次运行或环境变化后，可从仓库根执行依赖体检（不会连接数据库）：
-
-```bash
-cargo flow doctor
-```
-
-可观测性栈按需启动，提供指标、入口探测和集中日志，完整说明见[日志与故障定位](docs/observability.md)：
-
-```bash
-cp observability/.env.example observability/.env
-docker compose --env-file observability/.env -f observability/compose.yaml up -d
-```
-
-## Codex 工作流
-
-所有命令从仓库根执行。`cargo flow` 是本仓库在 `.cargo/config.toml` 中定义的别名，会从源码启动 `arc-flow`、自动定位 `.arc-flow/flow.toml`，并将结构化报告写入 `codex-audit-pipeline/.codex/reports/`。
-
-```bash
-# 开始编码前：确认变更会触发哪些组件
-cargo flow scope
-
-# 编码过程中：只验证工作区变更命中的组件
-cargo flow verify
-
-# 只验证指定组件，适合定向排查
-cargo flow verify --components backend
-cargo flow verify --components frontend
-
-# 检查配置及环境覆盖后的最终值
-cargo flow config check
-cargo flow config print --resolved
-
-# 提交或创建 PR 前：忽略变更范围，执行所有组件
-cargo flow verify --all
-```
-
-`verify` 固定先执行凭据扫描和架构审计，门禁通过后才运行配置中的 lint、compile、test、build。后端测试优先使用 `TEST_DATABASE_URL`；未配置时自动启动一次性 PostgreSQL 容器，结束后清理，不使用开发库或生产库。
-
-模板变更会在 `hook` 和 `full` 验证中自动执行质量门禁。门禁以 `codex-audit-pipeline/.codex/templates/manifest.json` 为清单，检查模板登记、占位符、示例渲染结果以及 TypeScript、Rust、SQL 的基础语法质量。
-
-详细资料：
-
-- [开发指南](docs/development.md)：本项目的本地开发、测试和提交步骤；
-- [架构说明](docs/architecture.md)：前后端分层和依赖边界；
-- [业务模块扩展指南](docs/business-extension.md)：新业务域的目录、权限、路由和后端接入清单；
-- [业务权限模板](docs/business-permissions.md)：SQL、Rust、Angular 三端权限声明和最小授权策略；
-- [日志与故障定位](docs/observability.md)：Prometheus 指标、内部探测、外部心跳、JSON Lines 和问题编号；
-- [供应链安全](docs/supply-chain-security.md)：依赖审计、CodeQL、镜像扫描和 SBOM；
-- [审计日志保留](docs/audit-retention.md)：只追加保护、JSONL 归档、校验清单和恢复演练；
-- [高合规部署基线](docs/high-compliance.md)：可选 OTLP/Tempo、会话收紧、不可变证据和未完成控制；
-- [Grafana 告警通知配置](docs/grafana-alert-notifications.md)：企业微信、钉钉、邮件、Webhook、通知策略和上线验收；
-- [框架版本与派生项目升级](docs/framework-upgrades.md)：版本发布、三方合并、冲突处理和完整验证；
-- [最小生产部署](docs/production-deployment.md)：非 root 镜像、TLS、反向代理、迁移任务和 Compose；
-- [PostgreSQL 备份与恢复](docs/postgresql-backup-recovery.md)：备份、PITR、恢复演练和 RPO/RTO；
-- [安全能力待办](docs/security-roadmap.md)：尚未实现的高权限认证能力及上线验收条件；
-- [项目公约](AGENTS.md)：Codex、Reviewer、Tester 和 Git 安全约束；
-- [arc-flow 操作手册](codex-audit-pipeline/README.md)：安装、命令、预设、CI、报告和故障排查；
-- [schema v2 配置参考](codex-audit-pipeline/docs/configuration.md)：`flow.toml` 与 `audit.toml` 的字段级说明。
-
-## API 契约
-
-[backend/src/openapi.rs](backend/src/openapi.rs) 和后端 DTO 是契约的唯一可编辑来源，生成产物为 [docs/openapi.json](docs/openapi.json)：
-
-- 后端按契约实现路由与 DTO（`/api/v1/...`，服务端口由 `backend/.env` 的 `PORT` 控制，默认 8080）；
-- 前端通过 `HttpClient`、HttpOnly Cookie 会话、CSRF interceptor 和 DTO 映射直接调用契约接口；开发服务器把 `/api/v1` 代理到后端；
-- 数据库 schema 与基础 RBAC 数据由 `backend/migrations/` 管理；历史演示管理员会被迁移禁用，真实管理员必须显式初始化；
-- `npm run generate:api:all` 会更新 OpenAPI 和 Angular DTO/API Client；`cargo flow verify` 会校验生成产物没有漂移。
-
-## 运行时产品配置
-
-前端在启动时读取 `frontend/public/config.js`。修改这些公开配置后无需重新构建：
-
-```javascript
-window.__ARC_ADMIN_CONFIG__ = {
-  appName: "RBAC 管理中心",
-  appShortName: "RBAC",
-  appSlug: "arc-admin",
-  apiBaseUrl: "/api/v1",
-  themeStorageKey: "arc-admin-theme",
-};
-```
-
-配置会同步控制浏览器标题、登录页、侧栏、顶栏、API 地址和主题存储键。该文件会被浏览器直接读取，禁止写入 API 密钥、会话凭据、数据库凭据或其他秘密。
+升级器只处理框架清单登记的文件，保留业务新增文件；冲突时不会写入。完整流程见 [框架版本与派生项目升级](docs/framework-upgrades.md)。

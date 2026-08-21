@@ -27,10 +27,7 @@
       </div>
     } @else {
       <div class="table-scroll" role="region" tabindex="0" aria-label="权限分配列表，可横向滚动">
-        <table class="data-table">
-          <caption class="visually-hidden">
-            角色权限分配列表
-          </caption>
+        <table class="data-table role-permission-table">
           <caption class="visually-hidden">
             角色权限分配列表
           </caption>
@@ -53,12 +50,16 @@
                 </td>
                 <td class="cell-secondary">{{ row.usersAssigned }} 名用户</td>
                 <td>
-                  <span class="status-pill" [class.inactive]="!row.active">
-                    <span class="dot"></span>
+                  <span
+                    class="status-badge"
+                    [class.st-active]="row.active"
+                    [class.st-suspended]="!row.active"
+                  >
+                    <span class="status-dot"></span>
                     {{ row.active ? '启用' : '停用' }}
                   </span>
                 </td>
-                <td class="th-actions">
+                <td class="td-actions">
                   @if (row.roleCode !== 'super_admin') {
                     <button
                       type="button"

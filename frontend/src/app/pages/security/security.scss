@@ -2,16 +2,15 @@
   display: block;
 }
 
-.loading-state {
-  display: grid;
-  place-items: center;
-  min-height: 240px;
-}
 .status-band,
 .settings-section,
 .recovery-result {
-  border-top: 1px solid var(--ui-color-border);
-  padding: 24px 0;
+  margin-bottom: var(--ui-space-6);
+  padding: var(--ui-space-6);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-surface-panel);
+  box-shadow: var(--ui-shadow-sm);
 }
 .status-band {
   display: grid;
@@ -83,6 +82,7 @@
   padding: 12px 14px;
   border: 1px solid var(--ui-color-border);
   border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-surface-subtle);
 }
 .passkey-main {
   display: flex;
@@ -103,7 +103,7 @@
     font-size: 12px;
   }
 }
-.empty-state {
+.passkey-empty {
   display: flex;
   align-items: center;
   gap: 8px;

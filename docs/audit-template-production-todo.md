@@ -1,6 +1,6 @@
 # 代码审计模板生产化待办
 
-更新日期：2026-08-11
+更新日期：2026-08-21
 
 ## 当前基线
 
@@ -9,7 +9,7 @@
 - [x] 注释扫描支持按扩展名配置行注释、块注释、嵌套块注释和字符串定界符。
 - [x] `cargo flow verify --all` 已通过，包括后端、前端、E2E、真实全栈 smoke 和生产构建。
 - [x] 当前审计报告为 0 blocker、0 error、0 warning。
-- [x] `cargo flow doctor` 的测试数据库告警已消除：CI 使用隔离的 `TEST_DATABASE_URL` 执行 `doctor --strict --json` 并保留 artifact；2026-08-11 在一次性干净克隆中通过 Docker 路径复验为 0 failure、0 warning。
+- [x] `cargo flow doctor` 的测试数据库告警已消除：CI 使用隔离的 `TEST_DATABASE_URL` 执行 `doctor --strict --json` 并保留 artifact；干净环境的 Docker 路径已复验为 0 failure、0 warning。
 
 生产级定位：当前可用于 arc-admin 的受控技术栈，但 auditor 仍是 Clippy、ESLint、SAST 等工具之前的补充门禁，不能作为唯一安全扫描器。
 

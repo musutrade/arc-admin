@@ -395,6 +395,38 @@ body {
   }
 }
 
+/* 列表状态在用户、角色、部门和权限页面共用同一视觉语义。 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-1) var(--ui-space-3);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-color-surface-muted);
+  color: var(--ui-color-text-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  &.st-active {
+    background: var(--ui-color-success-soft);
+    color: var(--ui-color-success);
+  }
+
+  &.st-suspended {
+    background: var(--ui-color-warning-soft);
+    color: var(--ui-color-warning);
+  }
+}
+
 /* 过滤栏 */
 .filter-bar {
   display: flex;
@@ -407,6 +439,18 @@ body {
   border: 1px solid var(--ui-color-border);
   border-radius: var(--ui-radius-lg);
   box-shadow: var(--ui-shadow-sm);
+}
+
+.filter-select-group {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+
+  > span {
+    color: var(--ui-color-text-tertiary);
+    font-size: 13px;
+    white-space: nowrap;
+  }
 }
 
 .filter-search {
@@ -584,6 +628,75 @@ body {
   .btn-outline {
     margin-top: var(--ui-space-2);
   }
+}
+
+/* 页面概览卡片与用户管理的统计区保持同一密度和层级。 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--ui-space-4);
+  margin-top: var(--ui-space-8);
+}
+
+.stat-card {
+  padding: var(--ui-space-6);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-color-surface-panel);
+  box-shadow: var(--ui-shadow-sm);
+  transition:
+    border-color var(--ui-duration-normal) var(--ui-ease-standard),
+    box-shadow var(--ui-duration-normal) var(--ui-ease-standard);
+
+  &:hover {
+    border-color: var(--ui-color-primary-border);
+    box-shadow: var(--ui-shadow-md);
+  }
+}
+
+.stat-label {
+  margin: 0;
+  color: var(--ui-color-text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stat-value-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: var(--ui-space-1);
+
+  h3 {
+    margin: 0;
+    color: var(--ui-color-text-primary);
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 38px;
+  }
+}
+
+.stat-trend {
+  font-size: 13px;
+  font-weight: 700;
+
+  &.success {
+    color: var(--ui-color-success);
+  }
+  &.warning {
+    color: var(--ui-color-warning);
+  }
+  &.danger {
+    color: var(--ui-color-error);
+  }
+}
+
+.stat-pulse {
+  width: 8px;
+  height: 8px;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  background: var(--ui-color-success);
 }
 
 /* 表格底部(分页) */
