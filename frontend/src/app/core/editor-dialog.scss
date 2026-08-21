@@ -86,7 +86,8 @@
     padding: 8px 11px;
     border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-radius-md);
-    outline: none;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     background: var(--ui-color-surface-panel);
     color: var(--ui-color-text-primary);
     font: inherit;
@@ -94,6 +95,9 @@
     &:focus {
       border-color: var(--ui-color-primary);
       box-shadow: var(--ui-focus-ring);
+    }
+    &:focus-visible {
+      outline-color: var(--ui-color-primary);
     }
 
     &:disabled {

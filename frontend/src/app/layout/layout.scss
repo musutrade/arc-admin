@@ -257,14 +257,14 @@
 
 .sidebar-toggle {
   position: absolute;
-  right: calc(var(--ui-space-3) * -1);
+  right: calc(var(--ui-space-4) * -1);
   top: calc(
     var(--sidebar-pad-y) + var(--brand-card-h) + var(--brand-card-gap) + var(--nav-item-h) +
       var(--nav-item-h) / 2
   );
   transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+  width: var(--ui-control-sm);
+  height: var(--ui-control-sm);
   border-radius: 50%;
   background: var(--ui-color-surface-panel);
   border: 1px solid var(--ui-color-border);
@@ -376,10 +376,14 @@
     flex: 1;
     background: transparent;
     border: none;
-    outline: none;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     font-family: inherit;
     font-size: 13px;
     color: var(--mat-sys-on-surface);
+    &:focus-visible {
+      outline-color: var(--ui-color-primary);
+    }
     &::placeholder {
       color: var(--ui-color-text-tertiary);
     }
@@ -499,10 +503,17 @@
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
+    visibility: hidden;
     box-shadow: none;
+    transition:
+      width var(--ui-duration-normal) var(--ui-ease-standard),
+      transform var(--ui-duration-normal) var(--ui-ease-standard),
+      visibility 0s linear var(--ui-duration-normal);
     &.open {
       transform: translateX(0);
+      visibility: visible;
       box-shadow: var(--ui-shadow-lg);
+      transition-delay: 0s;
     }
   }
   .sidebar-toggle {

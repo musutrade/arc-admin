@@ -67,10 +67,14 @@
     flex: 1;
     min-width: 0;
     border: 0;
-    outline: 0;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     background: transparent;
     color: var(--ui-color-text-primary);
     font: inherit;
+    &:focus-visible {
+      outline-color: var(--ui-color-primary);
+    }
   }
 }
 
@@ -88,10 +92,14 @@
 
   select {
     border: 0;
-    outline: 0;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     background: transparent;
     color: var(--ui-color-text-primary);
     font: inherit;
+    &:focus-visible {
+      outline-color: var(--ui-color-primary);
+    }
   }
 }
 

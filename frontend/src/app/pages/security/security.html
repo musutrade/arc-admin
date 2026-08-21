@@ -7,7 +7,9 @@
   </section>
 
   @if (loading()) {
-    <div class="loading-state"><mat-progress-spinner diameter="28" mode="indeterminate" /></div>
+    <div class="loading-state" role="status" aria-live="polite" aria-label="正在加载账号安全设置">
+      <mat-progress-spinner diameter="28" mode="indeterminate" />
+    </div>
   } @else if (recoveryCodes().length > 0) {
     <section class="recovery-result" aria-live="polite">
       <div class="section-heading">
@@ -89,7 +91,7 @@
                 type="button"
                 class="icon-btn danger"
                 (click)="confirmRevoke(passkey.id)"
-                aria-label="撤销通行密钥"
+                [attr.aria-label]="'撤销通行密钥 ' + passkey.name"
               >
                 <mat-icon>delete</mat-icon>
               </button>
