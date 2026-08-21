@@ -9,7 +9,7 @@ arc-admin 使用语义化版本和不可移动的 Git 标签发布。业务仓�
 - 框架已有文件：参与三方合并；
 - 业务仓库独自新增的业务文件：不会被扫描或删除；
 - 框架与业务新增同一路径：作为冲突处理；
-- `backend/.env`、`observability/.env` 等本地秘密：不在 Git 树中，不参与升级；
+- `backend/.env`、`observability/.env`、`deployment/.env.production` 等本地秘密：不在 Git 树中，不参与升级；
 - `.arc-project.json`：由升级器结构化更新版本元数据，不使用模板内容覆盖。
 
 即使业务文件位于 `backend/src`、`frontend/src` 或 `docs` 等管理目录，只要模板的旧、新版本都没有同一路径，升级器就不会触碰它。不要把业务实现写入现有框架文件；确需修改时，三方合并会尽量保留，冲突则要求人工判断。

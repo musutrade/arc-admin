@@ -26,6 +26,7 @@ function createFixture() {
   createdRoots.push(root);
   mkdirSync(join(root, "frontend/public"), { recursive: true });
   mkdirSync(join(root, "backend"), { recursive: true });
+  mkdirSync(join(root, "deployment"), { recursive: true });
   mkdirSync(join(root, "observability"), { recursive: true });
   mkdirSync(join(root, ".arc-framework"), { recursive: true });
   writeFileSync(
@@ -43,13 +44,17 @@ function createFixture() {
   );
   writeFileSync(
     join(root, "backend/.env.example"),
-    'DATABASE_URL="postgres://arc_admin:change-me@localhost:5432/arc_admin"\nSESSION_TTL_SECS=28800\nSERVICE_NAME=arc-admin-backend\n',
+    'DATABASE_URL="postgres://arc_admin:change-me@localhost:5432/arc_admin"\nSESSION_TTL_SECS=28800\nSERVICE_NAME=arc-admin-backend\nWEBAUTHN_RP_NAME="Arc Admin"\n',
   );
   writeFileSync(
     join(root, "observability/.env.example"),
-    "COMPOSE_PROJECT_NAME=arc-admin-observability\nGRAFANA_ADMIN_PASSWORD=change-me\n",
+    "COMPOSE_PROJECT_NAME=arc-admin-observability\nMONITORING_NETWORK=arc-admin-monitoring\nGRAFANA_ADMIN_PASSWORD=change-me\n",
   );
-  writeFileSync(join(root, ".gitignore"), ".env\n");
+  writeFileSync(
+    join(root, "deployment/.env.production.example"),
+    "COMPOSE_PROJECT_NAME=arc-admin\nAPP_HOST=admin.example.com\nPOSTGRES_DB=arc_admin\nPOSTGRES_USER=arc_admin\nPOSTGRES_PASSWORD=\nDATABASE_URL=\nMFA_ENCRYPTION_KEY=\nWEBAUTHN_RP_ID=\nWEBAUTHN_RP_ORIGIN=\nWEBAUTHN_RP_NAME=\"Arc Admin\"\nSERVICE_NAME=arc-admin-backend\nBACKEND_IMAGE=arc-admin-backend:v1.1.0\nFRONTEND_IMAGE=arc-admin-frontend:v1.1.0\nMONITORING_NETWORK=arc-admin-monitoring\n",
+  );
+  writeFileSync(join(root, ".gitignore"), ".env\n/deployment/.env.production\n");
   git(root, ["init", "-q"]);
   git(root, ["config", "user.name", "Test User"]);
   git(root, ["config", "user.email", "test@example.test"]);
@@ -108,6 +113,17 @@ test("initializes a clean template without tracking the local environment", () =
     /COMPOSE_PROJECT_NAME=stock-analysis-observability/,
   );
   assert.match(observabilityEnvironment, /GRAFANA_ADMIN_PASSWORD=g{32}/);
+  assert.match(observabilityEnvironment, /MONITORING_NETWORK=stock-analysis-monitoring/);
+  assert.match(environment, /WEBAUTHN_RP_NAME=\"股票分析系统\"/);
+  const productionEnvironment = readFileSync(
+    join(root, "deployment/.env.production"),
+    "utf8",
+  );
+  assert.match(productionEnvironment, /COMPOSE_PROJECT_NAME=stock-analysis/);
+  assert.match(productionEnvironment, /POSTGRES_DB=stock_analysis/);
+  assert.match(productionEnvironment, /SERVICE_NAME=stock-analysis-backend/);
+  assert.match(productionEnvironment, /BACKEND_IMAGE=stock-analysis-backend:v1.1.0/);
+  assert.match(productionEnvironment, /MONITORING_NETWORK=stock-analysis-monitoring/);
   const metadata = JSON.parse(
     readFileSync(join(root, ".arc-project.json"), "utf8"),
   );
@@ -119,6 +135,10 @@ test("initializes a clean template without tracking the local environment", () =
     git(root, ["status", "--porcelain"]),
     /observability\/\.env/,
   );
+  assert.doesNotMatch(
+    git(root, ["status", "--porcelain"]),
+    /deployment\/\.env\.production/,
+  );
 });
 
 test("rejects repeated initialization before checking worktree changes", () => {
@@ -128,6 +148,74 @@ test("rejects repeated initialization before checking worktree changes", () => {
   assert.throws(
     () => initializeProject(root, projectOptions(), { doctorMode: "never" }),
     /项目已经初始化/,
+  );
+});
+
+test("rejects unsafe API base URLs and protects the production environment", () => {
+  const apiUrlWithUserInfo = new URL("https://example.test/api");
+  apiUrlWithUserInfo.username = "test-user";
+  assert.equal(
+    parseArguments([
+      "--slug",
+      "stock-analysis",
+      "--title",
+      "股票分析系统",
+      "--database",
+      "stock_analysis",
+      "--permission-prefix",
+      "stock",
+      "--api-base-url",
+      "/",
+    ]).apiBaseUrl,
+    "/",
+  );
+  assert.throws(
+    () =>
+      parseArguments([
+        "--slug",
+        "stock-analysis",
+        "--title",
+        "股票分析系统",
+        "--database",
+        "stock_analysis",
+        "--permission-prefix",
+        "stock",
+        "--api-base-url",
+        "//external.example/api",
+      ]),
+    /--api-base-url/,
+  );
+  assert.throws(
+    () =>
+      parseArguments([
+        "--slug",
+        "stock-analysis",
+        "--title",
+        "股票分析系统",
+        "--database",
+        "stock_analysis",
+        "--permission-prefix",
+        "stock",
+        "--api-base-url",
+        "/api?source=unsafe",
+      ]),
+    /查询参数/,
+  );
+  assert.throws(
+    () =>
+      parseArguments([
+        "--slug",
+        "stock-analysis",
+        "--title",
+        "股票分析系统",
+        "--database",
+        "stock_analysis",
+        "--permission-prefix",
+        "stock",
+        "--api-base-url",
+        apiUrlWithUserInfo.toString(),
+      ]),
+    /凭据/,
   );
 });
 

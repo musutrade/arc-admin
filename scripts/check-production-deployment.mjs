@@ -32,6 +32,7 @@ function checkProductionDeployment() {
   const nginx = read("deployment/nginx/nginx.conf");
   const envExample = read("deployment/.env.production.example");
   const frameworkManifest = read(".arc-framework/manifest.json");
+  const frameworkVersion = read("FRAMEWORK_VERSION").trim();
 
   checkDockerfile(backendDockerfile, "后端 Dockerfile");
   checkDockerfile(frontendDockerfile, "前端 Dockerfile");
@@ -78,6 +79,18 @@ function checkProductionDeployment() {
     }
   }
   requireText(envExample, "MONITORING_NETWORK=arc-admin-monitoring", "生产环境示例");
+  for (const expected of [
+    `BACKEND_IMAGE=arc-admin-backend:${frameworkVersion}`,
+    `FRONTEND_IMAGE=arc-admin-frontend:${frameworkVersion}`,
+  ]) {
+    requireText(envExample, expected, "生产环境示例");
+  }
+  for (const expected of [
+    `arc-admin-backend:${frameworkVersion}`,
+    `arc-admin-frontend:${frameworkVersion}`,
+  ]) {
+    requireText(compose, expected, "生产 Compose 默认镜像");
+  }
   for (const managed of [
     '"deployment"',
     '"backend/Dockerfile"',

@@ -8,7 +8,7 @@ Nginx 负责 TLS 终止、HTTP 到 HTTPS 跳转、SPA 静态资源、`/api/` 反
 
 ## 首次部署
 
-1. 复制 `deployment/.env.production.example` 为 `deployment/.env.production`，设置 `APP_HOST`、强随机 `POSTGRES_PASSWORD` 和完整的 URL 编码 `DATABASE_URL`。该文件已被 `.gitignore` 排除。
+1. 通过 `scripts/init-project.sh` 创建的业务项目已生成 `deployment/.env.production`；直接使用框架源仓库时，先从 `deployment/.env.production.example` 复制。设置 `APP_HOST`、强随机 `POSTGRES_PASSWORD`、完整的 URL 编码 `DATABASE_URL` 和 `MFA_ENCRYPTION_KEY`。该文件已被 `.gitignore` 排除。
 2. 将受信 CA 签发的完整证书链和私钥放到 `deployment/tls/tls.crt`、`deployment/tls/tls.key`，私钥在宿主机设为仅部署账号可读。
 3. 从仓库根校验并构建：
 
