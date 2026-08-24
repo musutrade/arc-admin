@@ -13,8 +13,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 变更范围检测：以 .arc-flow/flow.toml 的 scope 规则为单一事实来源
+  # （cargo flow scope --base <ref>），把检测到的组件集下发给各验证 job。
+  # 只改文档/单端代码的提交不再触发全量验证。
+  scope:
+    name: Detect change scope
+    runs-on: self-hosted
+    timeout-minutes: 10
+    outputs:
+      components: ${{ steps.detect.outputs.components }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - name: Detect verification scope
+        id: detect
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          BASE_REF=""
+          if [ -n "${PR_BASE:-}" ]; then
+            BASE_REF="$PR_BASE"
+          elif [ -n "${PUSH_BEFORE:-}" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            BASE_REF="$PUSH_BEFORE"
+          fi
+          if [ -n "$BASE_REF" ] && git cat-file -e "$BASE_REF^{commit}" 2>/dev/null; then
+            cargo flow scope --base "$BASE_REF" --json > scope-output.json
+          else
+            cargo flow scope --all --json > scope-output.json
+          fi
+          COMPONENTS="$(node -e 'const fs=require("fs");const d=JSON.parse(fs.readFileSync("scope-output.json","utf8"));process.stdout.write(d.components.join(","))')"
+          echo "components=$COMPONENTS" >> "$GITHUB_OUTPUT"
+          echo "scope: $COMPONENTS"
+      - name: Upload scope report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scope-report
+          path: codex-audit-pipeline/.codex/reports/scope.json
+          if-no-files-found: ignore
+          retention-days: 14
+
   quality:
     name: Quality gate
+    needs: scope
+    # contains() 为子串匹配；当前组件名 workflow/backend/frontend 两两不成子串，安全。
+    if: ${{ contains(needs.scope.outputs.components, 'workflow') }}
     runs-on: self-hosted
     timeout-minutes: 15
     steps:
@@ -40,6 +89,8 @@ jobs:
 
   backend:
     name: Backend verification
+    needs: scope
+    if: ${{ contains(needs.scope.outputs.components, 'backend') }}
     runs-on: self-hosted
     timeout-minutes: 20
     services:
@@ -73,6 +124,8 @@ jobs:
 
   frontend:
     name: Frontend verification
+    needs: scope
+    if: ${{ contains(needs.scope.outputs.components, 'frontend') }}
     runs-on: self-hosted
     timeout-minutes: 20
     services:
