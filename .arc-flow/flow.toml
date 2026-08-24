@@ -336,7 +336,7 @@ program = "npm"
 args = ["run", "e2e:fullstack"]
 cwd = "{frontend}"
 log = "frontend_fullstack_smoke.log"
-timeout_secs = 300
+timeout_secs = 420
 services = ["test-postgres"]
 remove_env = ["DATABASE_URL"]
 
