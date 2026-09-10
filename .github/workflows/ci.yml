@@ -82,6 +82,8 @@ jobs:
         run: rustup show active-toolchain
       - name: Verify development workflow
         run: cargo flow verify --components workflow
+      - name: 验证原生采集器契约
+        run: python3 -m unittest discover -s scripts/quality -p 'test_*.py'
       - name: Upload quality reports
         if: always()
         uses: actions/upload-artifact@v7
