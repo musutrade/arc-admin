@@ -20,8 +20,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}/harness-build
-      SHADOW_RECEIPTS: ${{ runner.temp }}/quality-shadow-receipts
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.shadow-build
+      SHADOW_RECEIPTS: ${{ github.workspace }}/quality-shadow-receipts
     steps:
       - uses: actions/checkout@v7
         with:
