@@ -73,7 +73,7 @@ jobs:
           severity: HIGH,CRITICAL
       - name: Generate SPDX JSON SBOM
         if: ${{ always() && steps.build-image.outcome == 'success' }}
-        uses: anchore/sbom-action@v0.24.0
+        uses: anchore/sbom-action@v0.24.2
         with:
           image: ${{ matrix.image }}
           format: spdx-json
