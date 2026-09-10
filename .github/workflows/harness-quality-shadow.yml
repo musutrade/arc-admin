@@ -1,0 +1,122 @@
+name: Harness-Gate quality shadow
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/gh215-hosted-runner]
+    paths:
+      - .github/workflows/harness-quality-shadow.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harness-quality-shadow-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: 质量影子采集（非权威门禁）
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.shadow-build
+      SHADOW_RECEIPTS: ${{ github.workspace }}/quality-shadow-receipts
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: 获取固定版本的 Harness-Gate
+        uses: actions/checkout@v7
+        with:
+          repository: musutrade/Harness-Gate
+          ref: ed0270a82be8b699f6bcb7916e7a03462f0a52c6
+          path: .shadow-harness
+          persist-credentials: false
+      - name: 安装未修改的影子配置并检查可信输入
+        # No secret is exposed to branch code. A reviewed host provisioner is
+        # still required by GH-215; missing inputs must fail before costly tests.
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          from datetime import datetime, timezone
+
+          root = Path.cwd()
+          receipts = Path(os.environ['SHADOW_RECEIPTS'])
+          receipts.mkdir()
+          config = root / '.harness-gate'
+          source = root / '.shadow-harness/docs/dogfood/arc-admin'
+          config.mkdir(exist_ok=True)
+          for src, dst in [(source / 'import/flow.toml', config / 'flow.toml'),
+                           (source / 'quality/quality.toml', config / 'quality.toml')]:
+              if dst.exists():
+                  raise SystemExit(f'refusing to overwrite existing configuration: {dst}')
+              shutil.copy2(src, dst)
+          shutil.copytree(source / 'quality/packs', config / 'packs')
+          required = ['full-state.json', 'trusted-keys.json',
+                      'backend-request.json', 'frontend-request.json',
+                      'frontend-api-request.json', 'full-baseline-request.json']
+          missing = [name for name in required if not (config / 'runtime' / name).is_file()]
+          report = {
+              'schema': 'arc-admin-shadow-preflight/v1',
+              'observed_at': datetime.now(timezone.utc).isoformat(),
+              'arc_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'harness_commit': subprocess.check_output(['git', '-C', '.shadow-harness', 'rev-parse', 'HEAD'], text=True).strip(),
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'runner': os.environ['RUNNER_NAME'],
+              'missing_runtime_inputs': missing,
+              'status': 'blocked' if missing else 'inputs_present_not_authenticated',
+              'native_collection_completed': False,
+              'authority_transfer_permitted': False,
+              'config_sha256': {str(p.relative_to(config)): hashlib.sha256(p.read_bytes()).hexdigest()
+                               for p in sorted(config.rglob('*')) if p.is_file() and 'runtime' not in p.parts},
+          }
+          (receipts / 'preflight.json').write_text(json.dumps(report, indent=2) + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('### 质量影子采集\n\n')
+              summary.write('原有 CI 门禁保持不变；本任务不授予接管权限。\n\n')
+              summary.write('缺少可信输入：' + ', '.join(missing) + '\n' if missing else '输入文件存在，尚待验证签名与来源。\n')
+          if missing:
+              raise SystemExit('QUALITY_BLOCKED: trusted host provisioning required; see preflight.json')
+          PY
+      - name: 配置 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - name: 配置固定 Rust 工具链
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+      - name: 构建固定版本采集 CLI
+        run: cargo +1.97.1 build --locked --manifest-path .shadow-harness/tools/harness-gate/Cargo.toml --bin harness-gate
+      - name: 执行真实采集并保留退出状态
+        # Transport validation only. GH-215 still owns native producers,
+        # authenticated baseline evaluation and full-quality acceptance.
+        shell: bash
+        run: |
+          set -uo pipefail
+          "$CARGO_TARGET_DIR/debug/harness-gate" quality collect \
+            --repository-root "$GITHUB_WORKSPACE" \
+            --state .harness-gate/runtime/full-state.json \
+            --trusted-keys .harness-gate/runtime/trusted-keys.json \
+            --output "$SHADOW_RECEIPTS/collection.json" \
+            > "$SHADOW_RECEIPTS/collection.log" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$SHADOW_RECEIPTS/collection-exit-code.txt"
+          exit "$result"
+      - name: 保留成功或失败证据
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-shadow-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.SHADOW_RECEIPTS }}/
+          if-no-files-found: error
+          retention-days: 30

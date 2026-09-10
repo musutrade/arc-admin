@@ -18,7 +18,7 @@ jobs:
   # 只改文档/单端代码的提交不再触发全量验证。
   scope:
     name: Detect change scope
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       components: ${{ steps.detect.outputs.components }}
@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
+      - name: 安装项目固定 Rust 工具链
+        run: rustup show active-toolchain
       - name: Detect verification scope
         id: detect
         env:
@@ -64,7 +66,7 @@ jobs:
     needs: scope
     # contains() 为子串匹配；当前组件名 workflow/backend/frontend 两两不成子串，安全。
     if: ${{ contains(needs.scope.outputs.components, 'workflow') }}
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -76,6 +78,8 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: 安装项目固定 Rust 工具链
+        run: rustup show active-toolchain
       - name: Verify development workflow
         run: cargo flow verify --components workflow
       - name: Upload quality reports
@@ -91,8 +95,8 @@ jobs:
     name: Backend verification
     needs: scope
     if: ${{ contains(needs.scope.outputs.components, 'backend') }}
-    runs-on: self-hosted
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16-alpine
@@ -109,6 +113,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v7
+      - name: 安装项目固定 Rust 工具链
+        run: rustup show active-toolchain
       - name: Run backend checks and tests
         env:
           TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
@@ -126,8 +132,8 @@ jobs:
     name: Frontend verification
     needs: scope
     if: ${{ contains(needs.scope.outputs.components, 'frontend') }}
-    runs-on: self-hosted
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16-alpine
@@ -152,6 +158,8 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: 安装项目固定 Rust 工具链
+        run: rustup show active-toolchain
       - name: Prepare Doctor prerequisites
         run: |
           cp backend/.env.example backend/.env
@@ -168,8 +176,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: Install Playwright browser
         working-directory: frontend
-        # CentOS runner dependencies are provisioned on the runner host.
-        run: npx playwright install chromium
+        # GitHub 托管 runner 是临时环境，浏览器与系统依赖都需安装。
+        run: npx playwright install --with-deps chromium
       - name: Run frontend checks and tests
         env:
           TEST_DATABASE_URL: postgres://arc_admin_test:arc_admin_test@127.0.0.1:5432/arc_admin_test
@@ -186,7 +194,7 @@ jobs:
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request' && github.event.repository.private == false
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
