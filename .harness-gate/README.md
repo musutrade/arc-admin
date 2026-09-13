@@ -28,7 +28,7 @@ Git 基线必须来自 `origin/main` 的真实、唯一 merge base，且与 HEAD
 
 hook 是 partial，不采集完整覆盖率。用 `harness-gate scope --staged --json` 的结果作为 `host.py --profile hook --scope-json ...` 输入。完整质量仍显示 not_collected。
 
-Core 0.4.1 的真实暂存区 hook 无法读取未提交的主机 state，且 Git 不保存空证据目录。本次 Core 修复候选已在真实暂存区验证通过，并保留旧 0.4.1 失败与候选通过两份报告；候选结果不冒充已发布二进制的能力。正式 `cargo flow hook` 保持原有行为。
+Core 0.4.2 已修复暂存区主机 state 和大型报告发布问题，正式构建及公开签名文件已通过本机 full 和实际 `harness-gate hook` 验收。暂存区与工作目录内容不同的用例通过；hook 的完整质量仍为 not_collected。正式 `cargo flow hook` 保持原有行为。详见[2026-09-13 验收](../docs/quality/20260913/README.md)。
 
 ## 当前测量
 
