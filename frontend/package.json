@@ -13,7 +13,8 @@
     "generate:api": "ng-openapi-gen --config ng-openapi-gen.json",
     "generate:api:all": "cargo run --quiet --manifest-path ../backend/Cargo.toml --bin export_openapi && npm run generate:api",
     "lint": "ng lint",
-    "format:check": "prettier --check \"src/**/*.{ts,html,scss}\" \"e2e/**/*.ts\" \"playwright*.config.ts\""
+    "format:check": "prettier --check \"src/**/*.{ts,html,scss}\" \"e2e/**/*.ts\" \"playwright*.config.ts\"",
+    "test:coverage": "ng test --watch=false --runner=vitest --coverage --coverage-reporters=json --coverage-reporters=json-summary --coverage-include=src/**/*.ts --coverage-exclude=src/**/*.spec.ts"
   },
   "private": true,
   "packageManager": "npm@11.16.0",
@@ -42,6 +43,7 @@
     "@angular/compiler-cli": "^22.1.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
+    "@vitest/coverage-v8": "4.1.10",
     "angular-eslint": "22.1.0",
     "eslint": "^10.8.1",
     "jsdom": "^30.0.1",
