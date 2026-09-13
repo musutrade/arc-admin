@@ -208,6 +208,7 @@ components = ["backend", "workflow"]
 [[scope.rules]]
 patterns = [
   ".arc-flow/**",
+  ".harness-gate/**",
   "codex-audit-pipeline/tools/arc-flow/**",
   "codex-audit-pipeline/hooks/**",
   ".cargo/config.toml",
@@ -373,6 +374,7 @@ args = ["--test", "{root}/scripts/init-project.test.mjs"]
 cwd = "{root}"
 log = "project_init_tests.log"
 timeout_secs = 60
+remove_env = ["GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE", "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR"]
 
 [[steps]]
 id = "workflow.framework-release-config"
@@ -395,6 +397,7 @@ args = ["--test", "{root}/scripts/upgrade-framework.test.mjs"]
 cwd = "{root}"
 log = "framework_upgrade_tests.log"
 timeout_secs = 60
+remove_env = ["GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE", "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR"]
 
 [[steps]]
 id = "workflow.template-quality"
@@ -518,3 +521,4 @@ log = "arc_flow_tests.log"
 timeout_secs = 120
 timeout_env = "RUST_TEST_TIMEOUT"
 parser = "rust"
+remove_env = ["GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE", "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE", "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS", "GIT_REPLACE_REF_BASE", "GIT_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR"]
