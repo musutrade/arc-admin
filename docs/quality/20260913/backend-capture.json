@@ -1,0 +1,15 @@
+{
+  "status": "pass",
+  "runtime": "/home/gem/.local/share/harness-gate/rust-collector/versions/0.1.0-rc.2",
+  "capture_anchor": "d0960f4b26e98d674c36c5e9ad9060cff3c1ad4cb1b416acdbeed5ef66c2352c",
+  "functions": 1778,
+  "identical_reexports": true,
+  "project": "arc-admin",
+  "source_commit": "e0dcc46",
+  "reason": "Current main Cargo.lock uses chacha20 0.10.2; old 2faa capture is not reused for this lockfile",
+  "samples": [
+    "api_flow",
+    "openapi_contract",
+    "permission_template_contract"
+  ]
+}
