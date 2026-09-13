@@ -1,0 +1,121 @@
+{
+  "schema": "arc-native-integration-controls/v1",
+  "status": "pass",
+  "configuration_pr": "https://github.com/musutrade/arc-admin/pull/41",
+  "configuration_merge": "d5e113ec2d49cd7dc30aaf2a14db016ba9d7ca94",
+  "producer_records": 1921,
+  "quality_result": "fail",
+  "quality_thresholds_changed": false,
+  "evaluation_report_sha256": "5398175f3e97d9f5336b690061a4d3f580597e4d42c7ed5702196d534f633a65",
+  "transport_negatives": {
+    "receipt_sha256": "faaab55128a89c1c5868704bb7e50d0bd5b9a849cd804324c0a7239c2a0962c6",
+    "scope": "Prior 8dab project source; unchanged host transport, frontend inputs and rules; backend new lockfile independently recaptured."
+  },
+  "old_series_baseline_rejected": {
+    "diagnostic": "ERROR [E1000]: command failed: incompatible configured capability/series",
+    "log_sha256": "53bccb3b2b7112e25e484f384c01f11810e515e3d75c386c3d5e2deb9dd95b91"
+  },
+  "routing": {
+    "status": "pass",
+    "source_commit": "e0dcc46d1990e1f3a987841a355723ef09d3dee7",
+    "cases": [
+      {
+        "path": ".harness-gate/routing-probe.txt",
+        "expected_components": [
+          "backend",
+          "frontend",
+          "workflow"
+        ],
+        "original_staged": [
+          "backend",
+          "frontend",
+          "workflow"
+        ],
+        "core_staged": [
+          "backend",
+          "frontend",
+          "workflow"
+        ],
+        "index_content_retained_after_worktree_delete": true,
+        "working_tree_changed_files": [
+          ".harness-gate/routing-probe.txt"
+        ]
+      },
+      {
+        "path": "backend/routing-probe.txt",
+        "expected_components": [
+          "backend"
+        ],
+        "original_staged": [
+          "backend"
+        ],
+        "core_staged": [
+          "backend"
+        ],
+        "index_content_retained_after_worktree_delete": true,
+        "working_tree_changed_files": [
+          "backend/routing-probe.txt"
+        ]
+      },
+      {
+        "path": "frontend/routing-probe.txt",
+        "expected_components": [
+          "frontend"
+        ],
+        "original_staged": [
+          "frontend"
+        ],
+        "core_staged": [
+          "frontend"
+        ],
+        "index_content_retained_after_worktree_delete": true,
+        "working_tree_changed_files": [
+          "frontend/routing-probe.txt"
+        ]
+      }
+    ],
+    "ci_scope_command": "cargo flow scope --base <event base> --json; source .github/workflows/ci.yml",
+    "thresholds_changed": false
+  },
+  "hook": {
+    "status": "pass",
+    "core": {
+      "source_commit": "7d01c94b20472a35e2ceb7638d5831b5bc354fd1",
+      "merged_commit": "ccf97394f353fdbefd7b79e6318d47745cf8bcf1",
+      "sha256": "1b5812ef9d22973a0e33fdd7631f26cba8ff17835ff1f397340131ad460e476a",
+      "released": false
+    },
+    "scope": {
+      "mode": "staged",
+      "changed_files": [
+        "docs/harness-gate-index-acceptance.md"
+      ],
+      "components": [
+        "workflow"
+      ],
+      "unmatched_files": []
+    },
+    "different_staged_and_working_tree_content": true,
+    "source_commit": "f7cbaccd6a1c13260d1a3171c8a065f0508f5aad",
+    "report_sha256": "df583cac0c96a98f86dac4f9d0ef6a90e9507b7c09f44f8562f2f766526c8391",
+    "released_core_fixed": false,
+    "quality_status": "not_collected",
+    "full_quality_status": "not_collected"
+  },
+  "service_negative": {
+    "status": "pass",
+    "scope": "Imported backend execution service isolation, independent of full-quality state",
+    "external_test_database_name": "production",
+    "expected_failure_code": "SERVICE_LEASE_FAILURE",
+    "observed_failure": "service \"test-postgres\" previously failed: test database name must end with _test or -test",
+    "service_status": [
+      {
+        "id": "test-postgres",
+        "status": "CLEANED"
+      }
+    ],
+    "quality_state": "missing in isolated routing fixture; not a full-quality acceptance receipt",
+    "report_sha256": "c109654b0a17a29ff1e8f7c2b48198fdd54a20c74638d85016b31b97906a9968"
+  },
+  "full_git_baseline_accepted": false
+}
