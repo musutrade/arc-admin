@@ -3,9 +3,9 @@ use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
 #[tokio::test]
 async fn password_hashes_use_fresh_salts_and_verify() {
-    let password = "argon2-upgrade-test-password";
-    let first = hash_password_async(password).await.expect("hash password");
-    let second = hash_password_async(password).await.expect("hash password");
+    let password = uuid::Uuid::new_v4().to_string();
+    let first = hash_password_async(&password).await.expect("hash password");
+    let second = hash_password_async(&password).await.expect("hash password");
     assert_ne!(first, second, "each password hash needs a fresh salt");
 
     for encoded in [first, second] {
