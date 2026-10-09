@@ -88,7 +88,8 @@
     border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-radius-lg);
     background: var(--mat-sys-surface-container-lowest);
-    outline: none;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     font-family: inherit;
     font-size: 14px;
     color: var(--ui-color-text-primary);
@@ -102,6 +103,9 @@
     &:focus {
       border-color: var(--mat-sys-primary);
       box-shadow: var(--ui-focus-ring);
+    }
+    &:focus-visible {
+      outline-color: var(--ui-color-primary);
     }
   }
 }
