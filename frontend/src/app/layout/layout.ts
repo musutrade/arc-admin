@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  HostListener,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -33,6 +42,10 @@ export class LayoutComponent {
   readonly navigationItems = APP_NAVIGATION;
   readonly expandedGroups = signal<ReadonlySet<string>>(new Set());
   readonly currentUrl = signal('');
+  private readonly sidebarPanel = viewChild.required<ElementRef<HTMLElement>>('sidebarPanel');
+  private readonly mobileMenuButton =
+    viewChild.required<ElementRef<HTMLButtonElement>>('mobileMenuButton');
+  private readonly mainContent = viewChild.required<ElementRef<HTMLElement>>('mainContent');
   private readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -75,6 +88,9 @@ export class LayoutComponent {
   }
 
   toggleNavigationGroup(group: NavigationGroup): void {
+    if (this.collapsed()) {
+      this.collapsed.set(false);
+    }
     this.expandedGroups.update((current) => {
       const next = new Set(current);
       if (next.has(group.id)) {
@@ -86,8 +102,33 @@ export class LayoutComponent {
     });
   }
 
-  closeMobileNavigation(): void {
+  toggleMobileNavigation(): void {
+    if (this.sidebarOpen()) {
+      this.closeMobileNavigation(true);
+      return;
+    }
+
+    this.sidebarOpen.set(true);
+    requestAnimationFrame(() => this.sidebarPanel().nativeElement.focus());
+  }
+
+  closeMobileNavigation(restoreFocus = false): void {
     this.sidebarOpen.set(false);
+    if (restoreFocus) {
+      requestAnimationFrame(() => this.mobileMenuButton().nativeElement.focus());
+    }
+  }
+
+  focusMainContent(event: MouseEvent): void {
+    event.preventDefault();
+    this.mainContent().nativeElement.focus();
+  }
+
+  @HostListener('document:keydown.escape')
+  closeMobileNavigationOnEscape(): void {
+    if (this.sidebarOpen()) {
+      this.closeMobileNavigation(true);
+    }
   }
 
   openChangePassword(): void {

@@ -37,6 +37,7 @@ requireText(datasource, "uid: tempo", "Tempo 数据源");
 requireText(backendEnv, "OTEL_EXPORTER_OTLP_ENDPOINT=", "后端环境示例");
 requireText(compliance, "不构成", "高合规文档");
 requireText(compliance, "不可变", "高合规文档");
-requireText(roadmap, "状态：已实现", "MFA 路线图");
+requireText(roadmap, "已实现：`super_admin` 多因素认证", "安全能力状态");
+requireText(roadmap, "## 生产责任", "安全能力状态");
 
 console.log("可选链路追踪与高合规基线检查通过");

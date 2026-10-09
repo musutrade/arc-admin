@@ -8,7 +8,7 @@ RUN cargo build --locked --release --manifest-path backend/Cargo.toml --bins
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates curl \
+    && apt-get install --no-install-recommends -y ca-certificates curl libpcre2-8-0 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 arc-admin \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin arc-admin

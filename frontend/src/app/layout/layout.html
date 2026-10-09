@@ -1,7 +1,22 @@
+<a
+  class="skip-link"
+  href="#main-content"
+  [attr.inert]="sidebarOpen() ? '' : null"
+  (click)="focusMainContent($event)"
+  >跳到主要内容</a
+>
 <!-- 主布局:左侧固定侧边栏 + 顶部导航栏 + 内容区 -->
 <div class="app-shell">
   <!-- ============ 侧边栏 ============ -->
-  <aside class="sidebar" [class.collapsed]="collapsed()" [class.open]="sidebarOpen()">
+  <aside
+    #sidebarPanel
+    id="app-sidebar"
+    class="sidebar"
+    [class.collapsed]="collapsed()"
+    [class.open]="sidebarOpen()"
+    aria-label="主导航"
+    tabindex="-1"
+  >
     <!-- Logo -->
     <div class="sidebar-logo">
       <div class="brand-card">
@@ -22,10 +37,12 @@
           @if (item.kind === 'group') {
             <div class="nav-group">
               <button
+                type="button"
                 class="nav-item"
                 [class.justify-center]="collapsed()"
                 [class.active]="isNavigationActive(item)"
                 [attr.aria-expanded]="isGroupExpanded(item.id)"
+                [attr.aria-controls]="'nav-group-' + item.id"
                 (click)="toggleNavigationGroup(item)"
                 [attr.title]="collapsed() ? item.label : null"
               >
@@ -38,12 +55,17 @@
                   >expand_more</mat-icon
                 >
               </button>
-              <div class="nav-sub" [class.hidden]="collapsed() || !isGroupExpanded(item.id)">
+              <div
+                class="nav-sub"
+                [id]="'nav-group-' + item.id"
+                [class.hidden]="collapsed() || !isGroupExpanded(item.id)"
+              >
                 @for (child of item.children; track child.id) {
                   @if (canAccess(child)) {
                     <a
                       [routerLink]="child.route"
                       routerLinkActive="sub-active"
+                      ariaCurrentWhenActive="page"
                       class="nav-sub-item"
                       (click)="closeMobileNavigation()"
                     >
@@ -57,6 +79,7 @@
             <a
               [routerLink]="item.route"
               routerLinkActive="nav-active"
+              ariaCurrentWhenActive="page"
               class="nav-item"
               [class.justify-center]="collapsed()"
               (click)="closeMobileNavigation()"
@@ -72,6 +95,7 @@
 
     <!-- 折叠按钮 -->
     <button
+      type="button"
       class="sidebar-toggle"
       (click)="$event.stopPropagation(); toggleSidebar()"
       [attr.aria-label]="collapsed() ? '展开侧边栏' : '收起侧边栏'"
@@ -84,17 +108,21 @@
       type="button"
       class="sidebar-backdrop"
       aria-label="关闭菜单"
-      (click)="sidebarOpen.set(false)"
+      (click)="closeMobileNavigation(true)"
     ></button>
   }
 
   <!-- ============ 顶栏 ============ -->
-  <header class="topbar">
+  <header class="topbar" [attr.inert]="sidebarOpen() ? '' : null">
     <div class="topbar-left">
       <button
+        #mobileMenuButton
+        type="button"
         class="icon-btn mobile-menu-btn"
-        (click)="sidebarOpen.set(!sidebarOpen())"
-        aria-label="打开菜单"
+        (click)="toggleMobileNavigation()"
+        [attr.aria-expanded]="sidebarOpen()"
+        aria-controls="app-sidebar"
+        [attr.aria-label]="sidebarOpen() ? '关闭菜单' : '打开菜单'"
       >
         <mat-icon>menu</mat-icon>
       </button>
@@ -103,6 +131,7 @@
 
     <div class="topbar-right">
       <button
+        type="button"
         class="icon-btn"
         (click)="toggleTheme()"
         [attr.aria-label]="isDark() ? '切换到亮色模式' : '切换到暗色模式'"
@@ -111,6 +140,7 @@
       </button>
       <div class="topbar-divider"></div>
       <button
+        type="button"
         mat-icon-button
         [matMenuTriggerFor]="userMenu"
         class="user-chip"
@@ -123,13 +153,13 @@
         </span>
       </button>
       <mat-menu #userMenu="matMenu" xPosition="before" class="user-menu">
-        <button mat-menu-item [routerLink]="['/security']">
+        <button type="button" mat-menu-item [routerLink]="['/security']">
           <mat-icon>security</mat-icon><span>账号安全</span>
         </button>
-        <button mat-menu-item (click)="openChangePassword()">
+        <button type="button" mat-menu-item (click)="openChangePassword()">
           <mat-icon>password</mat-icon><span>修改密码</span>
         </button>
-        <button mat-menu-item (click)="logout()">
+        <button type="button" mat-menu-item (click)="logout()">
           <mat-icon>logout</mat-icon><span>退出登录</span>
         </button>
       </mat-menu>
@@ -137,7 +167,13 @@
   </header>
 
   <!-- ============ 内容区 ============ -->
-  <main class="content">
+  <main
+    #mainContent
+    id="main-content"
+    class="content"
+    tabindex="-1"
+    [attr.inert]="sidebarOpen() ? '' : null"
+  >
     <router-outlet />
   </main>
 </div>

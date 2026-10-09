@@ -9,7 +9,7 @@ arc-admin 使用语义化版本和不可移动的 Git 标签发布。业务仓�
 - 框架已有文件：参与三方合并；
 - 业务仓库独自新增的业务文件：不会被扫描或删除；
 - 框架与业务新增同一路径：作为冲突处理；
-- `backend/.env`、`observability/.env` 等本地秘密：不在 Git 树中，不参与升级；
+- `backend/.env`、`observability/.env`、`deployment/.env.production` 等本地秘密：不在 Git 树中，不参与升级；
 - `.arc-project.json`：由升级器结构化更新版本元数据，不使用模板内容覆盖。
 
 即使业务文件位于 `backend/src`、`frontend/src` 或 `docs` 等管理目录，只要模板的旧、新版本都没有同一路径，升级器就不会触碰它。不要把业务实现写入现有框架文件；确需修改时，三方合并会尽量保留，冲突则要求人工判断。
@@ -24,12 +24,12 @@ arc-admin 使用语义化版本和不可移动的 Git 标签发布。业务仓�
 
 登记前必须保证业务仓库工作区干净。`Aisix-Panel` 使用自己的 slug、数据库名和权限前缀；不要用初始化脚本代替登记，因为初始化脚本会生成环境文件并改写项目头部。
 
-先取得包含完整标签历史的新版本模板。以下示例把业务项目从当前版本升级到 `v1.2.0`：
+先取得包含完整标签历史的新版本模板。以下示例把业务项目从 `v2.3.0` 升级到假设的新版本 `v2.4.0`：
 
 ```bash
 gh repo clone higoalespn/arc-admin ../arc-admin-framework
 git -C ../arc-admin-framework fetch --tags
-git -C ../arc-admin-framework checkout v1.2.0
+git -C ../arc-admin-framework checkout v2.4.0
 ```
 
 业务仓库必须已经执行过项目初始化，且所有改动均已提交。进入业务仓库后先预检：
@@ -61,7 +61,7 @@ git -C ../arc-admin-framework checkout v1.2.0
 检测到冲突时，升级器不会写入任何文件。先在模板仓库查看版本差异：
 
 ```bash
-git -C ../arc-admin-framework diff v1.1.0 v1.2.0 -- <冲突文件>
+git -C ../arc-admin-framework diff v2.3.0 v2.4.0 -- <冲突文件>
 ```
 
 在业务仓库人工合并该文件，执行必要测试并提交。确认已经吸收所需框架改动后，显式保留该文件并继续升级：
@@ -98,9 +98,9 @@ cargo flow verify --all
 示例：
 
 ```bash
-git tag -a v1.2.0 -m "arc-admin v1.2.0"
+git tag -a v2.4.0 -m "arc-admin v2.4.0"
 git push origin main
-git push origin v1.2.0
+git push origin v2.4.0
 ```
 
 标签一旦被派生项目用作三方合并基线，不得删除、覆盖或重新指向其他提交。发布后应使用一个临时业务仓库实际演练 `--check` 和完整升级。
@@ -114,8 +114,8 @@ git push origin v1.2.0
   "schemaVersion": 2,
   "framework": {
     "name": "arc-admin",
-    "version": "v1.1.0",
-    "initializedVersion": "v1.1.0"
+    "version": "v2.3.0",
+    "initializedVersion": "v2.3.0"
   }
 }
 ```
