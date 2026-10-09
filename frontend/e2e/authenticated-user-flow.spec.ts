@@ -364,15 +364,12 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
 
   const changePasswordDialog = page.getByRole('dialog');
   await expect(changePasswordDialog.getByRole('heading', { name: '修改密码' })).toBeVisible();
-  await changePasswordDialog.locator('.editor-dialog').evaluate(async (element) => {
-    await Promise.allSettled(
-      element.getAnimations({ subtree: true }).map((animation) => animation.finished),
-    );
-  });
+  await expect(changePasswordDialog).not.toHaveClass(/\bmdc-dialog--opening\b/);
   const currentPassword = changePasswordDialog.locator('#current-password');
   const newPassword = changePasswordDialog.locator('#new-password');
   const confirmPassword = changePasswordDialog.locator('#confirm-password');
   const totpCode = changePasswordDialog.locator('#totp-code');
+  await expect(currentPassword).toBeFocused();
   await currentPassword.fill('safe-password');
   await newPassword.fill('updated-safe-password');
   await confirmPassword.fill('different-password');
