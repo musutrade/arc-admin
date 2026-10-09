@@ -75,7 +75,6 @@ import { MatIconModule } from '@angular/material/icon';
       padding: 8px 11px 8px 41px;
       border: 1px solid var(--ui-color-border);
       border-radius: var(--ui-radius-md);
-      outline: none;
       background: var(--ui-color-surface-panel);
       color: var(--ui-color-text-primary);
       font: inherit;

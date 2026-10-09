@@ -94,6 +94,8 @@ export function validateFrameworkRelease(root = ROOT) {
     "CHANGELOG.md",
     "FRAMEWORK_VERSION",
     "scripts/init-project.mjs",
+    "scripts/init-project.sh",
+    "scripts/init-project.test.mjs",
     "scripts/upgrade-framework.mjs",
     "scripts/upgrade-framework.sh",
     "scripts/upgrade-framework.test.mjs",
@@ -104,9 +106,11 @@ export function validateFrameworkRelease(root = ROOT) {
     }
   }
 
-  const shellMode = statSync(join(root, "scripts/upgrade-framework.sh")).mode;
-  if ((shellMode & 0o111) === 0) {
-    fail("scripts/upgrade-framework.sh 必须可执行");
+  for (const path of ["scripts/init-project.sh", "scripts/upgrade-framework.sh"]) {
+    const shellMode = statSync(join(root, path)).mode;
+    if ((shellMode & 0o111) === 0) {
+      fail(`${path} 必须可执行`);
+    }
   }
 
   return { version, managedRoots: roots.length, managedFiles: files.length };

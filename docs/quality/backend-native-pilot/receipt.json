@@ -1,0 +1,237 @@
+{
+  "schema": "arc-admin-native-pilot-receipt/v1",
+  "source_commit": "e5a1ee5f7ec6dbae461355106d469384581d4607",
+  "run": "bdd520e83d2749cba80d0c260141140d",
+  "harness_source_commit": "44689dd839852608b438f010694c193105ce6b55",
+  "execution": {
+    "argv": [
+      "cargo",
+      "llvm-cov",
+      "--manifest-path",
+      "backend/Cargo.toml",
+      "--locked",
+      "--json",
+      "--output-path",
+      "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/llvm.json"
+    ],
+    "cleanup": "completed",
+    "commit": "e5a1ee5f7ec6dbae461355106d469384581d4607",
+    "database": "disposable PostgreSQL 16, loopback only",
+    "elapsed_seconds": 316.57090095902095,
+    "exit_code": 0,
+    "run": "bdd520e83d2749cba80d0c260141140d",
+    "started_at": "2026-09-10T11:25:47.235322+00:00"
+  },
+  "host": {
+    "authority_transfer_permitted": false,
+    "collection_exit_code": 0,
+    "harness_binary_sha256": "3f48526067b38da0ba466696c7ad5a54759562c16f854bb9fd580b58c98fd628",
+    "native_manifest_sha256": "2cf319497c591f3335bcacf873be678bbc048cf5757bf0dd17592bbdb1625a57",
+    "trust_scope": "local shadow only; no accepted baseline or production trust anchor"
+  },
+  "evaluation": {
+    "accepted": false,
+    "exit_code": 1,
+    "note": "No base comparison; partial backend shadow, uncertified CRAP remains measurement_error."
+  },
+  "inventory": {
+    "source_files": 47,
+    "native_coverage_files": 42,
+    "missing_llvm_files": [
+      "backend/src/handlers/mod.rs",
+      "backend/src/permissions.rs",
+      "backend/src/permissions/departments.rs",
+      "backend/src/repositories/mod.rs",
+      "backend/src/services/mod.rs"
+    ]
+  },
+  "ast_errors": [
+    {
+      "error": "Error: \"unsupported production macro error at LineColumn { line: 90, column: 16 }: expected an expression\"",
+      "path": "backend/src/error.rs"
+    },
+    {
+      "error": "Error: \"unsupported production macro error at LineColumn { line: 31, column: 8 }: expected an expression\\nunsupported production macro error at LineColumn { line: 42, column: 12 }: expected an expression\\nunsupported production macro error at LineColumn { line: 56, column: 12 }: expected an expression\\nunsupported production macro select at LineColumn { line: 141, column: 4 }: expected `,`\"",
+      "path": "backend/src/main.rs"
+    },
+    {
+      "error": "Error: \"unsupported production macro macro_rules at LineColumn { line: 7, column: 0 }: expected an expression\"",
+      "path": "backend/src/permissions.rs"
+    },
+    {
+      "error": "Error: \"unsupported production macro task_local at LineColumn { line: 36, column: 0 }: expected `|`\\nunsupported production macro error at LineColumn { line: 153, column: 8 }: expected an expression\\nunsupported production macro info_span at LineColumn { line: 164, column: 4 }: expected an expression\\nunsupported production macro info_span at LineColumn { line: 182, column: 12 }: expected an expression\\nunsupported production macro error at LineColumn { line: 210, column: 20 }: expected `,`\\nunsupported production macro warn at LineColumn { line: 219, column: 20 }: expected `,`\\nunsupported production macro info at LineColumn { line: 228, column: 20 }: expected `,`\"",
+      "path": "backend/src/telemetry.rs"
+    }
+  ],
+  "measurement_series": {
+    "collector": {
+      "name": "arc-admin-rust-native",
+      "version": "1"
+    },
+    "id": "measurement-series/v1:278832ca9b15dbe18260f437cf356c73912c50550e2b594a9fb534db45f30ded",
+    "metrics": [
+      {
+        "name": "coverage.line",
+        "type": "ratio"
+      },
+      {
+        "name": "coverage.region",
+        "type": "ratio"
+      },
+      {
+        "name": "risk.crap",
+        "type": "rational"
+      }
+    ],
+    "name": "arc-admin-native-file-coverage",
+    "normalization": {
+      "name": "exact-native-counters",
+      "version": "1"
+    },
+    "rule": {
+      "name": "llvm-file-summary-unfiltered",
+      "version": "1"
+    },
+    "runtime": {
+      "name": "rust",
+      "version": "b6613b194bef01c71d7e040e4a15ba8999e2b8263b61c09e156819ccb213485a"
+    },
+    "source_identity": {
+      "name": "subject-identity",
+      "version": "1"
+    },
+    "target": "x86_64-unknown-linux-gnu",
+    "tool": {
+      "name": "cargo-llvm-cov",
+      "version": "569e7f72043a0f0d2c623f7839b64cdf8338d3aa503f775fbcefe141ed64f288"
+    }
+  },
+  "policy_states": {
+    "fail": 31,
+    "pass": 53,
+    "measurement_error": 57
+  },
+  "negative_checks": {
+    "authority_transfer_permitted": false,
+    "cases": [
+      {
+        "case": "tampered-artifact",
+        "diagnostic": "artifact/source digest mismatch\nartifact/source digest mismatch\nartifact/source digest mismatch",
+        "exit_code": 1,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "missing-artifact",
+        "diagnostic": "artifact/source file-0.json: No such file or directory (os error 2)\nartifact/source file-0.json: No such file or directory (os error 2)\nartifact/source file-0.json: No such file or directory (os error 2)",
+        "exit_code": 1,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "changed-source",
+        "diagnostic": "artifact/source digest mismatch\nartifact/source digest mismatch\nartifact/source digest mismatch",
+        "exit_code": 1,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "stale-context",
+        "diagnostic": "stale commit/base/target/run evidence\nstale commit/base/target/run evidence\nstale commit/base/target/run evidence",
+        "exit_code": 1,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "case": "tampered-signature",
+        "diagnostic": "ERROR [E1000]: command failed: ADAPTER_PROTOCOL_FAILURE: adapter signature verification failed",
+        "exit_code": 1,
+        "log_sha256": "4d60f13d15a1cab29f8126a229927f85c3ea16f44d121bd152ea95080df55882"
+      },
+      {
+        "case": "expired-request",
+        "diagnostic": "ERROR [E1000]: command failed: ADAPTER_PROTOCOL_FAILURE: adapter request has expired",
+        "exit_code": 1,
+        "log_sha256": "76708b30c9bca800a049dbfa8306d6904721a1eb5f8f6aa752a40f3c860dedc8"
+      }
+    ],
+    "harness_binary_sha256": "3f48526067b38da0ba466696c7ad5a54759562c16f854bb9fd580b58c98fd628",
+    "native_manifest_sha256": "2cf319497c591f3335bcacf873be678bbc048cf5757bf0dd17592bbdb1625a57",
+    "negative_checks_passed": true,
+    "schema": "arc-admin-native-negative-checks/v1"
+  },
+  "retained_artifacts": [
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/native.json",
+      "sha256": "2cf319497c591f3335bcacf873be678bbc048cf5757bf0dd17592bbdb1625a57",
+      "bytes": 12210
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/llvm.json.gz",
+      "sha256": "822ffef1c4264ce6b5707c62c09fd04e035c250107422de4926e723bb4af0641",
+      "bytes": 216758
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/source.tar.gz",
+      "sha256": "37b264c1f2d9bfe4d3af7b7bde5557bae65c63fede1f33564448d9e93a936f04",
+      "bytes": 4223962
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/execution.json",
+      "sha256": "a436127c491715d9104af8f73d05215d2e75b63322a560e6132ba00eedafee10",
+      "bytes": 427
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/tests.log",
+      "sha256": "f5fd3b2cfcea5785b3243441744077bf5c1200ca59e40012bdce85ff3171074f",
+      "bytes": 13838
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/sampler.py",
+      "sha256": "b764bbe6e632f6a4f71634ed6525c08c7e1871792c13443f36c47d69f498ac38",
+      "bytes": 8513
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/ast-preflight.json",
+      "sha256": "8513abc06225ae16cd546377005c591076d7040880fb42acd268d7d23cda1561",
+      "bytes": 1505
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-host-final/collection.json",
+      "sha256": "3c0e0d30b0878f8bd3313b48a17abd1f27b3cc70cacee3fb814b6447a5ac3141",
+      "bytes": 567925
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-host-final/policy-report.json",
+      "sha256": "d2267a18293ab013bcf080a8f479f785b38ac38101c844a53a77372ca8ed0ac8",
+      "bytes": 1373866
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-host-final/state.json",
+      "sha256": "e44eedad52d1bce362c835d4fab7aca5628d111a7c4b9c6d71ac4008679ecb37",
+      "bytes": 26143
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-host-final/host-receipt.json",
+      "sha256": "d492012a81e8a93b1efcf01785d588d8d93f2c12429fd2162d1c85d79ef4a310",
+      "bytes": 330
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-host-final/evaluation-receipt.json",
+      "sha256": "93399f194dff0d29c2531aabfdf842c7d1656529a3d66e6967569704e39c8ff9",
+      "bytes": 130
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-negatives-final/negative-checks.json",
+      "sha256": "6cfcf00ded3b1cbaf3b2fed2ecc1e2685695ef88bcd2935b84b0ca75befda2a5",
+      "bytes": 1826
+    },
+    {
+      "path": "/mnt/dev-ssd/dev-tmp/gh215-native-sample-2/profiles.tar.gz",
+      "sha256": "305c9924393584dd7cda315dcbfdece30789d21657fa6f21c10bce585563cd32",
+      "bytes": 110283
+    }
+  ],
+  "limitations": [
+    "LLVM file summaries include inline tests; not certified production/function coverage.",
+    "Every CRAP capability is measurement_error; no numeric CRAP emitted.",
+    "Local shadow trust only; no accepted baseline or authority transfer.",
+    "Manual GitHub workflow has not been executed."
+  ]
+}

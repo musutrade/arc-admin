@@ -1,0 +1,59 @@
+{
+  "rules": [
+    {
+      "id": "frontend-api.contract.breaking_changes",
+      "limit": {
+        "type": "count",
+        "value": 0
+      },
+      "metric": "contract.breaking_changes",
+      "on_violation": "fail",
+      "operator": "eq",
+      "remediation_classes": [
+        "repair_contract"
+      ],
+      "required": true,
+      "scope": {
+        "kind": "relationship",
+        "relationship": "frontend-api"
+      }
+    },
+    {
+      "id": "frontend-api.contract.client_drift",
+      "limit": {
+        "type": "boolean",
+        "value": false
+      },
+      "metric": "contract.client_drift",
+      "on_violation": "fail",
+      "operator": "eq",
+      "remediation_classes": [
+        "repair_contract"
+      ],
+      "required": true,
+      "scope": {
+        "kind": "relationship",
+        "relationship": "frontend-api"
+      }
+    },
+    {
+      "id": "frontend-api.contract.compatible",
+      "limit": {
+        "type": "boolean",
+        "value": true
+      },
+      "metric": "contract.compatible",
+      "on_violation": "fail",
+      "operator": "eq",
+      "remediation_classes": [
+        "repair_contract"
+      ],
+      "required": true,
+      "scope": {
+        "kind": "relationship",
+        "relationship": "frontend-api"
+      }
+    }
+  ],
+  "schema": "harness-policy/v1"
+}

@@ -9,7 +9,7 @@ x-backend-environment: &backend-environment
   TRUSTED_PROXY_CIDRS: 172.30.0.0/24
   LOG_FORMAT: json
   RUST_LOG: info,tower_http=info,sqlx=warn
-  SERVICE_NAME: arc-admin-backend
+  SERVICE_NAME: ${SERVICE_NAME:-arc-admin-backend}
   MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?请由密钥系统注入 MFA_ENCRYPTION_KEY}
   WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-${APP_HOST}}
   WEBAUTHN_RP_ORIGIN: ${WEBAUTHN_RP_ORIGIN:-https://${APP_HOST}}
