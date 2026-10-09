@@ -819,7 +819,7 @@ fn hash_recovery_code(code: &str) -> Result<String, ApiError> {
     let params = Params::new(4 * 1024, 1, 1, None)
         .map_err(|error| ApiError::internal(format!("invalid recovery hash profile: {error}")))?;
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password(code.as_bytes(), &session_auth::password_salt())
+        .hash_password_with_salt(code.as_bytes(), &session_auth::password_salt())
         .map(|hash| hash.to_string())
         .map_err(|error| ApiError::internal(format!("failed to hash recovery code: {error}")))
 }
