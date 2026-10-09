@@ -69,6 +69,7 @@ let roles: ApiRole[] = [
 test('logs in, uses permission-aware navigation, and creates a user', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60_000);
   let users: ApiUser[] = [administrator];
   let createdRequest: Record<string, unknown> | null = null;
   let passwordChangeRequest: ChangePasswordRequest | null = null;
@@ -176,7 +177,39 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
       passwordChangeRequest = request.postDataJSON() as ChangePasswordRequest;
       await route.fulfill({ status: 204 });
     } else if (path === '/api/v1/permissions/groups') {
-      await route.fulfill({ json: [] });
+      await route.fulfill({
+        json: [
+          {
+            id: 1,
+            code: 'user-management',
+            name: '用户管理',
+            icon: 'group',
+            permissions: [
+              {
+                id: 1,
+                code: 'user:directory:read',
+                name: '查看用户目录',
+                type: 'menu',
+                description: '查看用户列表和基础资料',
+              },
+              {
+                id: 2,
+                code: 'user:write',
+                name: '维护用户',
+                type: 'button',
+                description: '创建和编辑用户',
+              },
+              {
+                id: 3,
+                code: 'user:api:read',
+                name: '读取用户接口',
+                type: 'api',
+                description: '调用用户查询接口',
+              },
+            ],
+          },
+        ],
+      });
     } else if (path === '/api/v1/dashboard/stats') {
       await route.fulfill({
         json: {
@@ -261,17 +294,56 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     }
   });
 
+  const settlePageAnimation = async () => {
+    const pageSurface = page.locator('.page').first();
+    await pageSurface.evaluate(async (element) => {
+      await Promise.allSettled(
+        element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+      );
+    });
+  };
+
   await page.goto('/login');
   await expect(page).toHaveTitle('股票分析系统');
   await expect(page.locator('html')).toHaveAttribute('data-app-slug', 'stock-analysis');
   await expect(page.locator('.login-header p')).toContainText('股票分析系统');
+  if (process.env['VISUAL_REVIEW']) {
+    await page.locator('.login-card').evaluate(async (element) => {
+      await Promise.allSettled(
+        element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+      );
+    });
+    await page.screenshot({ path: testInfo.outputPath('login.png'), fullPage: true });
+  }
   await page.getByLabel('用户名').fill('admin');
   await page.getByLabel('密码', { exact: true }).fill('safe-password');
   await page.getByRole('button', { name: '登录' }).click();
   await expect(page.getByRole('heading', { name: '权限目录' })).toBeVisible();
+  await expect(page.getByRole('table', { name: '权限目录列表' })).toBeVisible();
   await expect(page.locator('.sidebar-logo h2')).toHaveText('股票分析系统');
   await expect(page.locator('.sidebar-logo p')).toHaveText('投研平台');
   await expect(page.locator('.topbar-title')).toHaveText('股票分析系统');
+  if (process.env['VISUAL_REVIEW']) {
+    await settlePageAnimation();
+    await page.screenshot({ path: testInfo.outputPath('permissions.png'), fullPage: true });
+  }
+  const skipLink = page.getByRole('link', { name: '跳到主要内容' });
+  await skipLink.focus();
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeVisible();
+  await skipLink.press('Enter');
+  await expect(page.locator('#main-content')).toBeFocused();
+
+  const sidebarToggle = page.getByRole('button', { name: '收起侧边栏' });
+  const userNavigationGroup = page
+    .locator('.sidebar')
+    .getByRole('button', { name: '用户管理', exact: true });
+  if (await sidebarToggle.isVisible()) {
+    await sidebarToggle.click();
+    await userNavigationGroup.click();
+    await expect(userNavigationGroup).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByRole('link', { name: '用户列表' })).toBeVisible();
+  }
 
   await page.getByRole('button', { name: '账户菜单' }).click();
   await expect(page.getByRole('menuitem', { name: '修改密码' })).toBeVisible();
@@ -346,13 +418,25 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   const mobileMenu = page.getByRole('button', { name: '打开菜单' });
   if (await mobileMenu.isVisible()) {
     await mobileMenu.click();
+    await expect(page.locator('.mobile-menu-btn')).toHaveAttribute('aria-expanded', 'true');
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.closest('.sidebar') !== null))
+      .toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.mobile-menu-btn')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('.mobile-menu-btn')).toBeFocused();
+    await mobileMenu.click();
   }
   await page.getByRole('link', { name: '审计日志' }).click();
   await expect(page.getByRole('heading', { name: '审计日志' })).toBeVisible();
-  await expect(page.getByRole('table').getByText('变更用户角色', { exact: true })).toBeVisible();
-  await expect(page.getByText('用户 #2', { exact: true })).toBeVisible();
-  await expect(page.getByText('audit-trace-e2e', { exact: true })).toBeVisible();
-  const copyTraceId = page.getByRole('button', { name: '复制追踪号 audit-trace-e2e' });
+  const auditList =
+    page.viewportSize()!.width < 800
+      ? page.locator('.audit-mobile-list')
+      : page.getByRole('table', { name: '审计日志列表' });
+  await expect(auditList.getByText('变更用户角色', { exact: true })).toBeVisible();
+  await expect(auditList.getByText('用户 #2', { exact: true })).toBeVisible();
+  await expect(auditList.getByText('audit-trace-e2e', { exact: true })).toBeVisible();
+  const copyTraceId = auditList.getByRole('button', { name: '复制追踪号 audit-trace-e2e' });
   await copyTraceId.click();
   await expect(copyTraceId).toHaveAttribute('title', '已复制');
   if (process.env['VISUAL_REVIEW']) {
@@ -361,13 +445,34 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   if (await mobileMenu.isVisible()) {
     await mobileMenu.click();
   }
-  await page.getByRole('button', { name: '用户管理' }).click();
+  await page.getByRole('link', { name: '部门管理' }).click();
+  await expect(page.getByRole('heading', { name: '部门管理' })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: '搜索部门名称或编码' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '按状态筛选部门' })).toBeVisible();
+  await expect(page.getByRole('table', { name: '组织部门列表' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '部门概览' })).toContainText('部门总数');
+  if (process.env['VISUAL_REVIEW']) {
+    await settlePageAnimation();
+    await page.screenshot({ path: testInfo.outputPath('departments.png'), fullPage: true });
+  }
+  if (await mobileMenu.isVisible()) {
+    await mobileMenu.click();
+  }
+  await userNavigationGroup.click();
   await page.getByRole('link', { name: '用户列表' }).click();
   await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '按用户名或邮箱搜索用户' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '按角色筛选用户' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '按创建时间或姓名排序用户' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '按状态筛选用户' })).toBeVisible();
+  await expect(page.getByRole('table', { name: '系统用户列表' })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: '选择当前页全部可操作用户' })).toBeVisible();
   const administratorRow = page.getByRole('row').filter({ hasText: '管理员' });
   await expect(administratorRow).toContainText('2026-08-01 08:00');
   await expect(administratorRow.getByRole('button', { name: '停用用户 管理员' })).toHaveCount(0);
   await expect(administratorRow.getByRole('button', { name: '删除用户 管理员' })).toHaveCount(0);
+  await expect(administratorRow.getByRole('button', { name: '编辑用户 管理员' })).toBeVisible();
+  await expect(administratorRow.getByRole('button', { name: '重置用户密码 管理员' })).toBeVisible();
   await page.getByRole('button', { name: '新增用户' }).click();
 
   const dialog = page.getByRole('dialog');
@@ -395,12 +500,12 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     await page.screenshot({ path: testInfo.outputPath('add-user-dialog.png'), fullPage: true });
   }
 
-  await page.getByLabel('用户名').fill('new_user');
-  await page.getByLabel('密码').fill('new-user-password');
-  await page.getByLabel('显示名称').fill('新用户');
-  await page.getByLabel('邮箱').fill('new.user@example.test');
-  await page.getByLabel('角色').selectOption({ label: '查看者' });
-  await page.getByRole('button', { name: '保存用户' }).click();
+  await dialog.getByLabel('用户名', { exact: true }).fill('new_user');
+  await dialog.getByLabel('密码', { exact: true }).fill('new-user-password');
+  await dialog.getByLabel('显示名称', { exact: true }).fill('新用户');
+  await dialog.getByLabel('邮箱', { exact: true }).fill('new.user@example.test');
+  await dialog.getByLabel('角色', { exact: true }).selectOption({ label: '查看者' });
+  await dialog.getByRole('button', { name: '保存用户' }).click();
   await completeStepUp('敏感操作需要再认证');
 
   await expect(page.getByText('新用户', { exact: true })).toBeVisible();
@@ -499,6 +604,11 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await page.getByRole('link', { name: '角色管理' }).click();
   await expect(page.getByRole('heading', { name: '角色管理' })).toBeVisible();
 
+  const gridViewButton = page.getByRole('button', { name: '卡片视图' });
+  const listViewButton = page.getByRole('button', { name: '列表视图' });
+  await expect(gridViewButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(listViewButton).toHaveAttribute('aria-pressed', 'false');
+
   const viewerCard = page.locator('.role-card').filter({ hasText: '查看者' });
   const superAdminCard = page.locator('.role-card').filter({ hasText: '超级管理员' });
   await expect(viewerCard.getByText('启用', { exact: true })).toBeVisible();
@@ -536,7 +646,9 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
     await page.screenshot({ path: testInfo.outputPath('roles-grid-inactive.png'), fullPage: true });
   }
 
-  await page.getByRole('button', { name: '列表视图' }).click();
+  await listViewButton.click();
+  await expect(gridViewButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(listViewButton).toHaveAttribute('aria-pressed', 'true');
 
   const roleTable = page.locator('.roles-table');
   const roleTableScroll = page.locator('.role-table-scroll');
@@ -593,10 +705,46 @@ test('logs in, uses permission-aware navigation, and creates a user', async ({
   await page.getByRole('option', { name: '审核', exact: true }).click();
   await expect(iconSelect).toContainText('审核');
   await roleDialog.getByRole('button', { name: '取消' }).click();
+
+  await page.goto('/role-permissions');
+  await expect(page.getByRole('heading', { name: '权限分配' })).toBeVisible();
+  await expect(page.getByRole('table', { name: '角色权限分配列表' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '编辑权限 查看者' })).toBeVisible();
+  if (process.env['VISUAL_REVIEW']) {
+    await settlePageAnimation();
+    await page.screenshot({ path: testInfo.outputPath('role-permissions.png'), fullPage: true });
+  }
+
+  await page.getByRole('button', { name: '账户菜单' }).click();
+  await page.getByRole('menuitem', { name: '账号安全' }).click();
+  await expect(page.getByRole('heading', { name: '账号安全' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '身份验证器已启用' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '通行密钥', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '恢复码', exact: true })).toBeVisible();
+  if (process.env['VISUAL_REVIEW']) {
+    await settlePageAnimation();
+    await page.screenshot({ path: testInfo.outputPath('security.png'), fullPage: true });
+  }
 });
 
 test('redirects an unauthenticated deep link to login', async ({ page }) => {
   await page.goto('/users');
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('button', { name: '登录' })).toBeVisible();
+});
+
+test('renders the public error page with one main landmark', async ({ page }, testInfo) => {
+  await page.goto('/404');
+  await expect(page.getByRole('heading', { name: '页面不存在' })).toBeVisible();
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: '返回首页' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '返回上一页' })).toBeVisible();
+  if (process.env['VISUAL_REVIEW']) {
+    await page.locator('.error-content').evaluate(async (element) => {
+      await Promise.allSettled(
+        element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+      );
+    });
+    await page.screenshot({ path: testInfo.outputPath('error-404.png'), fullPage: true });
+  }
 });

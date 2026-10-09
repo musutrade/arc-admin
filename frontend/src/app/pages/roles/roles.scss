@@ -152,35 +152,6 @@
   }
 }
 
-.role-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--ui-radius-pill);
-  background: var(--ui-color-surface-muted);
-  color: var(--ui-color-text-tertiary);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ui-color-text-tertiary);
-  }
-
-  &.st-active {
-    background: var(--ui-color-success-soft);
-    color: var(--mat-sys-success);
-
-    .status-dot {
-      background: var(--mat-sys-success);
-    }
-  }
-}
-
 .role-name {
   margin: 0 0 8px;
   font-size: 20px;

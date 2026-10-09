@@ -54,6 +54,10 @@ export class SecurityPage {
     void this.load();
   }
 
+  retry(): void {
+    void this.load();
+  }
+
   registerPasskey(): void {
     submit(this.registrationForm, async () => {
       await this.run(async () => {
@@ -120,6 +124,7 @@ export class SecurityPage {
 
   private async load(): Promise<void> {
     this.loading.set(true);
+    this.error.set(null);
     try {
       this.status.set(await this.auth.getMfaStatus());
     } catch (error) {

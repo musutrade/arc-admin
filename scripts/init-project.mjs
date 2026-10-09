@@ -65,13 +65,13 @@ function normalizedText(value, option, maximumLength) {
 }
 
 function normalizeApiBaseUrl(value) {
-  const normalized = normalizedText(value, "--api-base-url", 200).replace(
-    /\/+$/,
-    "",
-  );
+  const normalized = normalizedText(value, "--api-base-url", 200).replace(/\/+$/, "");
+  if (!normalized) {
+    return "/";
+  }
   if (normalized.startsWith("/")) {
-    if (/\s/.test(normalized)) {
-      fail("--api-base-url 不能包含空白字符");
+    if (normalized.startsWith("//") || /[\s\\?#]/.test(normalized)) {
+      fail("--api-base-url 必须以单斜杠开头，且不能包含空白、反斜杠、查询参数或片段");
     }
     return normalized;
   }
@@ -84,6 +84,9 @@ function normalizeApiBaseUrl(value) {
   }
   if (!["http:", "https:"].includes(parsed.protocol)) {
     fail("--api-base-url 仅支持 HTTP(S) URL");
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    fail("--api-base-url 不能包含凭据、查询参数或片段");
   }
   return normalized;
 }
@@ -165,7 +168,7 @@ function assertSafeRepository(root) {
   } catch {
     // A local template copy may not have an origin yet.
   }
-  if (/(?:^|[/:])higoalespn\/arc-admin(?:-starter)?(?:\.git)?$/i.test(origin)) {
+  if (/(?:^|[/:])[^/]+\/arc-admin(?:-starter)?(?:\.git)?$/i.test(origin)) {
     fail("不能在 arc-admin 框架源仓库执行初始化，请先从模板创建新的业务仓库");
   }
 
@@ -219,10 +222,15 @@ function buildEnvironment(example, options) {
     return JSON.stringify(databaseUrl.toString());
   });
 
-  return replaceEnvValue(
+  const withServiceName = replaceEnvValue(
     withDatabase,
     "SERVICE_NAME",
     () => `${options.slug}-backend`,
+  );
+  return replaceEnvValue(
+    withServiceName,
+    "WEBAUTHN_RP_NAME",
+    () => JSON.stringify(options.title),
   );
 }
 
@@ -233,12 +241,42 @@ function buildObservabilityEnvironment(example, options, grafanaPassword) {
     () => `${options.slug}-observability`,
     "observability/.env.example",
   );
-  return replaceEnvValue(
+  const withMonitoringNetwork = replaceEnvValue(
     withProjectName,
+    "MONITORING_NETWORK",
+    () => `${options.slug}-monitoring`,
+    "observability/.env.example",
+  );
+  return replaceEnvValue(
+    withMonitoringNetwork,
     "GRAFANA_ADMIN_PASSWORD",
     () => grafanaPassword,
     "observability/.env.example",
   );
+}
+
+function buildProductionEnvironment(example, options, frameworkVersion) {
+  const replacements = new Map([
+    ["COMPOSE_PROJECT_NAME", options.slug],
+    ["POSTGRES_DB", options.database],
+    ["POSTGRES_USER", options.database],
+    ["WEBAUTHN_RP_NAME", JSON.stringify(options.title)],
+    ["SERVICE_NAME", `${options.slug}-backend`],
+    ["BACKEND_IMAGE", `${options.slug}-backend:${frameworkVersion}`],
+    ["FRONTEND_IMAGE", `${options.slug}-frontend:${frameworkVersion}`],
+    ["MONITORING_NETWORK", `${options.slug}-monitoring`],
+  ]);
+
+  let environment = example;
+  for (const [key, value] of replacements) {
+    environment = replaceEnvValue(
+      environment,
+      key,
+      () => value,
+      "deployment/.env.production.example",
+    );
+  }
+  return environment;
 }
 
 function buildRuntimeConfig(options) {
@@ -334,13 +372,21 @@ export function initializeProject(
     root,
     "observability/.env.example",
   );
+  const productionEnvironmentExamplePath = requiredFile(
+    root,
+    "deployment/.env.production.example",
+  );
   const environmentPath = join(root, "backend/.env");
   const observabilityPath = join(root, "observability/.env");
+  const productionEnvironmentPath = join(root, "deployment/.env.production");
   if (existsSync(environmentPath)) {
     fail("backend/.env 已存在，拒绝覆盖本地配置");
   }
   if (existsSync(observabilityPath)) {
     fail("observability/.env 已存在，拒绝覆盖本地配置");
+  }
+  if (existsSync(productionEnvironmentPath)) {
+    fail("deployment/.env.production 已存在，拒绝覆盖本地配置");
   }
 
   const frameworkVersion = readFileSync(frameworkVersionPath, "utf8").trim();
@@ -367,6 +413,11 @@ export function initializeProject(
     frameworkVersion,
   );
   const metadata = buildProjectMetadata(options, frameworkVersion);
+  const productionEnvironment = buildProductionEnvironment(
+    readFileSync(productionEnvironmentExamplePath, "utf8"),
+    options,
+    frameworkVersion,
+  );
 
   writeFileSync(environmentPath, environment, {
     encoding: "utf8",
@@ -374,6 +425,11 @@ export function initializeProject(
     flag: "wx",
   });
   writeFileSync(observabilityPath, observabilityEnvironment, {
+    encoding: "utf8",
+    mode: 0o600,
+    flag: "wx",
+  });
+  writeFileSync(productionEnvironmentPath, productionEnvironment, {
     encoding: "utf8",
     mode: 0o600,
     flag: "wx",

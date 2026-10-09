@@ -1,4 +1,4 @@
-<main class="error-page">
+<div class="error-page">
   @switch (status) {
     @case (403) {
       <section class="error-content error-card" aria-labelledby="error-title">
@@ -22,7 +22,7 @@
       </section>
     }
     @case (404) {
-      <section class="error-content error-content-wide" aria-labelledby="error-title">
+      <section class="error-content error-content-wide error-card" aria-labelledby="error-title">
         <div class="not-found-illustration" aria-hidden="true">
           <span class="not-found-code">404</span>
           <span class="not-found-icon">
@@ -51,7 +51,7 @@
       </section>
     }
     @case (500) {
-      <section class="error-content error-content-wide" aria-labelledby="error-title">
+      <section class="error-content error-content-wide error-card" aria-labelledby="error-title">
         <div class="server-error-illustration" aria-hidden="true">
           <mat-icon class="filled">dangerous</mat-icon>
         </div>
@@ -75,4 +75,4 @@
       </section>
     }
   }
-</main>
+</div>
