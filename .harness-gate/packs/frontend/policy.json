@@ -1,0 +1,62 @@
+{
+  "rules": [
+    {
+      "id": "frontend.coverage.line",
+      "limit": {
+        "covered": 4,
+        "total": 5,
+        "type": "ratio"
+      },
+      "metric": "coverage.line",
+      "on_violation": "fail",
+      "operator": "ge",
+      "remediation_classes": [
+        "review_quality_evidence"
+      ],
+      "required": true,
+      "scope": {
+        "component": "frontend",
+        "kind": "component"
+      }
+    },
+    {
+      "id": "frontend.coverage.function",
+      "limit": {
+        "covered": 4,
+        "total": 5,
+        "type": "ratio"
+      },
+      "metric": "coverage.function",
+      "on_violation": "fail",
+      "operator": "ge",
+      "remediation_classes": [
+        "review_quality_evidence"
+      ],
+      "required": true,
+      "scope": {
+        "component": "frontend",
+        "kind": "component"
+      }
+    },
+    {
+      "id": "frontend.risk.crap",
+      "limit": {
+        "denominator": 1,
+        "numerator": 30,
+        "type": "rational"
+      },
+      "metric": "risk.crap",
+      "on_violation": "fail",
+      "operator": "le",
+      "remediation_classes": [
+        "review_quality_evidence"
+      ],
+      "required": false,
+      "scope": {
+        "component": "frontend",
+        "kind": "component"
+      }
+    }
+  ],
+  "schema": "harness-policy/v1"
+}
