@@ -1,0 +1,16 @@
+{
+  "schema": "arc-backend-series-transition/v1",
+  "reason": "Current main backend/Cargo.lock updated chacha20 from 0.10.1 to 0.10.2",
+  "project_commit": "e0dcc46d1990e1f3a987841a355723ef09d3dee7",
+  "old_series": "measurement-series/v1:8242d3ded2c297af381abaf5559190ac4708381f455daa58ef804d7b86280f52",
+  "new_series": "measurement-series/v1:7e259ca160cb1cb31890db0b3ad4e3de7394c76f95a09cd6b54a6097166fe2f7",
+  "native_series": "measurement-series/v1:f4bec64d998c59b4036607aff05b6689c12278e0cde548db4c57e9e6ceb9d104",
+  "old_lock_sha256": "54b5e07bbb8fcf7b3bf4569b28fadc38b4382c262b366cb33d146b91c4fa56f3",
+  "new_lock_sha256": "10cbd541d61f6aa6e1a5ec8c92a9844f1e59150943ecfad5238aec2680f84c05",
+  "capture_receipt_sha256": "97c25104cac5f1ef96e8a85f743ce00ee8c59531d985d42ea0f4459560a2f58b",
+  "authenticated_collection_receipt_sha256": "0fc0f6de9b64ec09d7ffd348af8d3ff95bbe26e156b6475402f855c1d87aaebb",
+  "measurement_sha256": "c3e17d97984ab8832a736b3ea6d475f8f6e0f38a88f20f2d63c49561748189b4",
+  "baseline_accepted": false,
+  "thresholds_changed": false,
+  "automatic_series_mapping": false
+}
