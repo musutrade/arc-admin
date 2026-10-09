@@ -1,0 +1,24 @@
+{
+  "status": "pass",
+  "source_commit": "19d7ed59851d5f042730eb5cb7cf9e0aa67a1345",
+  "manifest_sha256": "23568455acafcfb28731d3d0242c257592a4d456b31e965b0f31ac44cdc6341e",
+  "project": "arc-admin",
+  "functions": 1778,
+  "configuration_digest": "ac6439279f3d5ac495315f9bc23a0a68f583bf7ef221394d92930726511165c8",
+  "series": "measurement-series/v1:f4bec64d998c59b4036607aff05b6689c12278e0cde548db4c57e9e6ceb9d104",
+  "signed_distribution_verified": true,
+  "authenticated_configured_collect": true,
+  "replay_rejected": true,
+  "replay_rejection": "nonempty artifact root cannot be recollected without retained evidence",
+  "numerical_controls": [
+    "pass",
+    "fail"
+  ],
+  "project_policy_adopted": false,
+  "baseline_adopted": false,
+  "retained_runtime": "/home/gem/.local/share/harness-gate/rust-collector/versions/0.1.0-rc.2",
+  "runtime_bytes_identical_to_rc2": true,
+  "native_recompile": true,
+  "capture_reused": false,
+  "project_commit": "e0dcc46d1990e1f3a987841a355723ef09d3dee7"
+}

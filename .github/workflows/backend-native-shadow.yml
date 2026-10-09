@@ -1,0 +1,85 @@
+name: Backend native quality shadow
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-native-shadow-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: 后端原生测量（试运行）
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: musutrade/Harness-Gate
+          ref: 44689dd839852608b438f010694c193105ce6b55
+          path: .native-harness
+          persist-credentials: false
+      - name: 安装测量工具
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --version 0.9.0 --locked
+          python3 -m venv "$RUNNER_TEMP/quality-python"
+          "$RUNNER_TEMP/quality-python/bin/pip" install cryptography==46.0.5
+          CARGO_TARGET_DIR="$RUNNER_TEMP/harness-build" cargo build --locked \
+            --manifest-path .native-harness/tools/harness-gate/Cargo.toml --bin harness-gate
+          CARGO_TARGET_DIR="$RUNNER_TEMP/harness-build" cargo build --locked \
+            --manifest-path .native-harness/tools/quality/rust-measure/Cargo.toml
+      - name: 运行原生采集器契约测试
+        run: python3 -m unittest discover -s scripts/quality -p 'test_*.py'
+      - name: 采集真实后端覆盖率
+        shell: bash
+        run: |
+          set -euo pipefail
+          llvm_tools="$(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin"
+          python3 scripts/quality/rust_native.py --repository "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/native-sample" \
+            --analyzer "$RUNNER_TEMP/harness-build/debug/harness-gate-rust-measure" \
+            --llvm-tools "$llvm_tools"
+      - name: 验证签名证据并保留真实策略结果
+        # A fresh per-job key is an isolated shadow trust anchor only. No
+        # production secret or accepted baseline is provisioned by this job.
+        run: |
+          "$RUNNER_TEMP/quality-python/bin/python" scripts/quality/rust_host.py \
+            --repository "$GITHUB_WORKSPACE" \
+            --sample "$RUNNER_TEMP/native-sample" --harness-source .native-harness \
+            --harness-bin "$RUNNER_TEMP/harness-build/debug/harness-gate" \
+            --private-key "$RUNNER_TEMP/private-shadow-key/ed25519" \
+            --output "$RUNNER_TEMP/native-host"
+      - name: 验证真实证据的拒绝行为
+        if: ${{ !cancelled() }}
+        run: |
+          "$RUNNER_TEMP/quality-python/bin/python" scripts/quality/verify_native_receipt.py \
+            --host-result "$RUNNER_TEMP/native-host" \
+            --harness-bin "$RUNNER_TEMP/harness-build/debug/harness-gate" \
+            --private-key "$RUNNER_TEMP/private-shadow-key/ed25519" \
+            --output "$RUNNER_TEMP/native-negatives"
+      - name: 保留原始测量与失败证据
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/native-sample/*.json
+            ${{ runner.temp }}/native-sample/*.gz
+            ${{ runner.temp }}/native-sample/*.log
+            ${{ runner.temp }}/native-sample/sampler.py
+            ${{ runner.temp }}/native-host/*.json
+            ${{ runner.temp }}/native-host/*.log
+            ${{ runner.temp }}/native-negatives/*.json
+            ${{ runner.temp }}/native-negatives/*.log
+          if-no-files-found: error
+          retention-days: 30
