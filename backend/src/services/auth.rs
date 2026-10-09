@@ -547,7 +547,7 @@ pub fn validate_password(password: &str) -> Result<(), ApiError> {
 pub fn hash_password(password: &str) -> Result<String, ApiError> {
     let salt = auth::password_salt();
     Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password_with_salt(password.as_bytes(), &salt)
         .map(|hash| hash.to_string())
         .map_err(|error| ApiError::internal(error.to_string()))
 }

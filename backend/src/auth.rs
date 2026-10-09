@@ -4,7 +4,6 @@ use crate::access::{ActorContext, DataScope};
 use crate::error::ApiError;
 use crate::repositories;
 use crate::AppState;
-use argon2::password_hash::SaltString;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, HeaderName, Method};
@@ -46,10 +45,10 @@ pub fn random_token() -> String {
     hex(&bytes)
 }
 
-pub fn password_salt() -> SaltString {
+pub fn password_salt() -> [u8; 16] {
     let mut bytes = [0_u8; 16];
     fill_random(&mut bytes);
-    SaltString::encode_b64(&bytes).expect("16-byte password salt")
+    bytes
 }
 
 fn fill_random(bytes: &mut [u8]) {
