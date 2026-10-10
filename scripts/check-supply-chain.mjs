@@ -31,7 +31,7 @@ for (const action of [
   'rustsec/audit-check@v2.0.0',
   'EmbarkStudios/cargo-deny-action@v2.1.1',
   'aquasecurity/trivy-action@v0.36.0',
-  'anchore/sbom-action@v0.24.0',
+  'anchore/sbom-action@v0.24.3',
 ]) {
   requireText(security, action, '.github/workflows/security.yml');
 }
