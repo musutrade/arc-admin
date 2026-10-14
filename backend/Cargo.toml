@@ -33,7 +33,7 @@ totp-rs = { version = "6.0.0", features = ["gen_secret", "otpauth", "qr"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.7", features = ["catch-panic", "cors", "request-id", "trace"] }
 tracing = "0.1"
-tracing-opentelemetry = "0.33.0"
+tracing-opentelemetry = "0.34.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 utoipa = { version = "5.5.0", features = ["chrono"] }
 url = "2"
